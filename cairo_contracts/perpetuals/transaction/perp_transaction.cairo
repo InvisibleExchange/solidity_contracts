@@ -1,0 +1,780 @@
+// %builtins output pedersen range_check ecdsa
+
+from starkware.cairo.common.cairo_builtins import HashBuiltin, SignatureBuiltin
+from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.cairo.common.dict import dict_new, dict_write, dict_update, dict_squash, dict_read
+from starkware.cairo.common.dict_access import DictAccess
+from starkware.cairo.common.squash_dict import squash_dict
+from starkware.cairo.common.hash import hash2
+from starkware.cairo.common.ec_point import EcPoint
+from starkware.cairo.common.math import unsigned_div_rem, assert_le, assert_not_equal
+from starkware.cairo.common.math_cmp import is_le
+from starkware.cairo.common.pow import pow
+
+// from invisible_swaps.helpers.range_checks import range_checks_
+from rollup.output_structs import NoteDiffOutput, PerpPositionOutput, ZeroOutput
+from rollup.global_config import GlobalConfig
+from helpers.utils import Note, construct_new_note, sum_notes, take_fee, get_price
+
+from helpers.signatures.signatures import (
+    verify_open_order_signature,
+    verify_order_signature,
+    verify_sig,
+)
+
+from perpetuals.prices.prices import PriceRange
+from perpetuals.funding.funding import FundingInfo
+
+from perpetuals.order.perp_position import (
+    construct_new_position,
+    add_margin_to_position_internal,
+    increase_position_size_internal,
+    reduce_position_size_internal,
+    flip_position_side_internal,
+    close_position_partialy_internal,
+    close_position_internal,
+    liquidate_position_internal,
+    liquidate_position_partialy_internal,
+)
+from perpetuals.order.order_structs import (
+    PerpOrder,
+    OpenOrderFields,
+    CloseOrderFields,
+    PerpPosition,
+)
+from perpetuals.order.order_hash import (
+    verify_order_hash,
+    verify_open_order_hash,
+    verify_position_hash,
+    verify_close_order_hash,
+)
+
+from helpers.perp_helpers.checks import (
+    open_order_specific_checks,
+    validate_fee_taken,
+    checks_prev_fill_consistencies,
+)
+from perpetuals.transaction.change_margin import get_init_margin
+
+from rollup.global_config import get_dust_amount
+
+from helpers.perp_helpers.partial_fill_helpers_perp import refund_partial_fill
+from helpers.perp_helpers.dict_updates import (
+    update_note_dict,
+    update_rc_note_dict,
+    update_position_dict,
+    update_position_dict_on_close,
+)
+
+func execute_perpetual_transaction{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    fee_tracker_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    zero_note_output_ptr: ZeroOutput*,
+    empty_position_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    other_order: PerpOrder,
+    spent_collateral: felt,
+    spent_synthetic: felt,
+    fee_taken: felt,
+) {
+    alloc_locals;
+
+    // * ORDER ============================================================
+
+    if (order.position_effect_type == 0) {
+        %{ assert current_order["position_effect_type"] == "Open" %}
+
+        let (__fp__: felt, _) = get_fp_and_pc();
+        local open_order_fields: OpenOrderFields;
+        get_open_order_fields(&open_order_fields);
+
+        verify_open_order_hash(order, open_order_fields);
+
+        execute_open_order(
+            order, other_order, open_order_fields, spent_collateral, spent_synthetic, fee_taken
+        );
+
+        return ();
+    }
+    if (order.position_effect_type == 1) {
+        %{ assert current_order["position_effect_type"] == "Modify" %}
+
+        let position: PerpPosition = get_perp_position();
+
+        verify_position_hash(position);
+
+        verify_order_hash(order);
+
+        verify_order_signature(order.hash, position);
+
+        execute_modify_order(order, position, spent_collateral, spent_synthetic, fee_taken);
+
+        return ();
+    }
+    if (order.position_effect_type == 2) {
+        %{ assert current_order["position_effect_type"] == "Close" %}
+
+        let position: PerpPosition = get_perp_position();
+        verify_position_hash(position);
+
+        let (__fp__: felt, _) = get_fp_and_pc();
+        local close_order_fields: CloseOrderFields;
+        get_close_order_fields(&close_order_fields);
+
+        verify_close_order_hash(order, close_order_fields);
+
+        verify_order_signature(order.hash, position);
+
+        execute_close_order(
+            order, close_order_fields, position, spent_collateral, spent_synthetic, fee_taken
+        );
+
+        return ();
+    } else {
+        %{ assert current_order["position_effect_type"] == "Liquidation" %}
+
+        let position: PerpPosition = get_perp_position();
+        verify_position_hash(position);
+
+        verify_order_hash(order);
+
+        execute_liquidation_order(order, position, spent_collateral, spent_synthetic);
+
+        return ();
+    }
+}
+
+// * ============================================================
+
+func execute_open_order{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    fee_tracker_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    zero_note_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    other_order: PerpOrder,
+    open_order_fields: OpenOrderFields,
+    spent_collateral: felt,
+    spent_synthetic: felt,
+    fee_taken: felt,
+) {
+    alloc_locals;
+
+    let init_margin = get_init_margin(order, open_order_fields, spent_synthetic);
+
+    open_order_specific_checks(order, open_order_fields, spent_synthetic, init_margin, fee_taken);
+
+    // ? Take a fee
+    validate_fee_taken(fee_taken, order, spent_collateral);
+    take_fee(open_order_fields.collateral_token, fee_taken);
+
+    if (nondet %{ is_first_fill %} != 0) {
+        let (sum: felt) = sum_notes(
+            open_order_fields.notes_in_len,
+            open_order_fields.notes_in,
+            open_order_fields.collateral_token,
+            0,
+        );
+        // Todo: assert sum >= open_order_fields.refund_note.amount + open_order_fields.initial_margin;
+
+        let (pub_key_sum: EcPoint) = verify_open_order_signature(
+            order.hash, open_order_fields.notes_in_len, open_order_fields.notes_in
+        );
+
+        let (scaler) = pow(10, global_config.leverage_decimals);
+        let (leverage: felt, _) = unsigned_div_rem(init_margin * scaler, spent_collateral);
+
+        let (position: PerpPosition) = open_new_position(
+            order,
+            init_margin,
+            fee_taken,
+            leverage,
+            open_order_fields,
+            spent_collateral,
+            spent_synthetic,
+        );
+
+        // ? Add the position to the position dict and program output
+        update_position_dict(0, position);
+
+        // ? Refund excess margin if necessary
+        refund_unspent_margin_first_fill(
+            order, open_order_fields, init_margin, spent_synthetic, pub_key_sum
+        );
+
+        // ? Update note dict
+        update_note_dict(
+            open_order_fields.notes_in_len,
+            open_order_fields.notes_in,
+            open_order_fields.refund_note,
+        );
+
+        return ();
+    } else {
+        local prev_pfr_note: Note;
+        %{
+            note_data = prev_pfr_note
+
+            memory[ids.prev_pfr_note.address_ + ADDRESS_OFFSET + 0] = int(note_data["address"]["x"]) # x coordinate
+            memory[ids.prev_pfr_note.address_ + ADDRESS_OFFSET + 1] = int(note_data["address"]["y"]) # y coordinate
+            memory[ids.prev_pfr_note.address_ + TOKEN_OFFSET] = int(note_data["token"])
+            memory[ids.prev_pfr_note.address_ + AMOUNT_OFFSET] = int(note_data["amount"])
+            memory[ids.prev_pfr_note.address_ + BLINDING_FACTOR_OFFSET] = int(note_data["blinding"])
+            memory[ids.prev_pfr_note.address_ + INDEX_OFFSET] = int(note_data["index"])
+            memory[ids.prev_pfr_note.address_ + HASH_OFFSET] = int(note_data["hash"])
+        %}
+
+        checks_prev_fill_consistencies(order, init_margin, prev_pfr_note);
+
+        verify_sig(order.hash, prev_pfr_note.address);
+
+        let (price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
+
+        let (scaler) = pow(10, global_config.leverage_decimals);
+        let (leverage: felt, _) = unsigned_div_rem(init_margin * scaler, spent_collateral);
+
+        let (prev_position_hash: felt, position: PerpPosition) = add_margin_to_position(
+            order, init_margin, fee_taken, leverage, price
+        );
+
+        // ? Add the position to the position dict and program output
+        update_position_dict(prev_position_hash, position);
+
+        // ? Refund excess margin if necessary
+        refund_unspent_margin_later_fills(
+            order, open_order_fields, init_margin, spent_synthetic, prev_pfr_note
+        );
+
+        return ();
+    }
+}
+
+func execute_modify_order{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    fee_tracker_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    position: PerpPosition,
+    spent_collateral: felt,
+    spent_synthetic: felt,
+    fee_taken: felt,
+) {
+    alloc_locals;
+
+    // ? Take a fee
+    validate_fee_taken(fee_taken, order, spent_collateral);
+    take_fee(position.collateral_token, fee_taken);
+
+    let (price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
+
+    if (order.order_side == position.order_side) {
+        let (prev_position_hash: felt, position: PerpPosition) = increase_position_size(
+            order, position, spent_synthetic, fee_taken, price
+        );
+
+        // ? Add the position to the position dict and program output
+        update_position_dict(prev_position_hash, position);
+    } else {
+        let (prev_position_hash: felt, position: PerpPosition) = reduce_position_size(
+            order, position, spent_synthetic, fee_taken, price
+        );
+
+        // ? Add the position to the position dict and program output
+        update_position_dict(prev_position_hash, position);
+    }
+
+    return ();
+}
+
+func execute_close_order{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    fee_tracker_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    empty_position_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    close_order_fields: CloseOrderFields,
+    position: PerpPosition,
+    spent_collateral: felt,
+    spent_synthetic: felt,
+    fee_taken: felt,
+) {
+    alloc_locals;
+
+    // ? Take a fee
+    validate_fee_taken(fee_taken, order, spent_collateral);
+    take_fee(position.collateral_token, fee_taken);
+
+    assert_not_equal(order.order_side, position.order_side);
+
+    let (close_price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
+
+    let (collateral_returned: felt) = close_position(
+        order, position, spent_synthetic, fee_taken, close_price
+    );
+
+    local index: felt;
+    %{ ids.index = order_indexes["return_collateral_idx"] %}
+
+    let (return_collateral_note: Note) = construct_new_note(
+        close_order_fields.return_collateral_address,
+        position.collateral_token,
+        collateral_returned,
+        close_order_fields.return_collateral_blinding,
+        index,
+    );
+
+    update_rc_note_dict(return_collateral_note);
+
+    return ();
+}
+
+func execute_liquidation_order{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    position_dict: DictAccess*,
+    fee_tracker_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    empty_position_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(order: PerpOrder, position: PerpPosition, spent_collateral: felt, spent_synthetic: felt) {
+    alloc_locals;
+
+    assert_not_equal(order.order_side, position.order_side);
+
+    let (close_price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
+
+    let (leftover_value: felt) = liquidate_position(order, position, spent_synthetic, close_price);
+
+    // Todo: increase/decrease insurance fund
+
+    return ();
+}
+
+// * ============================================================
+
+func open_new_position{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    init_margin: felt,
+    fee_taken: felt,
+    leverage: felt,
+    open_order_fields: OpenOrderFields,
+    spent_collateral: felt,
+    spent_synthetic: felt,
+) -> (position: PerpPosition) {
+    alloc_locals;
+
+    local position_idx: felt;
+    %{ ids.position_idx = order_indexes["position_idx"] %}
+
+    local funding_idx: felt;
+    %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+    let (position: PerpPosition) = construct_new_position(
+        order.order_side,
+        order.synthetic_token,
+        open_order_fields.collateral_token,
+        spent_synthetic,
+        init_margin,
+        leverage,
+        open_order_fields.position_address,
+        funding_idx,
+        position_idx,
+        fee_taken,
+    );
+
+    return (position,);
+}
+
+func add_margin_to_position{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    position_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    global_config: GlobalConfig*,
+}(order: PerpOrder, init_margin: felt, fee_taken: felt, leverage: felt, entry_price: felt) -> (
+    prev_hash: felt, position: PerpPosition
+) {
+    alloc_locals;
+
+    let position: PerpPosition = get_perp_position();
+
+    let prev_position_hash = position.hash;
+
+    assert position.order_side = order.order_side;
+
+    local funding_idx: felt;
+    %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+    let (position: PerpPosition) = add_margin_to_position_internal(
+        position, init_margin, entry_price, leverage, fee_taken, funding_idx
+    );
+
+    return (prev_position_hash, position);
+}
+
+func increase_position_size{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    position_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder, position: PerpPosition, spent_synthetic: felt, fee_taken: felt, price: felt
+) -> (prev_hash: felt, position: PerpPosition) {
+    alloc_locals;
+
+    let prev_position_hash = position.hash;
+
+    assert position.order_side = order.order_side;
+
+    local funding_idx: felt;
+    %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+    let (position: PerpPosition) = increase_position_size_internal(
+        position, spent_synthetic, price, fee_taken, funding_idx
+    );
+
+    return (prev_position_hash, position);
+}
+
+func reduce_position_size{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    position_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder, position: PerpPosition, spent_synthetic: felt, fee_taken: felt, price: felt
+) -> (prev_hash: felt, position: PerpPosition) {
+    alloc_locals;
+
+    let prev_position_hash = position.hash;
+
+    assert_not_equal(position.order_side, order.order_side);
+
+    local funding_idx: felt;
+    %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+    let cond = is_le(spent_synthetic, position.position_size);
+
+    if (cond == 1) {
+        let (position: PerpPosition) = reduce_position_size_internal(
+            position, spent_synthetic, price, fee_taken, funding_idx
+        );
+        return (prev_position_hash, position);
+    } else {
+        let (position: PerpPosition) = flip_position_side_internal(
+            position, spent_synthetic, price, fee_taken, funding_idx
+        );
+
+        return (prev_position_hash, position);
+    }
+}
+
+func close_position{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    position_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    empty_position_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    position: PerpPosition,
+    spent_synthetic: felt,
+    fee_taken: felt,
+    close_price: felt,
+) -> (collateral_returned: felt) {
+    alloc_locals;
+
+    let position_idx = position.index;
+    let prev_position_hash = position.hash;
+
+    // ! close position fully
+    let (dust_amount) = get_dust_amount(order.synthetic_token);
+    let is_partial_close: felt = is_le(spent_synthetic, position.position_size - dust_amount - 1);
+    if (is_partial_close == 0) {
+        //
+
+        local funding_idx: felt;
+        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+        let (collateral_returned: felt) = close_position_internal(
+            position, close_price, fee_taken, funding_idx
+        );
+
+        update_position_dict_on_close(prev_position_hash, position_idx);
+
+        return (collateral_returned,);
+    } else {
+        //
+
+        local funding_idx: felt;
+        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+        let (position: PerpPosition, collateral_returned: felt) = close_position_partialy_internal(
+            position, spent_synthetic, close_price, fee_taken, funding_idx
+        );
+
+        // ? Removes the position to the position dict and program output
+        update_position_dict(prev_position_hash, position);
+
+        return (collateral_returned,);
+    }
+}
+
+func liquidate_position{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    position_dict: DictAccess*,
+    funding_info: FundingInfo*,
+    empty_position_output_ptr: ZeroOutput*,
+    global_config: GlobalConfig*,
+}(order: PerpOrder, position: PerpPosition, spent_synthetic: felt, close_price: felt) -> (
+    leftover_value: felt
+) {
+    alloc_locals;
+
+    let position_idx = position.index;
+    let prev_position_hash = position.hash;
+
+    let (dust_amount) = get_dust_amount(order.synthetic_token);
+    let is_partial_close: felt = is_le(spent_synthetic, position.position_size - dust_amount - 1);
+    if (is_partial_close == 0) {
+        // ! liquidate position fully
+
+        local funding_idx: felt;
+        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+        let (leftover_value: felt) = liquidate_position_internal(
+            position, close_price, funding_idx
+        );
+
+        update_position_dict_on_close(prev_position_hash, position_idx);
+
+        return (leftover_value,);
+    } else {
+        //
+
+        local funding_idx: felt;
+        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
+
+        let (position: PerpPosition, leftover_value: felt) = liquidate_position_partialy_internal(
+            position, spent_synthetic, close_price, funding_idx
+        );
+
+        // ? Removes the position to the position dict and program output
+        update_position_dict(prev_position_hash, position);
+
+        return (leftover_value,);
+    }
+}
+
+// * ============================================================
+
+func refund_unspent_margin_first_fill{
+    range_check_ptr: felt,
+    pedersen_ptr: HashBuiltin*,
+    note_dict: DictAccess*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    open_order_fields: OpenOrderFields,
+    init_margin: felt,
+    spent_synthetic: felt,
+    pub_key_sum: EcPoint,
+) {
+    alloc_locals;
+
+    let unspent_margin = open_order_fields.initial_margin - init_margin;
+
+    let (dust_amount_synthetic) = get_dust_amount(order.synthetic_token);
+    let (dust_amount_collateral) = get_dust_amount(global_config.collateral_token);
+
+    let order_filled_partialy: felt = is_le(
+        spent_synthetic + dust_amount_synthetic, order.synthetic_amount
+    );
+    let all_margin_spent: felt = is_le(unspent_margin, dust_amount_collateral);
+
+    if (all_margin_spent == 1) {
+        return ();
+    }
+    if (order_filled_partialy == 0) {
+        %{ print("!! ORDER FILLED BUT MARGIN NOT FULLY SPENT (SEE WHY)!!") %}
+        // Todo: Should do something with the leftover collateral (maybe insurance fund)
+        return ();
+    }
+
+    refund_partial_fill(
+        order,
+        pub_key_sum,
+        open_order_fields.collateral_token,
+        unspent_margin,
+        open_order_fields.blinding,
+        0,
+    );
+
+    return ();
+}
+
+func refund_unspent_margin_later_fills{
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    note_dict: DictAccess*,
+    global_config: GlobalConfig*,
+}(
+    order: PerpOrder,
+    open_order_fields: OpenOrderFields,
+    init_margin: felt,
+    spent_synthetic: felt,
+    pfr_note: Note,
+) {
+    alloc_locals;
+
+    let unspent_margin = pfr_note.amount - init_margin;
+
+    let (dust_amount_synthetic) = get_dust_amount(order.synthetic_token);
+    let (dust_amount_collateral) = get_dust_amount(global_config.collateral_token);
+
+    let all_margin_spent: felt = is_le(unspent_margin, dust_amount_collateral);
+
+    // let is_partially_filled_a = c1 * c2
+    if (all_margin_spent == 1) {
+        return ();
+    }
+    if (nondet %{ current_order["amount_filled"] + ids.spent_synthetic + dust_amount_synthetic < ids.order.synthetic_amount %} != 0) {
+        %{ print("!! ORDER FILLED BUT MARGIN NOT FULLY SPENT (SEE WHY)!!") %}
+        // Todo: Should do something with the leftover collateral (maybe insurance fund)
+        return ();
+    }
+
+    refund_partial_fill(
+        order,
+        pfr_note.address,
+        open_order_fields.collateral_token,
+        unspent_margin,
+        open_order_fields.blinding,
+        pfr_note.hash,
+    );
+
+    return ();
+}
+
+// * ============================================================
+
+func get_perp_position() -> PerpPosition {
+    alloc_locals;
+
+    local position: PerpPosition;
+
+    %{
+        position_addr = ids.position.address_
+
+        memory[position_addr + PERP_POSITION_ORDER_SIDE_OFFSET] = 0 if prev_position["order_side"] == "Long" else 1
+        memory[position_addr + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(prev_position["synthetic_token"])
+        memory[position_addr + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(prev_position["collateral_token"])
+        memory[position_addr + PERP_POSITION_POSITION_SIZE_OFFSET] = int(prev_position["position_size"])
+        memory[position_addr + PERP_POSITION_MARGIN_OFFSET] = int(prev_position["margin"])
+        memory[position_addr + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(prev_position["entry_price"])
+        memory[position_addr + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(prev_position["liquidation_price"])
+        memory[position_addr + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(prev_position["bankruptcy_price"])
+        memory[position_addr + PERP_POSITION_ADDRESS_OFFSET] = int(prev_position["position_address"])
+        memory[position_addr + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(prev_position["last_funding_idx"])
+        memory[position_addr + PERP_POSITION_INDEX_OFFSET] = int(prev_position["index"])
+        memory[position_addr + PERP_POSITION_HASH_OFFSET] = int(prev_position["hash"])
+    %}
+
+    return (position);
+}
+
+// * ============================================================
+
+func get_open_order_fields{pedersen_ptr: HashBuiltin*}(open_order_fields: OpenOrderFields*) {
+    %{
+        open_order_field_inputs = current_order["open_order_fields"]
+
+        memory[ids.open_order_fields.address_ + INITIAL_MARGIN_OFFSET] = int(open_order_field_inputs["initial_margin"])
+        memory[ids.open_order_fields.address_ + COLLATERAL_TOKEN_OFFSET] = int(open_order_field_inputs["collateral_token"])
+
+        input_notes = open_order_field_inputs["notes_in"]
+
+        memory[ids.open_order_fields.address_ + NOTES_IN_LEN_OFFSET] = len(input_notes)
+        memory[ids.open_order_fields.address_ + NOTES_IN_OFFSET] = notes_ = segments.add()
+        for i in range(len(input_notes)):
+            memory[notes_ + i* NOTE_SIZE + ADDRESS_OFFSET + 0] = int(open_order_field_inputs["notes_in"][i]["address"]["x"]) # x coordinate
+            memory[notes_ + i* NOTE_SIZE + ADDRESS_OFFSET + 1] = int(open_order_field_inputs["notes_in"][i]["address"]["y"]) # y coordinate
+            memory[notes_ + i* NOTE_SIZE + TOKEN_OFFSET] = int(open_order_field_inputs["notes_in"][i]["token"])
+            memory[notes_ + i* NOTE_SIZE + AMOUNT_OFFSET] = int(open_order_field_inputs["notes_in"][i]["amount"])
+            memory[notes_ + i* NOTE_SIZE + BLINDING_FACTOR_OFFSET] = int(open_order_field_inputs["notes_in"][i]["blinding"])
+            memory[notes_ + i* NOTE_SIZE + INDEX_OFFSET] = int(open_order_field_inputs["notes_in"][i]["index"])
+            memory[notes_ + i* NOTE_SIZE + HASH_OFFSET] = int(open_order_field_inputs["notes_in"][i]["hash"])
+
+        refund_note_ =  open_order_field_inputs["refund_note"]
+        if refund_note_ is not None:
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + ADDRESS_OFFSET + 0] = int(refund_note_["address"]["x"]) # x coordinate
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + ADDRESS_OFFSET + 1] = int(refund_note_["address"]["y"]) # y coordinate
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + TOKEN_OFFSET] = int(refund_note_["token"])
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + AMOUNT_OFFSET] = int(refund_note_["amount"])
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + BLINDING_FACTOR_OFFSET] = int(refund_note_["blinding"])
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + INDEX_OFFSET] = int(refund_note_["index"])
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + HASH_OFFSET] = int(refund_note_["hash"])
+        else:
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + ADDRESS_OFFSET + 0] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + ADDRESS_OFFSET + 1] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + TOKEN_OFFSET] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + AMOUNT_OFFSET] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + BLINDING_FACTOR_OFFSET] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + INDEX_OFFSET] = 0
+            memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + HASH_OFFSET] = 0
+
+        memory[ids.open_order_fields.address_ + POSITION_ADDRESS_OFFSET] = int(open_order_field_inputs["position_address"]) # x coordinate
+
+        memory[ids.open_order_fields.address_ + OPF_BLINDING_OFFSET] = int(open_order_field_inputs["blinding"])
+    %}
+
+    return ();
+}
+
+func get_close_order_fields{pedersen_ptr: HashBuiltin*}(close_order_fields: CloseOrderFields*) {
+    %{
+        close_order_field_inputs = current_order["close_order_fields"]
+
+        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(close_order_field_inputs["dest_received_address"])
+        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(close_order_field_inputs["dest_received_blinding"])
+    %}
+
+    return ();
+}

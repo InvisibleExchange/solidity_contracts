@@ -1,0 +1,501 @@
+use firestore_db_and_auth::ServiceSession;
+use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::thread::ThreadId;
+
+use num_bigint::BigUint;
+use serde_json::Value;
+
+use crossbeam::thread;
+use error_stack::{Report, Result};
+
+//
+use super::limit_order::LimitOrder;
+use super::swap_execution::{execute_order, update_state_after_order};
+use super::transaction_helpers::db_updates::update_db_after_spot_swap;
+use super::transaction_helpers::rollbacks::RollbackInfo;
+use super::transaction_helpers::swap_helpers::{
+    consistency_checks, finalize_updates, unblock_order, TxExecutionThreadOutput,
+};
+use super::transaction_helpers::transaction_output::TransactionOutptut;
+pub use crate::transaction_batch::transaction_batch::Transaction;
+use crate::trees::superficial_tree::SuperficialTree;
+use crate::utils::crypto_utils::Signature;
+use crate::utils::errors::{send_swap_error, SwapThreadExecutionError, TransactionExecutionError};
+use crate::utils::notes::Note;
+use crate::utils::storage::BackupStorage;
+
+#[derive(Debug)]
+pub struct Swap {
+    pub transaction_type: String,
+    pub order_a: LimitOrder,
+    pub order_b: LimitOrder,
+    pub signature_a: Signature,
+    pub signature_b: Signature,
+    pub spent_amount_a: u64,
+    pub spent_amount_b: u64,
+    pub fee_taken_a: u64,
+    pub fee_taken_b: u64,
+}
+
+impl Swap {
+    pub fn new(
+        order_a: LimitOrder,
+        order_b: LimitOrder,
+        signature_a: Signature,
+        signature_b: Signature,
+        spent_amount_a: u64,
+        spent_amount_b: u64,
+        fee_taken_a: u64,
+        fee_taken_b: u64,
+    ) -> Swap {
+        Swap {
+            transaction_type: "swap".to_string(),
+            order_a,
+            order_b,
+            signature_a,
+            signature_b,
+            spent_amount_a,
+            spent_amount_b,
+            fee_taken_a,
+            fee_taken_b,
+        }
+    }
+
+    // & batch_init_tree is the state tree at the beginning of the batch
+    // & tree is the current state tree
+    // & partial_fill_tracker is a map of indexes to partial fill refund notes
+    // & updatedNoteHashes is a map of {index: (leaf_hash, proof, proofPos)}
+    fn execute_swap(
+        &self,
+        tree_m: Arc<Mutex<SuperficialTree>>,
+        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
+        blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
+        rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
+        session: Arc<Mutex<ServiceSession>>,
+        backup_storage: Arc<Mutex<BackupStorage>>,
+    ) -> Result<SwapResponse, SwapThreadExecutionError> {
+        //
+
+        consistency_checks(
+            &self.order_a,
+            &self.order_b,
+            self.spent_amount_a,
+            self.spent_amount_b,
+            self.fee_taken_a,
+            self.fee_taken_b,
+        )?;
+
+        // self._range_checks(&self.order_a, &self.order_b);
+
+        let thread_id = std::thread::current().id();
+
+        let blocked_order_ids_c = blocked_order_ids_m.clone();
+
+        let swap_execution_handle = thread::scope(move |s| {
+            let tree = tree_m.clone();
+            let partial_fill_tracker = partial_fill_tracker_m.clone();
+            let blocked_order_ids = blocked_order_ids_m.clone();
+
+            let order_handle_a = s.spawn(move |_| {
+                // ? Exececute order a -----------------------------------------------------
+
+                let execution_output: TxExecutionThreadOutput;
+
+                let (
+                    is_partially_filled,
+                    swap_note,
+                    new_partial_fill_info,
+                    prev_partial_fill_refund_note,
+                    new_amount_filled,
+                ) = execute_order(
+                    &tree,
+                    &partial_fill_tracker,
+                    &blocked_order_ids,
+                    &self.order_a,
+                    &self.signature_a,
+                    self.spent_amount_a,
+                    self.spent_amount_b,
+                    self.fee_taken_a,
+                )?;
+
+                execution_output = TxExecutionThreadOutput {
+                    is_partially_filled,
+                    swap_note,
+                    new_partial_fill_info,
+                    prev_partial_fill_refund_note,
+                    new_amount_filled,
+                };
+
+                return Ok(execution_output);
+            });
+
+            let tree = tree_m.clone();
+            let partial_fill_tracker = partial_fill_tracker_m.clone();
+            let blocked_order_ids = blocked_order_ids_m.clone();
+
+            let order_handle_b = s.spawn(move |_| {
+                // ? Exececute order b -----------------------------------------------------
+
+                let execution_output: TxExecutionThreadOutput;
+
+                let (
+                    is_partially_filled,
+                    swap_note,
+                    new_partial_fill_info,
+                    prev_partial_fill_refund_note,
+                    new_amount_filled,
+                ) = execute_order(
+                    &tree,
+                    &partial_fill_tracker,
+                    &blocked_order_ids,
+                    &self.order_b,
+                    &self.signature_b,
+                    self.spent_amount_b,
+                    self.spent_amount_a,
+                    self.fee_taken_b,
+                )?;
+
+                execution_output = TxExecutionThreadOutput {
+                    is_partially_filled,
+                    swap_note,
+                    new_partial_fill_info,
+                    prev_partial_fill_refund_note,
+                    new_amount_filled,
+                };
+
+                return Ok(execution_output);
+            });
+
+            // ? Get the result of thread_a execution or return an error
+            let order_a_output = order_handle_a
+                .join()
+                .or_else(|_| {
+                    // ? Un unknown error occured executing order a thread
+                    Err(send_swap_error(
+                        "Unknow Error Occured".to_string(),
+                        None,
+                        None,
+                    ))
+                })?
+                .or_else(|err: Report<SwapThreadExecutionError>| {
+                    // ? An error occured executing order a thread
+                    Err(err)
+                })?;
+
+            // ? Get the result of thread_b execution or return an error
+            let order_b_output = order_handle_b
+                .join()
+                .or_else(|_| {
+                    // ? Un unknown error occured executing order a thread
+                    Err(send_swap_error(
+                        "Unknow Error Occured".to_string(),
+                        None,
+                        None,
+                    ))
+                })?
+                .or_else(|err: Report<SwapThreadExecutionError>| {
+                    // ? An error occured executing order a thread
+                    Err(err)
+                })?;
+
+            // & After both orders have been verified successfully update the state (!NOT BEFORE)
+
+            // ? Order a ----------------------------------------
+            let tree = tree_m.clone();
+            let updated_note_hashes = updated_note_hashes_m.clone();
+            let partial_fill_tracker = partial_fill_tracker_m.clone();
+            let blocked_order_ids = blocked_order_ids_m.clone();
+            let rollback_safeguard = rollback_safeguard_m.clone();
+            let order_a_output_clone = order_a_output.clone();
+
+            let update_state_handle_a = s.spawn(move |_| {
+                update_state_after_order(
+                    &tree,
+                    &updated_note_hashes,
+                    &rollback_safeguard,
+                    thread_id,
+                    order_a_output_clone.prev_partial_fill_refund_note.is_none(),
+                    self.order_a.order_id,
+                    &self.order_a.notes_in,
+                    &self.order_a.refund_note,
+                    &order_a_output_clone.swap_note,
+                    &order_a_output_clone.new_partial_fill_info,
+                    &order_a_output_clone.prev_partial_fill_refund_note,
+                )?;
+                // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
+                finalize_updates(
+                    &partial_fill_tracker,
+                    &blocked_order_ids,
+                    self.order_a.order_id,
+                    &order_a_output_clone.new_partial_fill_info,
+                );
+
+                Ok(())
+            });
+
+            // ? Order b ----------------------------------------
+            let tree = tree_m.clone();
+            let updated_note_hashes = updated_note_hashes_m.clone();
+            let partial_fill_tracker = partial_fill_tracker_m.clone();
+            let blocked_order_ids = blocked_order_ids_m.clone();
+            let rollback_safeguard = rollback_safeguard_m.clone();
+            let order_b_output_clone = order_b_output.clone();
+
+            let update_state_handle_b = s.spawn(move |_| {
+                update_state_after_order(
+                    &tree,
+                    &updated_note_hashes,
+                    &rollback_safeguard,
+                    thread_id,
+                    order_b_output_clone.prev_partial_fill_refund_note.is_none(),
+                    self.order_b.order_id,
+                    &self.order_b.notes_in,
+                    &self.order_b.refund_note,
+                    &order_b_output_clone.swap_note,
+                    &order_b_output_clone.new_partial_fill_info,
+                    &order_b_output_clone.prev_partial_fill_refund_note,
+                )?;
+
+                // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
+                finalize_updates(
+                    &partial_fill_tracker,
+                    &blocked_order_ids,
+                    self.order_b.order_id,
+                    &order_b_output_clone.new_partial_fill_info,
+                );
+
+                Ok(())
+            });
+
+            // ? Run the update state thread_a or return an error
+            update_state_handle_a
+                .join()
+                .or_else(|_| {
+                    // ? Un unknown error occured executing order a thread
+                    Err(send_swap_error(
+                        "Unknow Error Occured".to_string(),
+                        None,
+                        None,
+                    ))
+                })?
+                .or_else(|err: Report<SwapThreadExecutionError>| {
+                    // ? An error occured executing order a thread
+                    Err(err)
+                })?;
+
+            // ? Run the update state thread_b or return an error
+            update_state_handle_b
+                .join()
+                .or_else(|e| {
+                    // ? Un unknown error occured executing order a thread
+                    Err(send_swap_error(
+                        "Unknow Error Occured".to_string(),
+                        None,
+                        Some(format!("error occured executing spot swap:  {:?}", e)),
+                    ))
+                })?
+                .or_else(|err: Report<SwapThreadExecutionError>| {
+                    // ? An error occured executing order a thread
+                    Err(err)
+                })?;
+
+            return Ok((order_a_output, order_b_output));
+        });
+
+        // ? Get the result or return the error
+        let (execution_output_a, execution_output_b) = swap_execution_handle
+            .or_else(|e| {
+                unblock_order(
+                    &blocked_order_ids_c,
+                    self.order_a.order_id,
+                    self.order_b.order_id,
+                );
+
+                Err(send_swap_error(
+                    "Unknow Error Occured".to_string(),
+                    None,
+                    Some(format!("error occured executing spot swap:  {:?}", e)),
+                ))
+            })?
+            .or_else(|err: Report<SwapThreadExecutionError>| {
+                unblock_order(
+                    &blocked_order_ids_c,
+                    self.order_a.order_id,
+                    self.order_b.order_id,
+                );
+
+                Err(err)
+            })?;
+
+        // ? JSON Output =================================
+
+        let swap_output = TransactionOutptut::new(&self);
+
+        let mut new_pfr_idx_a: u64 = 0;
+        if let Some(new_pfr_note) = execution_output_a.new_partial_fill_info.as_ref() {
+            new_pfr_idx_a = new_pfr_note.0.index;
+        }
+
+        let mut new_pfr_idx_b: u64 = 0;
+        if let Some(new_pfr_note) = execution_output_b.new_partial_fill_info.as_ref() {
+            new_pfr_idx_b = new_pfr_note.0.index;
+        }
+
+        let json_output = swap_output.wrap_output(
+            &execution_output_a.prev_partial_fill_refund_note,
+            &execution_output_b.prev_partial_fill_refund_note,
+            execution_output_a.swap_note.index,
+            execution_output_b.swap_note.index,
+            new_pfr_idx_a,
+            new_pfr_idx_b,
+        );
+
+        let mut swap_output_json = swap_output_json_m.lock();
+        swap_output_json.push(json_output);
+        drop(swap_output_json);
+
+        // * Cleanup =================================
+
+        let mut new_pfr_note_a: Option<Note> = None;
+        if let Some(new_pfr_note) = execution_output_a.new_partial_fill_info {
+            new_pfr_note_a = Some(new_pfr_note.0);
+        }
+
+        let mut new_pfr_note_b: Option<Note> = None;
+        if let Some(new_pfr_note) = execution_output_b.new_partial_fill_info {
+            new_pfr_note_b = Some(new_pfr_note.0);
+        }
+
+        // *  Update the database
+        update_db_after_spot_swap(
+            &session,
+            backup_storage,
+            &self.order_a,
+            &self.order_b,
+            execution_output_a.prev_partial_fill_refund_note,
+            execution_output_b.prev_partial_fill_refund_note,
+            &execution_output_a.swap_note,
+            &execution_output_b.swap_note,
+            &new_pfr_note_a,
+            &new_pfr_note_b,
+        );
+
+        return Ok(SwapResponse {
+            swap_note_a: execution_output_a.swap_note,
+            swap_note_b: execution_output_b.swap_note,
+            new_pfr_note_a,
+            new_amount_filled_a: execution_output_a.new_amount_filled,
+            new_pfr_note_b,
+            new_amount_filled_b: execution_output_b.new_amount_filled,
+        });
+    }
+}
+
+// * IMPL TRANSACTION TRAIT * //
+
+impl Transaction for Swap {
+    fn transaction_type(&self) -> &str {
+        return self.transaction_type.as_str();
+    }
+
+    fn execute_transaction(
+        &mut self,
+        tree_m: Arc<Mutex<SuperficialTree>>,
+        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
+        blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
+        rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
+        session: Arc<Mutex<ServiceSession>>,
+        backup_storage: Arc<Mutex<BackupStorage>>,
+    ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError> {
+        let swap_response = self
+            .execute_swap(
+                tree_m,
+                partial_fill_tracker_m,
+                updated_note_hashes_m,
+                swap_output_json_m,
+                blocked_order_ids_m,
+                rollback_safeguard_m,
+                session,
+                backup_storage,
+            )
+            .or_else(|err: Report<SwapThreadExecutionError>| {
+                let error_context = err.current_context().clone();
+                Err(
+                    Report::new(TransactionExecutionError::Swap(error_context.clone()))
+                        .attach_printable(format!("Error executing swap: {}", error_context)),
+                )
+            })?;
+
+        return Ok((Some(swap_response), None));
+    }
+}
+
+// * SERIALIZE SWAP * //
+
+use serde::ser::{Serialize, SerializeStruct, Serializer};
+
+impl Serialize for Swap {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut note = serializer.serialize_struct("PerpSwap", 9)?;
+
+        note.serialize_field("order_a", &self.order_a)?;
+        note.serialize_field("order_b", &self.order_b)?;
+        note.serialize_field("signature_a", &self.signature_a)?;
+        note.serialize_field("signature_b", &self.signature_b)?;
+        note.serialize_field("spent_amount_a", &self.spent_amount_a)?;
+        note.serialize_field("spent_amount_b", &self.spent_amount_b)?;
+        note.serialize_field("fee_taken_a", &self.fee_taken_a)?;
+        note.serialize_field("fee_taken_b", &self.fee_taken_b)?;
+
+        return note.end();
+    }
+}
+
+// * SWAP RESPONSE STRUCT * //
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SwapResponse {
+    pub swap_note_a: Note,
+    pub swap_note_b: Note,
+    pub new_pfr_note_a: Option<Note>,
+    pub new_amount_filled_a: u64,
+    pub new_pfr_note_b: Option<Note>,
+    pub new_amount_filled_b: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OrderFillResponse {
+    pub swap_note: Note,
+    pub new_pfr_note: Option<Note>,
+    pub new_amount_filled: u64,
+    pub fee_taken: u64,
+}
+
+impl OrderFillResponse {
+    pub fn from_swap_response(req: &SwapResponse, fee_taken: u64, is_a: bool) -> Self {
+        if is_a {
+            return OrderFillResponse {
+                swap_note: req.swap_note_a.clone(),
+                new_pfr_note: req.new_pfr_note_a.clone(),
+                new_amount_filled: req.new_amount_filled_a,
+                fee_taken,
+            };
+        } else {
+            return OrderFillResponse {
+                swap_note: req.swap_note_b.clone(),
+                new_pfr_note: req.new_pfr_note_b.clone(),
+                new_amount_filled: req.new_amount_filled_b,
+                fee_taken,
+            };
+        }
+    }
+}
