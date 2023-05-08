@@ -16,7 +16,7 @@ pub fn pedersen(a: &BigUint, b: &BigUint) -> BigUint {
 
     let res = pedersen_hash(&left, &right);
 
-    let hash = BigUint::from_str(&res.inner.0.to_string()).unwrap();
+    let hash = BigUint::from_str(&res.to_string()).unwrap();
 
     return hash;
 }
@@ -30,7 +30,7 @@ pub fn pedersen_on_vec(arr: &Vec<&BigUint>) -> BigUint {
 
     let res = compute_hash_on_elements(input);
 
-    let hash = BigUint::from_str(&res.inner.0.to_string()).unwrap();
+    let hash = BigUint::from_str(&res.to_string()).unwrap();
 
     return hash;
 }
@@ -97,26 +97,28 @@ impl EcPoint {
             y: BigInt::from_str(&y.to_string()).unwrap(),
         };
     }
+}
 
-    pub fn add_point(&self, addend: &EcPoint) -> EcPoint {
-        let p1 = AffinePoint {
-            x: FieldElement::from_dec_str(&self.x.to_string()).unwrap(),
-            y: FieldElement::from_dec_str(&self.y.to_string()).unwrap(),
+impl From<&EcPoint> for AffinePoint {
+    fn from(p: &EcPoint) -> Self {
+        if p.x == BigInt::from(0) {
+            return AffinePoint::identity();
+        }
+
+        AffinePoint {
+            x: FieldElement::from_dec_str(&p.x.to_string()).unwrap(),
+            y: FieldElement::from_dec_str(&p.y.to_string()).unwrap(),
             infinity: false,
-        };
+        }
+    }
+}
 
-        let p2 = AffinePoint {
-            x: FieldElement::from_dec_str(&addend.x.to_string()).unwrap(),
-            y: FieldElement::from_dec_str(&addend.y.to_string()).unwrap(),
-            infinity: false,
-        };
-
-        let res = &p1 + &p2;
-
-        return EcPoint {
-            x: BigInt::from_str(&res.x.inner.0.to_string()).unwrap(),
-            y: BigInt::from_str(&res.y.inner.0.to_string()).unwrap(),
-        };
+impl From<&AffinePoint> for EcPoint {
+    fn from(p: &AffinePoint) -> Self {
+        EcPoint {
+            x: BigInt::from_str(&p.x.to_string()).unwrap(),
+            y: BigInt::from_str(&p.y.to_string()).unwrap(),
+        }
     }
 }
 

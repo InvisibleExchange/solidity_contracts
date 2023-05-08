@@ -142,6 +142,11 @@ impl Deposit {
         if valid {
             return Ok(());
         } else {
+            println!(
+                "Invalid Signature: hash: {:?} pubKey: {:?} r:{:?} s:{:?}",
+                deposit_hash, &self.stark_key, &self.signature.r, &self.signature.s
+            );
+
             return Err(send_deposit_error(
                 "Invalid Signature".to_string(),
                 Some(format!(

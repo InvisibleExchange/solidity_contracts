@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
+use starknet::curve::AffinePoint;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
@@ -14,7 +15,7 @@ use crate::utils::errors::{
 use crate::utils::storage::BackupStorage;
 use crossbeam::thread;
 use error_stack::{Report, Result};
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigUint;
 use num_traits::Zero;
 use serde_json::Value;
 
@@ -134,16 +135,17 @@ impl Withdrawal {
     fn verify_withdrawal_signatures(&self) -> Result<(), WithdrawalThreadExecutionError> {
         let withdrawal_hash = self.hash_transaction();
 
-        let mut pub_key_sum: EcPoint = EcPoint {
-            x: BigInt::zero(),
-            y: BigInt::zero(),
-        };
+        let mut pub_key_sum: AffinePoint = AffinePoint::identity();
+
         for i in 0..self.notes_in.len() {
-            pub_key_sum = pub_key_sum.add_point(&self.notes_in[i].address);
+            let ec_point = AffinePoint::from(&self.notes_in[i].address);
+            pub_key_sum = &pub_key_sum + &ec_point;
         }
 
+        let pub_key: EcPoint = EcPoint::from(&pub_key_sum);
+
         let valid = verify(
-            &pub_key_sum.x.to_biguint().unwrap(),
+            &pub_key.x.to_biguint().unwrap(),
             &withdrawal_hash,
             &self.signature,
         );
@@ -154,8 +156,8 @@ impl Withdrawal {
             return Err(send_withdrawal_error(
                 "Invalid Signature".to_string(),
                 Some(format!(
-                    "Invalid signature: r:{:?} s:{:?}",
-                    &self.signature.r, &self.signature.s,
+                    "Invalid signature: r:{:?} s:{:?} hash:{:?} pub_key:{:?}",
+                    &self.signature.r, &self.signature.s, withdrawal_hash, pub_key
                 )),
             ));
         }

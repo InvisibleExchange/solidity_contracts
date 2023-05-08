@@ -2,6 +2,7 @@ use num_bigint::{BigInt, BigUint};
 use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::{Map, Value};
+use starknet::{core::types::FieldElement, curve::AffinePoint};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
@@ -617,14 +618,11 @@ pub fn restore_partial_fill_refund_note(
 fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
     let notes_in = notes_in_.as_array().unwrap();
 
-    let mut pub_key_sum: EcPoint = EcPoint {
-        x: BigInt::zero(),
-        y: BigInt::zero(),
-    };
+    let mut pub_key_sum: AffinePoint = AffinePoint::identity();
 
     for note in notes_in {
-        let point = EcPoint {
-            x: BigInt::from_str(
+        let point = AffinePoint {
+            x: FieldElement::from_dec_str(
                 note.get("address")
                     .unwrap()
                     .get("x")
@@ -633,7 +631,7 @@ fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
                     .unwrap(),
             )
             .unwrap(),
-            y: BigInt::from_str(
+            y: FieldElement::from_dec_str(
                 note.get("address")
                     .unwrap()
                     .get("y")
@@ -642,12 +640,13 @@ fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
                     .unwrap(),
             )
             .unwrap(),
+            infinity: false,
         };
 
-        pub_key_sum = pub_key_sum.add_point(&point);
+        pub_key_sum = &pub_key_sum + &point;
     }
 
-    return pub_key_sum;
+    return EcPoint::from(&pub_key_sum);
 }
 
 // * UPDATE MARGIN RESTORE FUNCTIONS ================================================================================

@@ -1,7 +1,8 @@
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigUint;
 use num_traits::{FromPrimitive, Zero};
 use parking_lot::Mutex;
 use serde_json::Value;
+use starknet::curve::AffinePoint;
 use std::{str::FromStr, sync::Arc};
 
 use crate::{
@@ -78,18 +79,18 @@ pub fn verify_margin_change_signature(margin_change: &ChangeMarginMessage) -> Re
     let msg_hash = hash_margin_change_message(margin_change);
 
     if margin_change.margin_change >= 0 {
-        let mut pub_key_sum: EcPoint = EcPoint {
-            x: BigInt::zero(),
-            y: BigInt::zero(),
-        };
+        let mut pub_key_sum: AffinePoint = AffinePoint::identity();
 
         let notes_in = margin_change.notes_in.as_ref().unwrap();
         for i in 0..notes_in.len() {
-            pub_key_sum = pub_key_sum.add_point(&notes_in[i].address);
+            let ec_point = AffinePoint::from(&notes_in[i].address);
+            pub_key_sum = &pub_key_sum + &ec_point;
         }
 
+        let pub_key: EcPoint = EcPoint::from(&pub_key_sum);
+
         let valid = verify(
-            &pub_key_sum.x.to_biguint().unwrap(),
+            &pub_key.x.to_biguint().unwrap(),
             &msg_hash,
             &margin_change.signature,
         );

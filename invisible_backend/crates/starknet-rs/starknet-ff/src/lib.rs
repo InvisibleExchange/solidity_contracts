@@ -24,7 +24,7 @@ const U256_BYTE_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct FieldElement {
-    pub inner: Fr,
+    inner: Fr,
 }
 
 mod from_str_error {
@@ -266,6 +266,11 @@ impl FieldElement {
 
     pub fn sqrt(&self) -> Option<FieldElement> {
         self.inner.sqrt().map(|inner| Self { inner })
+    }
+
+    /// Returns the string representation of the field element.
+    pub fn to_string(&self) -> String {
+        self.inner.to_string()
     }
 
     /// Performs a floor division. It's not implemented as the `Div` trait on purpose to

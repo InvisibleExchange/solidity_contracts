@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::perpetual::DUST_AMOUNT_PER_ASSET;
 use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 use crate::utils::errors::{send_swap_error, SwapThreadExecutionError};
@@ -5,6 +7,8 @@ use crate::utils::errors::{send_swap_error, SwapThreadExecutionError};
 use error_stack::Result;
 use num_bigint::{BigInt, BigUint};
 use num_traits::{FromPrimitive, Zero};
+use starknet::core::types::FieldElement;
+use starknet::curve::AffinePoint;
 
 //
 use crate::utils::notes::Note;
@@ -116,30 +120,27 @@ impl LimitOrder {
     ) -> Result<EcPoint, SwapThreadExecutionError> {
         let order_hash = &self.hash;
 
-        let mut pub_key_sum: EcPoint = EcPoint {
-            x: BigInt::zero(),
-            y: BigInt::zero(),
-        };
+        let mut pub_key_sum: AffinePoint = AffinePoint::identity();
 
         for i in 0..self.notes_in.len() {
-            pub_key_sum = pub_key_sum.add_point(&self.notes_in[i].address);
+            let ec_point = AffinePoint::from(&self.notes_in[i].address);
+
+            pub_key_sum = &pub_key_sum + &ec_point;
         }
 
-        let valid = verify(
-            &pub_key_sum.x.to_biguint().unwrap(),
-            &order_hash,
-            &signature,
-        );
+        let pub_key: EcPoint = EcPoint::from(&pub_key_sum);
+
+        let valid = verify(&pub_key.x.to_biguint().unwrap(), &order_hash, &signature);
 
         if valid {
-            return Ok(pub_key_sum);
+            return Ok(pub_key);
         } else {
             return Err(send_swap_error(
                 "Invalid Signature".to_string(),
                 Some(self.order_id),
                 Some(format!(
                     "Invalid signature: r:{:?} s:{:?} hash:{:?} pub_key:{:?}",
-                    &signature.r, &signature.s, order_hash, pub_key_sum
+                    &signature.r, &signature.s, order_hash, pub_key
                 )),
             ));
         }

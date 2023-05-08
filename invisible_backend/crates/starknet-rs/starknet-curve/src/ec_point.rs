@@ -30,7 +30,7 @@ impl AffinePoint {
         })
     }
 
-    fn identity() -> AffinePoint {
+    pub fn identity() -> AffinePoint {
         Self {
             x: FieldElement::ZERO,
             y: FieldElement::ZERO,

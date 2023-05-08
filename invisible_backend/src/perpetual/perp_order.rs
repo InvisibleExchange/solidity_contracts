@@ -1,6 +1,7 @@
 use error_stack::Result;
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigUint;
 use num_traits::{FromPrimitive, One, Zero};
+use starknet::curve::AffinePoint;
 
 //
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
@@ -223,32 +224,28 @@ impl PerpOrder {
         let order_hash = &self.hash;
 
         if self.position_effect_type == PositionEffectType::Open {
-            let mut pub_key_sum: EcPoint = EcPoint {
-                x: BigInt::zero(),
-                y: BigInt::zero(),
-            };
+            let mut pub_key_sum: AffinePoint = AffinePoint::identity();
+
             for i in 0..self.open_order_fields.as_ref().unwrap().notes_in.len() {
-                pub_key_sum = pub_key_sum
-                    .add_point(&self.open_order_fields.as_ref().unwrap().notes_in[i].address);
+                let ec_point = AffinePoint::from(
+                    &self.open_order_fields.as_ref().unwrap().notes_in[i].address,
+                );
+                pub_key_sum = &pub_key_sum + &ec_point;
             }
 
-            let pk_sum = Some(pub_key_sum.clone());
+            let pub_key: EcPoint = EcPoint::from(&pub_key_sum);
 
-            let valid = verify(
-                &pub_key_sum.x.to_biguint().unwrap(),
-                &order_hash,
-                &signature,
-            );
+            let valid = verify(&pub_key.x.to_biguint().unwrap(), &order_hash, &signature);
 
             if valid {
-                return Ok(pk_sum);
+                return Ok(Some(pub_key));
             } else {
                 return Err(send_perp_swap_error(
                     "Invalid Signature".to_string(),
                     Some(self.order_id),
                     Some(format!(
-                        "Invalid signature: r:{:?} s:{:?}",
-                        &signature.r, &signature.s,
+                        "Invalid signature: r:{:?} s:{:?} hash:{:?} pub_key:{:?}",
+                        &signature.r, &signature.s, order_hash, pub_key
                     )),
                 ));
             }
@@ -262,8 +259,11 @@ impl PerpOrder {
                     "Invalid Signature".to_string(),
                     Some(self.order_id),
                     Some(format!(
-                        "Invalid signature: r:{:?} s:{:?}",
-                        &signature.r, &signature.s,
+                        "Invalid signature: r:{:?} s:{:?} hash:{:?} pub_key:{:?}",
+                        &signature.r,
+                        &signature.s,
+                        order_hash,
+                        position_address.unwrap()
                     )),
                 ));
             }
