@@ -44,16 +44,17 @@ pub fn execute_liquidation(
         order.order_id,
     )?;
 
-    if partial_fill_info.is_some()
-        && partial_fill_info.as_ref().unwrap().1 == 69
-        && partial_fill_info.as_ref().unwrap().2 == 69
-    {
-        return Err(send_perp_swap_error(
-            "Order rejected".to_string(),
-            Some(order.order_id),
-            None,
-        ));
-    }
+    // TODO: IS this necessary: If the order was partially filled and the server crashed than we reject the order
+    // if partial_fill_info.is_some()
+    //     && partial_fill_info.as_ref().unwrap().1 == 69
+    //     && partial_fill_info.as_ref().unwrap().2 == 69
+    // {
+    //     return Err(send_perp_swap_error(
+    //         "Order rejected".to_string(),
+    //         Some(order.order_id),
+    //         None,
+    //     ));
+    // }
 
     let (leftover_value, new_spent_synthetic, position_index, prev_position, position) =
         liquidate_position(

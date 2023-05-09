@@ -281,7 +281,7 @@ function delegateRequest(
 ) {
   const order = JSON.stringify(reqBody);
 
-  // "deposit" + "withdrawal" + "spot_order" + "perp_order
+  // "deposit" + "withdrawal" + "spot_order" + "perp_order + "cancel" + "amend
   const correlationId =
     orderType.toString() +
     Math.random().toString() +

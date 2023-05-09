@@ -947,6 +947,7 @@ pub async fn process_and_execute_perp_swaps(
             if swaps.len() == 0 {
                 break;
             }
+
             let (swap, user_id_a, user_id_b) = swaps.pop().unwrap();
 
             let mpsc_tx = mpsc_tx.clone();

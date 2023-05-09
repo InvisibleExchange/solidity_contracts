@@ -49,17 +49,17 @@ pub fn execute_modify_order(
         order.order_id,
     )?;
 
-    // ? If the order was partially filled and the server crashed than we reject the order
-    if partial_fill_info.is_some()
-        && partial_fill_info.as_ref().unwrap().1 == 69
-        && partial_fill_info.as_ref().unwrap().2 == 69
-    {
-        return Err(send_perp_swap_error(
-            "Order rejected".to_string(),
-            Some(order.order_id),
-            None,
-        ));
-    }
+    // TODO: IS this necessary: If the order was partially filled and the server crashed than we reject the order
+    // if partial_fill_info.is_some()
+    //     && partial_fill_info.as_ref().unwrap().1 == 69
+    //     && partial_fill_info.as_ref().unwrap().2 == 69
+    // {
+    //     return Err(send_perp_swap_error(
+    //         "Order rejected".to_string(),
+    //         Some(order.order_id),
+    //         None,
+    //     ));
+    // }
 
     // ? Get the new total amount filled after this swap
     let new_amount_filled = if partial_fill_info.is_some() {
@@ -221,18 +221,34 @@ pub fn verify_position_existence(
     position: &Option<PerpPosition>,
     order_id: u64,
 ) -> Result<(), PerpSwapExecutionError> {
-    let pos: &PerpPosition;
+    let perpetual_state_tree = perpetual_state_tree__.lock();
+
     let partialy_filled_positions_m = partialy_filled_positions.lock();
     if let Some((pos_, _)) =
         partialy_filled_positions_m.get(&position.as_ref().unwrap().position_address.to_string())
     {
-        pos = pos_;
+        // ? Verify the position hash is valid and exists in the state
+        if pos_.hash != pos_.hash_position()
+            || perpetual_state_tree.get_leaf_by_index(pos_.index as u64) != pos_.hash
+        {
+            let pos = position.as_ref().unwrap();
+            return verify_existance(&perpetual_state_tree, &pos, order_id);
+        }
     } else {
-        pos = position.as_ref().unwrap();
+        let pos = position.as_ref().unwrap();
+        return verify_existance(&perpetual_state_tree, &pos, order_id);
     }
 
+    Ok(())
+}
+
+fn verify_existance(
+    state_tree: &SuperficialTree,
+    position: &PerpPosition,
+    order_id: u64,
+) -> Result<(), PerpSwapExecutionError> {
     // ? Verify the position hash is valid and exists in the state
-    if pos.hash != pos.hash_position() {
+    if position.hash != position.hash_position() {
         return Err(send_perp_swap_error(
             "position hash not valid".to_string(),
             Some(order_id),
@@ -240,15 +256,13 @@ pub fn verify_position_existence(
         ));
     }
 
-    let perpetual_state_tree = perpetual_state_tree__.lock();
     // ? Check that the position being updated exists in the state
-    if perpetual_state_tree.get_leaf_by_index(pos.index as u64) != pos.hash {
+    if state_tree.get_leaf_by_index(position.index as u64) != position.hash {
         return Err(send_perp_swap_error(
             "position does not exist in the state".to_string(),
             Some(order_id),
             None,
         ));
     }
-
-    Ok(())
+    return Ok(());
 }

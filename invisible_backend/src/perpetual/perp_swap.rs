@@ -194,6 +194,7 @@ impl PerpSwap {
                     PositionEffectType::Modify => {
                         //
 
+
                         // ? Verify the position hash is valid and exists in the state
                         verify_position_existence(
                             &perpetual_state_tree__,
