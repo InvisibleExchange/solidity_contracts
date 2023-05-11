@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::time::{Duration, SystemTime};
 
 use crate::matching_engine::get_qty_from_quote;
+use crate::matching_engine::orders::amend_inner;
 use crate::perpetual::perp_order::PerpOrder;
 use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{DUST_AMOUNT_PER_ASSET, PRICE_DECIMALS_PER_ASSET};
@@ -166,6 +167,7 @@ impl OrderBook {
                 new_expiration,
                 signature,
                 user_id,
+                match_only,
             } => {
                 self.process_order_amend(
                     &mut proc_result,
@@ -175,6 +177,7 @@ impl OrderBook {
                     new_expiration,
                     signature,
                     user_id,
+                    match_only,
                 );
             }
         }
@@ -285,6 +288,7 @@ impl OrderBook {
         proc_result
     }
 
+    /// Returns whether the order was fully filled or not
     pub fn process_order_internal(
         &mut self,
         results: &mut OrderProcessingResult,
@@ -299,7 +303,9 @@ impl OrderBook {
         ts: SystemTime,
         is_market_order: bool,
         is_retry: bool,
-    ) {
+    ) -> u64 {
+        let qty_left = order.qty_left;
+
         // take a look at current opposite limit order
         let opposite_order_result = {
             let opposite_queue = match side {
@@ -418,7 +424,7 @@ impl OrderBook {
                     order.qty_left = new_qty;
 
                     // process the rest of new limit order
-                    self.process_order_internal(
+                    return self.process_order_internal(
                         results,
                         order_id,
                         order_asset,
@@ -433,17 +439,23 @@ impl OrderBook {
                         is_retry,
                     );
                 }
+
+                0
             } else {
                 if !is_market_order {
                     // just insert new order in queue
                     self.store_new_limit_order(results, order_id, side, price, order, ts);
                 }
+
+                qty_left
             }
         } else {
             if !is_market_order {
                 // just insert new order in queue
                 self.store_new_limit_order(results, order_id, side, price, order, ts);
             }
+
+            qty_left
         }
     }
 
@@ -469,6 +481,33 @@ impl OrderBook {
         }
     }
 
+    // fn process_order_amend(
+    //     &mut self,
+    //     results: &mut OrderProcessingResult,
+    //     order_id: u64,
+    //     side: OrderSide,
+    //     new_price: f64,
+    //     new_expiration: u64,
+    //     signature: Signature,
+    //     user_id: u64,
+    // ) {
+    //     let order_queue = match side {
+    //         OrderSide::Bid => &mut self.bid_queue,
+    //         OrderSide::Ask => &mut self.ask_queue,
+    //     };
+
+    //     let ts = SystemTime::now();
+    //     if order_queue.amend(order_id, user_id, new_price, new_expiration, signature, ts) {
+    //         results.push(Ok(Success::Amended {
+    //             id: order_id,
+    //             new_price,
+    //             ts,
+    //         }));
+    //     } else {
+    //         results.push(Err(Failed::OrderNotFound(order_id)));
+    //     }
+    // }
+
     fn process_order_amend(
         &mut self,
         results: &mut OrderProcessingResult,
@@ -478,21 +517,80 @@ impl OrderBook {
         new_expiration: u64,
         signature: Signature,
         user_id: u64,
+        match_only: bool, // if true then only match the order and don't amend it
     ) {
         let order_queue = match side {
             OrderSide::Bid => &mut self.bid_queue,
             OrderSide::Ask => &mut self.ask_queue,
         };
 
-        let ts = SystemTime::now();
-        if order_queue.amend(order_id, user_id, new_price, new_expiration, signature, ts) {
+        let qty_left: u64;
+        let prev_price: f64;
+        let prev_signature: Signature;
+        let mut order_wrapper: OrderWrapper;
+        if let Some(mut wrapper) = order_queue.remove_order(order_id, user_id, false) {
+            prev_price = wrapper.order.get_price(side, None);
+            prev_signature = wrapper.signature.clone();
+
+            amend_inner(&mut wrapper, new_price, new_expiration, signature);
+
+            let ts = SystemTime::now();
+
             results.push(Ok(Success::Amended {
                 id: order_id,
                 new_price,
                 ts,
             }));
+
+            let quote_qty = get_quote_qty(
+                wrapper.qty_left,
+                new_price,
+                self.order_asset,
+                self.price_asset,
+                None,
+            );
+
+            order_wrapper = wrapper.clone();
+
+            qty_left = self.process_order_internal(
+                results,
+                order_id,
+                self.order_asset,
+                self.price_asset,
+                side,
+                new_price,
+                wrapper.qty_left,
+                quote_qty,
+                wrapper,
+                ts,
+                true,
+                false,
+            );
         } else {
             results.push(Err(Failed::OrderNotFound(order_id)));
+            return;
+        }
+
+        if qty_left > 0 {
+            order_wrapper.qty_left = qty_left;
+
+            if match_only {
+                amend_inner(
+                    &mut order_wrapper,
+                    prev_price,
+                    new_expiration,
+                    prev_signature,
+                );
+            }
+
+            self.store_new_limit_order(
+                results,
+                order_id,
+                side,
+                if match_only { prev_price } else { new_price },
+                order_wrapper,
+                SystemTime::now(),
+            )
         }
     }
 

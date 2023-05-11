@@ -7,6 +7,7 @@ use crate::perpetual::VALID_COLLATERAL_TOKENS;
 use crate::utils::crypto_utils::Signature;
 
 use super::domain::{Order, OrderSide, OrderWrapper};
+use super::orders::amend_inner;
 use super::{get_qty_from_quote, get_quote_qty};
 
 #[derive(Clone, Debug)]
@@ -169,62 +170,11 @@ impl OrderQueue {
                 return false;
             };
 
-            if wrapper.order_side == OrderSide::Bid {
-                match &mut wrapper.order {
-                    Order::Spot(ord) => {
-                        let base_asset = ord.token_received;
-                        let quote_asset = ord.token_spent;
-
-                        let new_received_amount =
-                            get_qty_from_quote(ord.amount_spent, price, base_asset, quote_asset);
-
-                        ord.amount_received = new_received_amount;
-                        ord.expiration_timestamp = new_expiration;
-                    }
-                    Order::Perp(ord) => {
-                        let new_collateral_amount = get_quote_qty(
-                            ord.synthetic_amount,
-                            price,
-                            ord.synthetic_token,
-                            VALID_COLLATERAL_TOKENS[0],
-                            None,
-                        );
-
-                        ord.collateral_amount = new_collateral_amount;
-                        ord.expiration_timestamp = new_expiration;
-                    }
-                }
-            } else {
-                match &mut wrapper.order {
-                    Order::Spot(ord) => {
-                        let base_asset = ord.token_spent;
-                        let quote_asset = ord.token_received;
-
-                        let new_received_amount =
-                            get_quote_qty(ord.amount_spent, price, base_asset, quote_asset, None);
-
-                        ord.amount_received = new_received_amount;
-                        ord.expiration_timestamp = new_expiration;
-                    }
-                    Order::Perp(ord) => {
-                        let new_collateral_amount = get_quote_qty(
-                            ord.synthetic_amount,
-                            price,
-                            ord.synthetic_token,
-                            VALID_COLLATERAL_TOKENS[0],
-                            None,
-                        );
-
-                        ord.collateral_amount = new_collateral_amount;
-                        ord.expiration_timestamp = new_expiration;
-                    }
-                }
-            }
-
-            wrapper.signature = signature;
+            amend_inner(&mut wrapper, price, new_expiration, signature);
 
             // store new order data
             self.rebuild_idx(id, price, ts);
+
             true
         } else {
             false
@@ -245,6 +195,25 @@ impl OrderQueue {
             }
             None => false,
         }
+    }
+
+    pub fn remove_order(
+        &mut self,
+        order_id: u64,
+        user_id: u64,
+        force: bool,
+    ) -> Option<OrderWrapper> {
+        let wrapper = self.orders.get(&order_id)?;
+
+        if (wrapper.user_id != user_id) && !force {
+            return None;
+        }
+
+        let wrapper = self.orders.remove(&order_id)?;
+
+        self.remove_stalled();
+
+        Some(wrapper)
     }
 
     /// Returns order by id

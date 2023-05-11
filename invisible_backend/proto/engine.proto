@@ -112,6 +112,7 @@ message AmendOrderRequest {
     Signature signature = 6;
     uint64 user_id = 7; // used to verify that the user is the owner of the order
     bool is_perp = 8;
+    bool match_only = 9; // if true - only match the order, if false - match and amend
 }
 
 message AmendOrderResponse {

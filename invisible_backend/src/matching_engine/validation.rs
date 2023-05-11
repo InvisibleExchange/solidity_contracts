@@ -43,8 +43,7 @@ impl OrderRequestValidator {
                 price,
                 qty,
                 order,
-                ts: _,
-                is_market: _,
+                ..
             } => {
                 if *price <= 0.0 {
                     return Err(ERR_BAD_PRICE_VALUE);
@@ -58,20 +57,9 @@ impl OrderRequestValidator {
                 );
             }
 
-            OrderRequest::CancelOrder {
-                id,
-                side: _side,
-                user_id: _user_id,
-            } => self.validate_cancel(*id),
+            OrderRequest::CancelOrder { id, .. } => self.validate_cancel(*id),
 
-            OrderRequest::AmendOrder {
-                id,
-                side: _side,
-                new_price: _,
-                signature: _,
-                user_id: _,
-                new_expiration: _,
-            } => self.validate_cancel(*id),
+            OrderRequest::AmendOrder { id, .. } => self.validate_cancel(*id),
         }
     }
 

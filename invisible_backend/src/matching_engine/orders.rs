@@ -1,9 +1,12 @@
 use std::fmt::Debug;
 use std::time::SystemTime;
 
-use crate::utils::crypto_utils::Signature;
+use crate::{perpetual::VALID_COLLATERAL_TOKENS, utils::crypto_utils::Signature};
 
-use super::domain::{Order, OrderSide, OrderWrapper};
+use super::{
+    domain::{Order, OrderSide, OrderWrapper},
+    get_qty_from_quote, get_quote_qty,
+};
 
 #[derive(Debug, Clone)]
 pub enum OrderRequest {
@@ -32,6 +35,7 @@ pub enum OrderRequest {
         new_expiration: u64,
         signature: Signature,
         user_id: u64,
+        match_only: bool,
     },
     CancelOrder {
         id: u64,
@@ -123,6 +127,7 @@ pub fn new_amend_order(
     new_price: f64,
     new_expiration: u64,
     signature: Signature,
+    match_only: bool,
 ) -> OrderRequest {
     OrderRequest::AmendOrder {
         id: order_id,
@@ -131,5 +136,68 @@ pub fn new_amend_order(
         new_expiration,
         signature,
         user_id,
+        match_only,
     }
+}
+
+/// Amend an order
+pub fn amend_inner(
+    wrapper: &mut OrderWrapper,
+    price: f64,
+    new_expiration: u64,
+    signature: Signature,
+) {
+    if wrapper.order_side == OrderSide::Bid {
+        match &mut wrapper.order {
+            Order::Spot(ord) => {
+                let base_asset = ord.token_received;
+                let quote_asset = ord.token_spent;
+
+                let new_received_amount =
+                    get_qty_from_quote(ord.amount_spent, price, base_asset, quote_asset);
+
+                ord.amount_received = new_received_amount;
+                ord.expiration_timestamp = new_expiration;
+            }
+            Order::Perp(ord) => {
+                let new_collateral_amount = get_quote_qty(
+                    ord.synthetic_amount,
+                    price,
+                    ord.synthetic_token,
+                    VALID_COLLATERAL_TOKENS[0],
+                    None,
+                );
+
+                ord.collateral_amount = new_collateral_amount;
+                ord.expiration_timestamp = new_expiration;
+            }
+        }
+    } else {
+        match &mut wrapper.order {
+            Order::Spot(ord) => {
+                let base_asset = ord.token_spent;
+                let quote_asset = ord.token_received;
+
+                let new_received_amount =
+                    get_quote_qty(ord.amount_spent, price, base_asset, quote_asset, None);
+
+                ord.amount_received = new_received_amount;
+                ord.expiration_timestamp = new_expiration;
+            }
+            Order::Perp(ord) => {
+                let new_collateral_amount = get_quote_qty(
+                    ord.synthetic_amount,
+                    price,
+                    ord.synthetic_token,
+                    VALID_COLLATERAL_TOKENS[0],
+                    None,
+                );
+
+                ord.collateral_amount = new_collateral_amount;
+                ord.expiration_timestamp = new_expiration;
+            }
+        }
+    }
+
+    wrapper.signature = signature;
 }

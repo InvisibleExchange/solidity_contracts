@@ -17,10 +17,16 @@ use super::{
         SuccessResponse, WithdrawalMessage,
     },
     server_helpers::{
+        amend_order_execution::{
+            execute_perp_swaps_after_amend_order, execute_spot_swaps_after_amend_order,
+        },
         engine_helpers::store_output_json,
+        perp_swap_execution::{
+            process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
+        },
         swap_execution::{
-            await_swap_handles, process_and_execute_perp_swaps, process_and_execute_spot_swaps,
-            retry_failed_perp_swaps,
+            await_swap_handles, process_and_execute_spot_swaps, process_limit_order_request,
+            retry_failed_swaps,
         },
         PERP_MARKET_IDS,
     },
@@ -155,7 +161,7 @@ impl Engine for EngineService {
             Ok(lo) => limit_order = lo,
             Err(_e) => {
                 return send_order_error_reply(
-                    "Erroc unpacking the limit order (verify the format is correct)".to_string(),
+                    "Error unpacking the limit order (verify the format is correct)".to_string(),
                 );
             }
         };
@@ -172,15 +178,8 @@ impl Engine for EngineService {
             return send_order_error_reply(err_msg);
         }
 
-        // This matches the orders and creates the swaps that can be executed
-        let handles;
-        let new_order_id;
-        match process_and_execute_spot_swaps(
-            &self.mpsc_tx,
-            &self.rollback_safeguard,
+        let mut processed_res = process_limit_order_request(
             self.order_books.get(&market_id).clone().unwrap(),
-            &self.session,
-            &self.backup_storage,
             limit_order.clone(),
             side,
             signature.clone(),
@@ -190,6 +189,19 @@ impl Engine for EngineService {
             0,
             0,
             None,
+        )
+        .await;
+
+        // This matches the orders and creates the swaps that can be executed
+        let handles;
+        let new_order_id;
+        match process_and_execute_spot_swaps(
+            &self.mpsc_tx,
+            &self.rollback_safeguard,
+            self.order_books.get(&market_id).clone().unwrap(),
+            &self.session,
+            &self.backup_storage,
+            &mut processed_res,
         )
         .await
         {
@@ -205,26 +217,35 @@ impl Engine for EngineService {
         // this executes the swaps in parallel
 
         let l = handles.len();
-        if let Err(e) = await_swap_handles(
-            &self.mpsc_tx,
-            &self.rollback_safeguard,
-            self.order_books.get(&market_id).clone().unwrap(),
-            &self.session,
-            &self.backup_storage,
-            limit_order.clone(),
-            side,
-            signature.clone(),
-            user_id,
-            is_market,
-            &self.ws_connections,
-            &self.ws_ids,
-            handles,
-            None,
-        )
-        .await
-        {
-            return send_order_error_reply(e);
+
+        let retry_messages;
+        match await_swap_handles(&self.ws_connections, &self.ws_ids, handles).await {
+            Ok(rm) => retry_messages = rm,
+            Err(e) => return send_order_error_reply(e),
         };
+
+        if retry_messages.len() > 0 {
+            if let Err(e) = retry_failed_swaps(
+                &self.mpsc_tx,
+                &self.rollback_safeguard,
+                self.order_books.get(&market_id).clone().unwrap(),
+                &self.session,
+                &self.backup_storage,
+                limit_order,
+                side,
+                signature,
+                user_id,
+                is_market,
+                &self.ws_connections,
+                &self.ws_ids,
+                retry_messages,
+                None,
+            )
+            .await
+            {
+                return send_order_error_reply(e);
+            }
+        }
 
         if l > 0 {
             println!(
@@ -328,8 +349,22 @@ impl Engine for EngineService {
             }
         }
 
-        // this executes the swaps in parallel
         let side: OBOrderSide = perp_order.order_side.clone().into();
+
+        let mut processed_res = process_perp_order_request(
+            self.perp_order_books.get(&market.unwrap()).clone().unwrap(),
+            perp_order.clone(),
+            side,
+            signature.clone(),
+            user_id,
+            is_market,
+            false,
+            0,
+            0,
+            None,
+        )
+        .await;
+
         // This matches the orders and creates the swaps that can be executed
         let retry_messages;
         let new_order_id;
@@ -341,15 +376,7 @@ impl Engine for EngineService {
             &self.backup_storage,
             &self.ws_connections,
             &self.ws_ids,
-            perp_order.clone(),
-            side,
-            signature.clone(),
-            user_id,
-            is_market,
-            false,
-            0,
-            0,
-            None,
+            &mut processed_res,
         )
         .await
         {
@@ -512,7 +539,7 @@ impl Engine for EngineService {
 
                 return Ok(Response::new(reply));
             }
-            Err(Failed::OrderNotFound(id)) => {
+            Err(Failed::OrderNotFound(_)) => {
                 // println!("order not found: {:?}", id);
 
                 return send_cancel_order_error_reply("Order not found".to_string());
@@ -582,51 +609,83 @@ impl Engine for EngineService {
             req.user_id,
             req.new_price,
             req.new_expiration,
-            signature,
+            signature.clone(),
+            req.match_only,
         );
 
         let mut order_book = order_book_m.lock().await;
+        let mut processed_res = order_book.process_order(amend_request);
+        drop(order_book);
 
-        let res = order_book.process_order(amend_request);
-
-        match &res[0] {
-            Ok(Success::Amended { .. }) => {
-                // ? Get the updated orderbook liquidity
-                let ask_liquidity = order_book.ask_queue.visualize();
-                let bid_liquidity = order_book.bid_queue.visualize();
-
-                let json_msg = json!({
-                    "message_id": "LIQUIDITY_UPDATE",
-                    "type": if req.is_perp {"perpetual"} else {"spot"},
-                    "market": market_id.to_string(),
-                    "ask_liquidity": ask_liquidity,
-                    "bid_liquidity": bid_liquidity
-                });
-                let msg = Message::Text(json_msg.to_string());
-
-                // ? Send the updated liquidity to anyone who's listening
-                if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
-                    println!("Error sending liquidity update message")
-                };
-
-                let reply: AmendOrderResponse = AmendOrderResponse {
-                    successful: true,
-                    error_message: "".to_string(),
-                };
-
-                return Ok(Response::new(reply));
+        if req.is_perp {
+            if let Err(e) = execute_perp_swaps_after_amend_order(
+                &self.mpsc_tx,
+                &self.perp_rollback_safeguard,
+                &order_book_m,
+                &self.session,
+                &self.backup_storage,
+                &self.ws_connections,
+                &self.ws_ids,
+                &mut processed_res,
+                req.order_id,
+                order_side,
+                signature,
+                req.user_id,
+            )
+            .await
+            {
+                return send_amend_order_error_reply(e);
             }
-            Err(Failed::OrderNotFound(id)) => {
-                // println!("order not found: {:?}", id);
-
-                return send_amend_order_error_reply("Order not found".to_string());
-            }
-            _ => {
-                println!("unknown cancel err");
-
-                return send_amend_order_error_reply("Unknown error".to_string());
+        } else {
+            if let Err(e) = execute_spot_swaps_after_amend_order(
+                &self.mpsc_tx,
+                &self.rollback_safeguard,
+                &order_book_m,
+                &self.session,
+                &self.backup_storage,
+                &mut processed_res,
+                &self.ws_connections,
+                &self.ws_ids,
+                req.order_id,
+                order_side,
+                signature,
+                req.user_id,
+            )
+            .await
+            {
+                return send_amend_order_error_reply(e);
             }
         }
+
+        store_output_json(&self.swap_output_json, &self.main_storage);
+
+        // =================================================================================================
+        // ? Get the updated orderbook liquidity
+        let order_book = order_book_m.lock().await;
+        let ask_liquidity = order_book.ask_queue.visualize();
+        let bid_liquidity = order_book.bid_queue.visualize();
+        drop(order_book);
+
+        let json_msg = json!({
+            "message_id": "LIQUIDITY_UPDATE",
+            "type": if req.is_perp {"perpetual"} else {"spot"},
+            "market": market_id.to_string(),
+            "ask_liquidity": ask_liquidity,
+            "bid_liquidity": bid_liquidity
+        });
+        let msg = Message::Text(json_msg.to_string());
+
+        // ? Send the updated liquidity to anyone who's listening
+        if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
+            println!("Error sending liquidity update message")
+        };
+
+        let reply: AmendOrderResponse = AmendOrderResponse {
+            successful: true,
+            error_message: "".to_string(),
+        };
+
+        return Ok(Response::new(reply));
     }
 
     //

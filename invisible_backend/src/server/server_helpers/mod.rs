@@ -12,7 +12,7 @@ use tokio_tungstenite::WebSocketStream;
 use crate::perpetual::perp_order::PerpOrder;
 use crate::perpetual::perp_swap::PerpSwap;
 use crate::perpetual::{calculate_quote_amount, VALID_COLLATERAL_TOKENS};
-use crate::utils::crypto_utils::{ Signature};
+use crate::utils::crypto_utils::Signature;
 use crate::{
     matching_engine::{
         domain::{Order, OrderSide as OBOrderSide},
@@ -38,8 +38,10 @@ pub static PERP_MARKET_IDS: phf::Map<&'static str, u16> = phf_map! {
     "54321" => 22, // ETH
 };
 
+pub mod amend_order_execution;
 pub mod engine_helpers;
 pub mod periodic_updates;
+pub mod perp_swap_execution;
 pub mod swap_execution;
 
 pub fn init_order_books() -> (
@@ -136,7 +138,17 @@ pub fn proccess_spot_matching_result(
                         new_order_id: 0,
                     });
                 }
-                _ => panic!("SOMETHING WENT WRONG"),
+                Success::Amended {
+                    id: _,
+                    new_price: _,
+                    ts: _,
+                } => {
+                    return Ok(MatchingProcessedResult {
+                        swaps: None,
+                        new_order_id: 0,
+                    });
+                }
+                _ => return Err(send_matching_error("Invalid matching response".to_string())),
             },
             Err(e) => Err(handle_error(e)),
         }
@@ -155,17 +167,8 @@ pub fn proccess_spot_matching_result(
 
         let mut new_order_id: u64 = 0;
         if let Ok(x) = &results_vec[0] {
-            if let Success::Accepted {
-                id,
-                order_type: _,
-                ts: _,
-            } = x
-            {
+            if let Success::Accepted { id, .. } = x {
                 new_order_id = *id;
-            } else {
-                return Err(send_matching_error(
-                    "Invalid matching response length".to_string(),
-                ));
             }
         } else if let Err(e) = &results_vec[0] {
             return Err(handle_error(e));
@@ -290,27 +293,35 @@ pub fn proccess_perp_matching_result(
     } else if results_vec.len() == 1 {
         match &results_vec[0] {
             Ok(x) => match x {
-                Success::Accepted {
-                    id,
-                    order_type: _,
-                    ts: _,
-                } => {
+                Success::Accepted { id, .. } => {
                     return Ok(PerpMatchingProcessedResult {
                         perp_swaps: None,
                         new_order_id: *id,
                     });
                 }
-                Success::Cancelled { id: _, ts: _ } => {
+                Success::Cancelled { .. } => {
                     return Ok(PerpMatchingProcessedResult {
                         perp_swaps: None,
                         new_order_id: 0,
                     });
                 }
-                _ => panic!("SOMETHING WENT WRONG"),
+                Success::Amended { .. } => {
+                    return Ok(PerpMatchingProcessedResult {
+                        perp_swaps: None,
+                        new_order_id: 0,
+                    });
+                }
+                _ => return Err(send_matching_error("Invalid matching response".to_string())),
             },
             Err(e) => Err(handle_error(e)),
         }
     } else if results_vec.len() % 2 == 0 {
+        for res in results_vec {
+            if let Err(e) = res {
+                return Err(handle_error(e));
+            }
+        }
+
         return Err(send_matching_error(
             "Invalid matching response length".to_string(),
         ));
@@ -319,17 +330,8 @@ pub fn proccess_perp_matching_result(
 
         let mut new_order_id: u64 = 0;
         if let Ok(x) = &results_vec[0] {
-            if let Success::Accepted {
-                id,
-                order_type: _,
-                ts: _,
-            } = x
-            {
+            if let Success::Accepted { id, .. } = x {
                 new_order_id = *id;
-            } else {
-                return Err(send_matching_error(
-                    "Invalid matching response length".to_string(),
-                ));
             }
         } else if let Err(e) = &results_vec[0] {
             return Err(handle_error(e));
@@ -426,11 +428,6 @@ pub fn proccess_perp_matching_result(
                 fee_taken_a,
                 fee_taken_b,
             );
-
-            // order_a amount: 1000000
-            // order_b amount: 1000000
-            // spent_collatera 1000000000
-            // spent_synthetic 1000000
 
             swaps.push((swap, user_id_a, user_id_b));
         }
