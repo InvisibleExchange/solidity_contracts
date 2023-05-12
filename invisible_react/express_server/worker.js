@@ -9,15 +9,19 @@ const packageDefinition = protoLoader.loadSync(
   { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
-const SERVER_URL = "localhost:50052";
+const SERVER_URL = "localhost";
+// const SERVER_URL = "54.212.28.196";
 
-const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
+const client = new engine.Engine(
+  `${SERVER_URL}:50052`,
+  grpc.credentials.createInsecure()
+);
 
 const db = initDb();
 
 const rabbitmqConfig = {
   protocol: "amqp",
-  hostname: "54.212.28.196",
+  hostname: SERVER_URL,
   port: 5672,
   username: "Snojj25",
   password: "123456790",
@@ -114,6 +118,8 @@ async function processOrder(correlationId, order) {
 
     return res;
   } else if (correlationId.startsWith("get_orders")) {
+    console.log("get_orders in worker.js");
+
     // gets all orders for a user in the backend engine
     let res = await callGetOrderRpcWithPromise(order);
 
@@ -237,6 +243,8 @@ function callChangeMarginRpcWithPromise(marginReq) {
 function callGetOrderRpcWithPromise(ordersReq) {
   return new Promise((resolve, reject) => {
     client.get_orders(ordersReq, function (err, response) {
+      console.log("get_orders in worker.js response: ", response);
+
       if (err) {
         reject(err);
       } else {

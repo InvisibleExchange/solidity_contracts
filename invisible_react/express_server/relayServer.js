@@ -18,10 +18,13 @@ app.use(express.json());
 
 const db = initDb();
 
+const SERVER_URL = "localhost";
+// const SERVER_URL = "54.212.28.196";
+
 // ORDER BOOKS AND LIQUIDITY ====================================================================================
 
 let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket("ws://localhost:50053/");
+let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
@@ -36,7 +39,7 @@ wsClient.onmessage = function (e) {
 
 const rabbitmqConfig = {
   protocol: "amqp",
-  hostname: "54.212.28.196",
+  hostname: SERVER_URL,
   port: 5672,
   username: "Snojj25",
   password: "123456790",
@@ -202,6 +205,8 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
     // * GET ORDERS ---------------------------------------------------------------------
 
     app.post("/get_orders", (req, res) => {
+      console.log("get_orders in relay server");
+
       delegateRequest(
         req.body,
         "get_orders",
