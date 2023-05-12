@@ -4,10 +4,23 @@ const amqp = require("amqplib/callback_api");
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 const { initDb, storeSpotOrder, storePerpOrder } = require("./helpers");
-const packageDefinition = protoLoader.loadSync(
-  "../../invisible_backend/proto/engine.proto",
-  { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
+
+const path = require("path");
+
+// Create a path to a different location relative to the current directory
+const protoPath = path.join(
+  __dirname,
+  "../../invisible_backend/proto",
+  "engine.proto"
 );
+
+const packageDefinition = protoLoader.loadSync(protoPath, {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true,
+});
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
 const SERVER_URL = "localhost";
 // const SERVER_URL = "54.212.28.196";
