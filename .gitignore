@@ -28,6 +28,7 @@ invisible_backend/storage/merkle_trees/perpetual_tree
 invisible_backend/storage/transaction_data
 invisible_backend/storage/price_data
 invisible_backend/storage/batch_snapshot
+invisible_backend/firebase-service-account.json
 
 
 invisible_solidity/bin
