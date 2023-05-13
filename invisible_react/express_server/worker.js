@@ -131,8 +131,6 @@ async function processOrder(correlationId, order) {
 
     return res;
   } else if (correlationId.startsWith("get_orders")) {
-    console.log("get_orders in worker.js");
-
     // gets all orders for a user in the backend engine
     let res = await callGetOrderRpcWithPromise(order);
 
@@ -256,8 +254,6 @@ function callChangeMarginRpcWithPromise(marginReq) {
 function callGetOrderRpcWithPromise(ordersReq) {
   return new Promise((resolve, reject) => {
     client.get_orders(ordersReq, function (err, response) {
-      console.log("get_orders in worker.js response: ", response);
-
       if (err) {
         reject(err);
       } else {

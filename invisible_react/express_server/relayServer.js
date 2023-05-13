@@ -205,7 +205,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
     // * GET ORDERS ---------------------------------------------------------------------
 
     app.post("/get_orders", (req, res) => {
-      console.log("get_orders in relay server");
 
       delegateRequest(
         req.body,
