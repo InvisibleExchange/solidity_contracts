@@ -8,7 +8,7 @@ use invisible_backend::perpetual::perp_helpers::perp_rollback::PerpRollbackInfo;
 use invisible_backend::server::{
     engine::EngineService,
     grpc::{engine, GrpcMessage, GrpcTxResponse, MessageType},
-    server_helpers::{handle_connection, init_order_books, WsConnectionsMap, WsIdsMap},
+    server_helpers::{handle_connection, init_order_books, WsConnectionsMap},
 };
 
 use invisible_backend::transactions::transaction_helpers::rollbacks::RollbackInfo;
@@ -92,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: Some(handle),
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: true,
                     };
@@ -106,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: Some(handle),
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: true,
                     };
@@ -121,6 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: Some(handle),
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: true,
                     };
@@ -136,6 +139,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: Some(handle),
+                        liquidation_tx_handle: None,
+                        new_idxs: None,
+                        successful: true,
+                    };
+
+                    response
+                        .send(grpc_res)
+                        .expect("failed sending back the TxResponse in perp swap");
+                }
+                MessageType::LiquidationMessage => {
+                    let handle = tx_batch
+                        .execute_liquidation_transaction(grpc_message.liquidation_message.unwrap());
+
+                    let grpc_res = GrpcTxResponse {
+                        tx_handle: None,
+                        perp_tx_handle: None,
+                        liquidation_tx_handle: Some(handle),
                         new_idxs: None,
                         successful: true,
                     };
@@ -151,6 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: Some(zero_idxs),
                         successful: true,
                     };
@@ -166,6 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: Some(new_idxs),
                         successful: true,
                     };
@@ -180,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: true,
                     };
@@ -196,6 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: true,
                     };
@@ -212,6 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
+                        liquidation_tx_handle: None,
                         new_idxs: None,
                         successful: updated_prices.is_some(),
                     };
@@ -236,7 +261,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (order_books, perp_order_books) = init_order_books();
 
-    let ws_ids: Arc<TokioMutex<WsIdsMap>> = Arc::new(TokioMutex::new(HashMap::new()));
+    let privileged_ws_connections: Arc<TokioMutex<Vec<u64>>> =
+        Arc::new(TokioMutex::new(Vec::new()));
 
     let ws_addr: SocketAddr = "0.0.0.0:50053".parse()?;
     println!("Listening for updates on {:?}", ws_addr);
@@ -250,21 +276,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ws_conn_mutex = ws_connections.clone();
 
-    let ws_ids_ = ws_ids.clone();
+    let privileged_ws_connections_ = privileged_ws_connections.clone();
 
+    // Handle incoming websocket connections
     tokio::spawn(async move {
         loop {
             let ws_conn_ = ws_conn_mutex.clone();
-            let ws_ids_ = ws_ids_.clone();
+            let privileged_ws_connections_ = privileged_ws_connections_.clone();
 
-            let (stream, addr) = listener.accept().await.expect("accept failed");
+            let (stream, _addr) = listener.accept().await.expect("accept failed");
 
-            tokio::spawn(handle_connection(stream, addr, ws_conn_, ws_ids_));
+            tokio::spawn(handle_connection(
+                stream,
+                ws_conn_,
+                privileged_ws_connections_,
+            ));
         }
     });
 
+    let ws_conn_mutex = ws_connections.clone();
     // ? Start periodic updates
-    start_periodic_updates(&order_books, &perp_order_books, &mpsc_tx, &session).await;
+    start_periodic_updates(
+        &order_books,
+        &perp_order_books,
+        &mpsc_tx,
+        &session,
+        &ws_conn_mutex,
+        &privileged_ws_connections,
+    )
+    .await;
 
     let transaction_service = EngineService {
         mpsc_tx,
@@ -278,7 +318,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         order_books,
         perp_order_books,
         ws_connections,
-        ws_ids,
+        privileged_ws_connections,
         tx_count: Arc::new(Mutex::new(0)),
         main_storage,
         backup_storage,

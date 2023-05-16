@@ -29,7 +29,6 @@ use crate::perpetual::{
     perp_swap::PerpSwap,
     OrderSide,
 };
-use crate::server::server_helpers::brodcast_message;
 use crate::transactions::transaction_helpers::rollbacks::initiate_rollback;
 
 use crate::utils::crypto_utils::Signature;
@@ -41,7 +40,9 @@ use tokio::sync::{mpsc::Sender as MpscSender, oneshot::Sender as OneshotSender};
 use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType, RollbackMessage};
-use super::{proccess_perp_matching_result, send_direct_message, WsConnectionsMap, WsIdsMap};
+use super::{
+    broadcast_message, proccess_perp_matching_result, send_direct_message, WsConnectionsMap,
+};
 
 pub async fn execute_perp_swap(
     perp_swap: PerpSwap,
@@ -104,18 +105,9 @@ pub async fn execute_perp_swap(
         tokio::spawn(async move {
             let (resp_tx, resp_rx) = oneshot::channel();
 
-            let grpc_message = GrpcMessage {
-                msg_type: MessageType::PerpSwapMessage,
-                deposit_message: None,
-                swap_message: None,
-                withdrawal_message: None,
-                perp_swap_message: Some(perp_swap),
-                split_notes_message: None,
-                change_margin_message: None,
-                rollback_info_message: None,
-                funding_update_message: None,
-                price_update_message: None,
-            };
+            let mut grpc_message = GrpcMessage::new();
+            grpc_message.msg_type = MessageType::PerpSwapMessage;
+            grpc_message.perp_swap_message = Some(perp_swap);
 
             tx_mpsc_tx.send((grpc_message, resp_tx)).await.ok().unwrap();
             let res = resp_rx.await.unwrap();
@@ -133,7 +125,7 @@ pub async fn execute_perp_swap(
     match perp_swap_response {
         Ok(res1) => match res1 {
             Ok(response) => {
-                println!("Perpetual swap executed successfuly in the beckend engine\n");
+                println!("Perpetual swap executed successfully in the backend engine\n");
 
                 if maker_side == OrderSide::Long {
                     book.bid_queue
@@ -316,7 +308,7 @@ pub async fn process_and_execute_perp_swaps(
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
 ) -> std::result::Result<(Vec<(Option<u64>, u64, u64)>, u64), String> {
     // ? Parse proccessed_res into swaps and get the new order_id
@@ -355,7 +347,8 @@ pub async fn process_and_execute_perp_swaps(
 
             let res = handle.await;
 
-            let (retry_msg, position_pair) = await_perp_handle(ws_connections, ws_ids, res).await;
+            let (retry_msg, position_pair) =
+                await_perp_handle(ws_connections, privileged_ws_connections, res).await;
 
             if let Some(msg) = retry_msg {
                 retry_messages.push(msg);
@@ -423,7 +416,7 @@ type HandleResult = std::result::Result<
 
 pub async fn await_perp_handle(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     handle_res: HandleResult,
 ) -> (
     Option<(Option<u64>, u64, u64)>,
@@ -437,17 +430,19 @@ pub async fn await_perp_handle(
             handle_res.unwrap().0.unwrap();
 
         // ? Send a message to the user_id websocket
-        if let Err(_) = send_direct_message(ws_connections, ws_ids, user_id_a, msg_a).await {
+        if let Err(_) = send_direct_message(ws_connections, user_id_a, msg_a).await {
             println!("Error sending swap message")
         };
 
         // ? Send a message to the user_id websocket
-        if let Err(_) = send_direct_message(ws_connections, ws_ids, user_id_b, msg_b).await {
+        if let Err(_) = send_direct_message(ws_connections, user_id_b, msg_b).await {
             println!("Error sending swap message")
         };
 
         // ? Send a filled swap to anyone who's listening
-        if let Err(_) = brodcast_message(ws_connections, fill_msg.clone()).await {
+        if let Err(_) =
+            broadcast_message(ws_connections, privileged_ws_connections, fill_msg.clone()).await
+        {
             println!("Error sending perp swap fill update message")
         };
 
@@ -473,7 +468,7 @@ pub async fn retry_failed_perp_swaps(
     user_id: u64,
     is_market: bool,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     retry_messages: Vec<(Option<u64>, u64, u64)>,
     failed_counterpart_ids: Option<Vec<u64>>,
 ) -> std::result::Result<(), String> {
@@ -513,7 +508,7 @@ pub async fn retry_failed_perp_swaps(
             session,
             backup_storage,
             ws_connections,
-            ws_ids,
+            privileged_ws_connections,
             &mut processed_res,
         )
         .await
@@ -540,7 +535,7 @@ pub async fn retry_failed_perp_swaps(
             user_id,
             is_market,
             ws_connections,
-            ws_ids,
+            privileged_ws_connections,
             new_retry_messages,
             Some(failed_ids),
         )

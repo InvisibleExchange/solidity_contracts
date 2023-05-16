@@ -1,8 +1,9 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use phf::phf_map;
+use serde_json::{from_str, Value};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex as TokioMutex;
 
@@ -457,14 +458,14 @@ fn handle_error(e: &Failed) -> Report<MatchingEngineError> {
 
 // * ======================= ==================== ===================== =========================== ====================================
 
-pub type WsConnectionsMap = HashMap<SocketAddr, SplitSink<WebSocketStream<TcpStream>, Message>>;
-pub type WsIdsMap = HashMap<u64, SocketAddr>;
+pub type WsConnectionsMap = HashMap<u64, SplitSink<WebSocketStream<TcpStream>, Message>>;
+
+const CONFIG_CODE: u64 = 1234567890;
 
 pub async fn handle_connection(
     raw_stream: TcpStream,
-    addr: SocketAddr,
     ws_connections: Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: Arc<TokioMutex<Vec<u64>>>,
 ) -> WsResult<()> {
     let ws_stream = tokio_tungstenite::accept_async(raw_stream)
         .await
@@ -474,25 +475,37 @@ pub async fn handle_connection(
 
     let msg = ws_receiver.next().await;
 
-    let mut user_id: Option<u64> = None;
+    let mut user_id: u64 = 0;
+    let mut config_code: u64 = 0;
 
     match msg {
         Some(msg) => {
             let msg: Message = msg?;
             if let Message::Text(m) = msg {
-                // ? SUBSCRIBE TO THE LIQUIDITY UPDATES AS WELL AS TRADES
-                if let Ok(user_id_) = m.parse::<u64>() {
-                    user_id = Some(user_id_);
+                let json: std::result::Result<Value, _> = from_str(&m);
 
-                    let mut ws_connections__ = ws_connections.lock().await;
-                    ws_connections__.insert(addr, ws_sender);
-                    drop(ws_connections__);
+                if let Ok(json) = json {
+                    // Extract the desired fields
+                    user_id = u64::from_str_radix(json["user_id"].as_str().unwrap_or("0"), 10)
+                        .unwrap_or_default();
+                    config_code =
+                        u64::from_str_radix(json["config_code"].as_str().unwrap_or("0"), 10)
+                            .unwrap_or_default();
 
-                    let mut ws_ids__ = ws_ids.lock().await;
-                    ws_ids__.insert(user_id_, addr);
-                    drop(ws_ids__);
-                } else {
-                    // println!("Received invalid user id: {}", m);
+                    if user_id > 0 {
+                        // ? SUBSCRIBE TO THE LIQUIDITY UPDATES
+                        let mut ws_connections__ = ws_connections.lock().await;
+                        ws_connections__.insert(user_id, ws_sender);
+                        drop(ws_connections__);
+
+                        if config_code == CONFIG_CODE {
+                            // ? SUBSCRIBE TO THE TRADE UPDATES
+                            let mut privileged_ws_connections__ =
+                                privileged_ws_connections.lock().await;
+                            privileged_ws_connections__.push(user_id);
+                            drop(privileged_ws_connections__);
+                        }
+                    }
                 }
             }
         }
@@ -512,52 +525,58 @@ pub async fn handle_connection(
     }
 
     let mut ws_connections__ = ws_connections.lock().await;
-    ws_connections__.remove(&addr);
+    ws_connections__.remove(&user_id);
     drop(ws_connections__);
 
-    if let Some(user_id) = user_id {
-        let mut ws_ids__ = ws_ids.lock().await;
-        ws_ids__.remove(&user_id);
-        drop(ws_ids__);
+    if config_code > 0 {
+        let mut privileged_ws_connections__ = privileged_ws_connections.lock().await;
+        let index = privileged_ws_connections__
+            .iter()
+            .position(|&uid| uid == user_id)
+            .unwrap_or_default();
+        privileged_ws_connections__.remove(index);
+
+        drop(privileged_ws_connections__);
     }
 
     Ok(())
 }
 
-pub async fn brodcast_message(
+pub async fn broadcast_message(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     msg: Message,
 ) -> WsResult<()> {
-    let mut ws_connections__ = ws_connections.lock().await;
-    for (_, ws_sender) in ws_connections__.iter_mut() {
-        ws_sender.send(msg.clone()).await?;
+    for user_id in privileged_ws_connections.lock().await.iter() {
+        let mut ws_connections__ = ws_connections.lock().await;
+        let ws_sender = ws_connections__.get_mut(&user_id);
+
+        if let None = ws_sender {
+            continue;
+        }
+
+        ws_sender.unwrap().send(msg.clone()).await?;
     }
-    drop(ws_connections__);
 
     Ok(())
 }
 
 pub async fn send_direct_message(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
     user_id: u64,
     msg: Message,
 ) -> WsResult<()> {
     let mut ws_connections__ = ws_connections.lock().await;
-    let ws_ids__ = ws_ids.lock().await;
 
-    let addr = ws_ids__.get(&user_id);
+    let ws_sender = ws_connections__.get_mut(&user_id);
 
-    if addr.is_none() {
+    if let None = ws_sender {
         return Ok(());
     }
 
-    let ws_sender = ws_connections__.get_mut(addr.unwrap()).unwrap();
-
-    ws_sender.send(msg.clone()).await?;
+    ws_sender.unwrap().send(msg.clone()).await?;
 
     drop(ws_connections__);
-    drop(ws_ids__);
 
     Ok(())
 }

@@ -8,7 +8,7 @@ use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{DUST_AMOUNT_PER_ASSET, PRICE_DECIMALS_PER_ASSET};
 use crate::server::grpc::engine::{PerpOrderRestoreMessageInner, SpotOrderRestoreMessageInner};
 use crate::transactions::limit_order::LimitOrder;
-use crate::utils::crypto_utils::{EcPoint, Signature};
+use crate::utils::crypto_utils::Signature;
 
 use super::domain::{Order, OrderSide, OrderType, OrderWrapper};
 use super::order_queues::OrderQueue;
@@ -410,7 +410,6 @@ impl OrderBook {
                         OrderType::Limit,
                         side,
                         qty,
-                        is_market_order,
                     );
                     opposite_quote_qty = 0;
                 }
@@ -637,7 +636,6 @@ impl OrderBook {
         order_type: OrderType,
         side: OrderSide,
         qty: u64,
-        is_market: bool,
     ) -> bool {
         // ? real processing time
         let deal_time = SystemTime::now();
@@ -1311,6 +1309,36 @@ impl OrderBook {
         let impact_ask_price = ask_price_ * 10_f64.powi(*price_decimals as i32);
 
         return Ok((impact_bid_price as u64, impact_ask_price as u64));
+    }
+
+    ///  * get market_price
+    pub fn get_market_price(&self) -> Result<u64, String> {
+        let top_bid_order = self.bid_queue.peek();
+        if top_bid_order.is_none() {
+            return Err("No market price".to_string());
+        }
+        let top_ask_order = self.ask_queue.peek();
+        if top_ask_order.is_none() {
+            return Err("No market price".to_string());
+        }
+
+        let bid_price_ = top_bid_order.unwrap().order.get_price(OrderSide::Bid, None);
+
+        let ask_price_ = top_ask_order.unwrap().order.get_price(OrderSide::Ask, None);
+
+        if bid_price_ == 0.0 || ask_price_ == 0.0 {
+            return Err("No market price".to_string());
+        }
+
+        let market_price = (bid_price_ + ask_price_) / 2.0;
+        let market_price = market_price
+            * 10_f64.powi(
+                *PRICE_DECIMALS_PER_ASSET
+                    .get(self.order_asset.to_string().as_str())
+                    .unwrap() as i32,
+            );
+
+        return Ok(market_price as u64);
     }
 
     /// * Clears all orders that have expired from both queues

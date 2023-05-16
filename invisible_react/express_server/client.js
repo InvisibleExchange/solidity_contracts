@@ -8,6 +8,9 @@ const {
   initDb,
   storeSpotOrder,
   storePerpOrder,
+  initOrderBooks,
+  compileLiqUpdateMessage,
+  listenToLiquidityUpdates,
 } = require("./helpers");
 
 const grpc = require("@grpc/grpc-js");
@@ -28,25 +31,71 @@ const packageDefinition = protoLoader.loadSync(
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
 
+const CONFIG_CODE = "1234567890";
 const SERVER_URL = "localhost:50052";
 
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
 const db = initDb();
 
-// ORDER BOOKS AND LIQUIDITY ====================================================================================
+// * ORDER BOOKS AND LIQUIDITY ====================================================================================
 
+const orderBooks = initOrderBooks();
+let fillUpdates = [];
+let wsConnections = [];
+
+// & WEBSOCKET CLIENT
 let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket("ws://localhost:50053/");
+let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
-  wsClient.send("1234567654321");
+  wsClient.send(
+    JSON.stringify({ user_id: "11223344556677", config_code: CONFIG_CODE })
+  );
 };
 
 wsClient.onmessage = function (e) {
-  listenToLiquidtiyUpdates(e, db);
+  listenToLiquidityUpdates(e, db, orderBooks, fillUpdates);
 };
+
+// & WEBSOCKET SERVER
+const WebSocket = require("ws");
+const wss = new WebSocket.Server({ port: 4040 });
+const SEND_LIQUIDITY_PERIOD = 1_000;
+
+wss.on("connection", (ws) => {
+  ws.on("message", (message) => {});
+
+  wsConnections.push(ws);
+});
+
+// ? Send the update to all connected clients
+setInterval(() => {
+  let updates = compileLiqUpdateMessage(orderBooks);
+  let message = JSON.stringify({
+    message_id: "LIQUIDITY_UPDATE",
+    liquidity_updates: updates,
+  });
+
+  let fillMessage = fillUpdates.length
+    ? JSON.stringify({
+        message_id: "SWAP_FILLED",
+        fillUpdates: fillUpdates,
+      })
+    : null;
+
+  fillUpdates = [];
+
+  for (const ws of wsConnections) {
+    ws.send(message);
+    if (fillMessage) {
+      ws.send(fillMessage);
+    }
+  }
+}, SEND_LIQUIDITY_PERIOD);
+
+console.log("WebSocket server started on port 4040");
 
 /// =============================================================================
 

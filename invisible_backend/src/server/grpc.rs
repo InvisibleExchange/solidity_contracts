@@ -15,6 +15,10 @@ use serde::Serialize;
 
 use crate::{
     perpetual::{
+        liquidations::{
+            liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
+            liquidation_output::LiquidationResponse,
+        },
         perp_helpers::perp_swap_outptut::PerpSwapResponse,
         perp_order::{CloseOrderFields, OpenOrderFields, PerpOrder},
         perp_position::PerpPosition,
@@ -37,7 +41,7 @@ use crate::{
 
 use self::engine::{
     DepositMessage, GrpcCloseOrderFields, GrpcOpenOrderFields, GrpcOracleUpdate, GrpcPerpPosition,
-    MarginChangeReq, PerpOrderMessage, WithdrawalMessage,
+    LiquidationOrderMessage, MarginChangeReq, PerpOrderMessage, WithdrawalMessage,
 };
 
 // * TRANSACTION ENGINE ======================================================================
@@ -216,21 +220,6 @@ impl TryFrom<PerpOrderMessage> for PerpOrder {
                     close_order_fields,
                 );
             }
-            3 => {
-                result = PerpOrder::new_liquidation_order(
-                    0,
-                    req.expiration_timestamp,
-                    PerpPosition::try_from(req.position.ok_or(GrpcMessageError {})?)?,
-                    if req.order_side == 0 {
-                        OrderSide::Long
-                    } else {
-                        OrderSide::Short
-                    },
-                    req.synthetic_token,
-                    req.synthetic_amount,
-                    req.collateral_amount,
-                );
-            }
             _ => {
                 return Err(Report::new(GrpcMessageError {}).attach("Invalid position effect type"))
             }
@@ -269,6 +258,7 @@ impl TryFrom<GrpcOpenOrderFields> for OpenOrderFields {
             blinding: BigUint::from_str(&req.blinding)
                 .ok()
                 .ok_or(GrpcMessageError {})?,
+            allow_partial_liquidations: req.allow_partial_liquidations,
         };
 
         Ok(fields)
@@ -292,6 +282,33 @@ impl TryFrom<GrpcCloseOrderFields> for CloseOrderFields {
     }
 }
 
+// LIQUIDATION ORDER
+
+impl TryFrom<LiquidationOrderMessage> for LiquidationOrder {
+    type Error = Report<GrpcMessageError>;
+
+    fn try_from(req: LiquidationOrderMessage) -> Result<Self, GrpcMessageError> {
+        let open_order_fields =
+            OpenOrderFields::try_from(req.open_order_fields.ok_or(GrpcMessageError {})?)?;
+        let position = PerpPosition::try_from(req.position.ok_or(GrpcMessageError {})?)?;
+
+        let result = LiquidationOrder::new(
+            position,
+            if req.order_side == 0 {
+                OrderSide::Long
+            } else {
+                OrderSide::Short
+            },
+            req.synthetic_token,
+            req.synthetic_amount,
+            req.collateral_amount,
+            open_order_fields,
+        );
+
+        return Ok(result);
+    }
+}
+
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 // POSITIONS
@@ -311,6 +328,7 @@ impl From<PerpPosition> for GrpcPerpPosition {
             entry_price: req.entry_price,
             liquidation_price: req.liquidation_price,
             bankruptcy_price: req.bankruptcy_price,
+            allow_partial_liquidations: req.allow_partial_liquidations,
             position_address: BigUint::from_str(&req.position_address.to_string())
                 .unwrap_or_default()
                 .to_string(),
@@ -352,6 +370,7 @@ impl TryFrom<GrpcPerpPosition> for PerpPosition {
             entry_price: req.entry_price,
             liquidation_price: req.liquidation_price,
             bankruptcy_price: req.bankruptcy_price,
+            allow_partial_liquidations: req.allow_partial_liquidations,
             position_address,
             last_funding_idx: req.last_funding_idx,
             index: req.index,
@@ -548,7 +567,9 @@ pub struct GrpcTxResponse {
         JoinHandle<Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError>>,
     >,
     pub perp_tx_handle: Option<JoinHandle<Result<PerpSwapResponse, PerpSwapExecutionError>>>,
-    pub new_idxs: Option<std::result::Result<Vec<u64>, String>>,
+    pub liquidation_tx_handle:
+        Option<JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>>>,
+    pub new_idxs: Option<std::result::Result<Vec<u64>, String>>, // For deposit orders
     pub successful: bool,
 }
 
@@ -569,6 +590,7 @@ pub enum MessageType {
     SwapMessage,
     WithdrawalMessage,
     PerpSwapMessage,
+    LiquidationMessage,
     SplitNotes,
     MarginChange,
     Rollback,
@@ -590,6 +612,7 @@ pub struct GrpcMessage {
     pub swap_message: Option<Swap>,
     pub withdrawal_message: Option<Withdrawal>,
     pub perp_swap_message: Option<PerpSwap>,
+    pub liquidation_message: Option<LiquidationSwap>,
     pub split_notes_message: Option<(Vec<Note>, Vec<Note>)>,
     pub change_margin_message: Option<ChangeMarginMessage>,
     pub rollback_info_message: Option<(ThreadId, RollbackMessage)>,

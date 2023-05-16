@@ -348,6 +348,31 @@ pub fn consistency_checks(
         ));
     }
 
+    if order_a.position.is_some()
+        && order_a.position.as_ref().unwrap().synthetic_token != order_a.synthetic_token
+    {
+        return Err(send_perp_swap_error(
+            "order and position token mismatch".to_string(),
+            Some(order_a.order_id),
+            Some(format!(
+                "synthetic token mismatch {:?} != {:?}",
+                order_a.synthetic_token, order_b.synthetic_token
+            )),
+        ));
+    }
+    if order_b.position.is_some()
+        && order_b.position.as_ref().unwrap().synthetic_token != order_b.synthetic_token
+    {
+        return Err(send_perp_swap_error(
+            "order and position token mismatch".to_string(),
+            Some(order_b.order_id),
+            Some(format!(
+                "synthetic token mismatch {:?} != {:?}",
+                order_b.synthetic_token, order_b.synthetic_token
+            )),
+        ));
+    }
+
     // ? Check that the orders are the opposite sides
     // ? for simplicity, we require order_a to be the "buyer" and order_b to be the "seller"
     if order_a.order_side != OrderSide::Long || order_b.order_side != OrderSide::Short {
@@ -430,11 +455,9 @@ pub fn consistency_checks(
 
     // ? Check that the fees taken don't exceed the order fees
     if ((fee_taken_a as u128 * order_a.collateral_amount as u128)
-        > (order_a.fee_limit as u128 * spent_collateral as u128)
-        && order_a.position_effect_type != PositionEffectType::Liquidation)
+        > (order_a.fee_limit as u128 * spent_collateral as u128))
         || ((fee_taken_b as u128 * order_b.collateral_amount as u128)
-            > (order_b.fee_limit as u128 * spent_collateral as u128)
-            && order_b.position_effect_type != PositionEffectType::Liquidation)
+            > (order_b.fee_limit as u128 * spent_collateral as u128))
     {
         return Err(send_perp_swap_error(
             "Fees taken exceed order fees".to_string(),
@@ -543,3 +566,5 @@ pub fn consistency_checks(
 
     Ok(())
 }
+
+// * ========================================================================================

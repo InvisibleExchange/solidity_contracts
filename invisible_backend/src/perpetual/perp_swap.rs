@@ -9,7 +9,6 @@ use std::thread::ThreadId;
 use crossbeam::thread;
 
 use super::order_execution::close_order::execute_close_order;
-use super::order_execution::liquidate_order::execute_liquidation;
 use super::order_execution::modify_order::{execute_modify_order, verify_position_existence};
 use super::order_execution::open_order::{
     check_valid_collateral_token, execute_open_order, get_init_margin,
@@ -95,7 +94,6 @@ impl PerpSwap {
         perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>, // (pfr_note, amount_filled, spent_margin)
         partialy_filled_positions: Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>, // (position, synthetic filled)
         perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
-        insurance_fund: Arc<Mutex<i64>>,
         //
         index_price: u64,
         min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
@@ -132,7 +130,6 @@ impl PerpSwap {
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
             let swap_funding_info__ = swap_funding_info.clone();
-            let insurance_fund__ = insurance_fund.clone();
 
             let order_handle_a = s.spawn(move |_| {
                 let execution_output: TxExecutionThreadOutput;
@@ -193,7 +190,6 @@ impl PerpSwap {
                     }
                     PositionEffectType::Modify => {
                         //
-
 
                         // ? Verify the position hash is valid and exists in the state
                         verify_position_existence(
@@ -281,55 +277,6 @@ impl PerpSwap {
                             synthetic_amount_filled: new_spent_sythetic,
                         }
                     }
-                    PositionEffectType::Liquidation => {
-                        //
-
-                        // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
-                            &perpetual_state_tree__,
-                            &partialy_filled_positions__,
-                            &self.order_a.position,
-                            self.order_a.order_id,
-                        )?;
-
-                        let (
-                            position_index,
-                            prev_position,
-                            position,
-                            new_pfr_info,
-                            leftover_value,
-                            new_spent_synthetic,
-                            prev_funding_idx,
-                            is_fully_filled,
-                        ) = execute_liquidation(
-                            &swap_funding_info__,
-                            &partialy_filled_positions__,
-                            &perpetual_partial_fill_tracker__,
-                            &blocked_perp_order_ids__,
-                            index_price,
-                            &self.order_a,
-                            self.spent_collateral,
-                            self.spent_synthetic,
-                        )?;
-
-                        let mut insurance_fund_m = insurance_fund__.lock();
-                        let fund_amount: &mut i64 = &mut insurance_fund_m;
-                        *fund_amount += leftover_value;
-                        drop(insurance_fund_m);
-
-                        execution_output = TxExecutionThreadOutput {
-                            prev_pfr_note: None,
-                            new_pfr_info,
-                            is_fully_filled,
-                            prev_position: Some(prev_position),
-                            position,
-                            position_index,
-                            prev_funding_idx,
-                            collateral_returned: 0,
-                            return_collateral_note: None,
-                            synthetic_amount_filled: new_spent_synthetic,
-                        }
-                    }
                 }
 
                 return Ok(execution_output);
@@ -342,7 +289,6 @@ impl PerpSwap {
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
             let swap_funding_info__ = swap_funding_info.clone();
-            let insurance_fund__ = insurance_fund.clone();
 
             let order_handle_b = s.spawn(move |_| {
                 let execution_output: TxExecutionThreadOutput;
@@ -486,55 +432,6 @@ impl PerpSwap {
                             position_index,
                             prev_funding_idx,
                             collateral_returned,
-                            return_collateral_note: None,
-                            synthetic_amount_filled: new_spent_sythetic,
-                        }
-                    }
-                    PositionEffectType::Liquidation => {
-                        //
-
-                        // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
-                            &perpetual_state_tree__,
-                            &partialy_filled_positions__,
-                            &self.order_b.position,
-                            self.order_b.order_id,
-                        )?;
-
-                        let (
-                            position_index,
-                            prev_position,
-                            position,
-                            new_pfr_info,
-                            leftover_value,
-                            new_spent_sythetic,
-                            prev_funding_idx,
-                            is_fully_filled,
-                        ) = execute_liquidation(
-                            &swap_funding_info__,
-                            &partialy_filled_positions__,
-                            &perpetual_partial_fill_tracker__,
-                            &blocked_perp_order_ids__,
-                            index_price,
-                            &self.order_b,
-                            self.spent_collateral,
-                            self.spent_synthetic,
-                        )?;
-
-                        let mut insurance_fund_m = insurance_fund__.lock();
-                        let fund_amount: &mut i64 = &mut insurance_fund_m;
-                        *fund_amount += leftover_value;
-                        drop(insurance_fund_m);
-
-                        execution_output = TxExecutionThreadOutput {
-                            prev_pfr_note: None,
-                            new_pfr_info,
-                            is_fully_filled,
-                            prev_position: Some(prev_position),
-                            position,
-                            position_index,
-                            prev_funding_idx,
-                            collateral_returned: 0,
                             return_collateral_note: None,
                             synthetic_amount_filled: new_spent_sythetic,
                         }
@@ -1092,24 +989,24 @@ impl Serialize for PerpSwap {
     where
         S: Serializer,
     {
-        let mut note = serializer.serialize_struct("PerpSwap", 9)?;
+        let mut perp_swap = serializer.serialize_struct("PerpSwap", 9)?;
 
         if self.order_a.order_side == OrderSide::Long {
-            note.serialize_field("signature_a", &self.signature_a)?;
-            note.serialize_field("signature_b", &self.signature_b)?;
-            note.serialize_field("spent_collateral", &self.spent_collateral)?;
-            note.serialize_field("spent_synthetic", &self.spent_synthetic)?;
-            note.serialize_field("fee_taken_a", &self.fee_taken_a)?;
-            note.serialize_field("fee_taken_b", &self.fee_taken_b)?;
+            perp_swap.serialize_field("signature_a", &self.signature_a)?;
+            perp_swap.serialize_field("signature_b", &self.signature_b)?;
+            perp_swap.serialize_field("spent_collateral", &self.spent_collateral)?;
+            perp_swap.serialize_field("spent_synthetic", &self.spent_synthetic)?;
+            perp_swap.serialize_field("fee_taken_a", &self.fee_taken_a)?;
+            perp_swap.serialize_field("fee_taken_b", &self.fee_taken_b)?;
         } else {
-            note.serialize_field("signature_b", &self.signature_a)?;
-            note.serialize_field("signature_a", &self.signature_b)?;
-            note.serialize_field("spent_collateral", &self.spent_collateral)?;
-            note.serialize_field("spent_synthetic", &self.spent_synthetic)?;
-            note.serialize_field("fee_taken_b", &self.fee_taken_a)?;
-            note.serialize_field("fee_taken_a", &self.fee_taken_b)?;
+            perp_swap.serialize_field("signature_b", &self.signature_a)?;
+            perp_swap.serialize_field("signature_a", &self.signature_b)?;
+            perp_swap.serialize_field("spent_collateral", &self.spent_collateral)?;
+            perp_swap.serialize_field("spent_synthetic", &self.spent_synthetic)?;
+            perp_swap.serialize_field("fee_taken_b", &self.fee_taken_a)?;
+            perp_swap.serialize_field("fee_taken_a", &self.fee_taken_b)?;
         }
 
-        return note.end();
+        return perp_swap.end();
     }
 }

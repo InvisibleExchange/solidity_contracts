@@ -8,7 +8,8 @@ use serde::Deserialize as DeserializeTrait;
 
 use crate::perpetual::OrderSide;
 use crate::perpetual::{
-    COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET, LEVERAGE_DECIMALS, PRICE_DECIMALS_PER_ASSET,
+    COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET, LEVERAGE_DECIMALS, MIN_PARTIAL_LIQUIDATION_SIZE,
+    PRICE_DECIMALS_PER_ASSET,
 };
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
 
@@ -17,7 +18,7 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 // position should have address or something
 #[derive(Debug, Clone)]
 pub struct PerpPosition {
-    // ? Imutable fields
+    // ? Immutable fields
     pub order_side: OrderSide, // Long or Short
     pub synthetic_token: u64,  // type of asset being traded
     pub collateral_token: u64, // collateral asset type
@@ -28,6 +29,7 @@ pub struct PerpPosition {
     pub entry_price: u64,       // average buy/sell price of the position
     pub liquidation_price: u64, // price at which position will be liquidated
     pub bankruptcy_price: u64,  // price at which the position has zero margin left
+    pub allow_partial_liquidations: bool, // if true, allow partial liquidations
     // ? =======
     pub position_address: BigUint, // address of the position (for signatures)
     pub last_funding_idx: u32, // last index when funding payment was updated in the state (in cairo)
@@ -43,6 +45,7 @@ impl PerpPosition {
         collateral_token: u64,
         margin: u64,
         leverage: u64,
+        allow_partial_liquidations: bool,
         position_address: BigUint,
         current_funding_idx: u32,
         index: u32,
@@ -60,8 +63,14 @@ impl PerpPosition {
             synthetic_token,
         )
         .unwrap_or_default();
-        let liquidation_price: u64 =
-            _get_liquidation_price(entry_price, bankruptcy_price, &order_side);
+        let liquidation_price: u64 = _get_liquidation_price(
+            entry_price,
+            margin,
+            position_size,
+            &order_side,
+            synthetic_token,
+            allow_partial_liquidations,
+        );
 
         let hash: BigUint = _hash_position(
             &order_side,
@@ -82,6 +91,7 @@ impl PerpPosition {
             entry_price,
             liquidation_price,
             bankruptcy_price,
+            allow_partial_liquidations,
             position_address,
             last_funding_idx: current_funding_idx,
             hash,
@@ -89,8 +99,9 @@ impl PerpPosition {
         }
     }
 
-    /// This is called if an open order was filled partially before.
-    /// It Adds new_margin amount of collateral at new_entry_price with new_leverage
+    //
+    /// *  This is called if an open order was filled partially before.
+    /// *  It Adds new_margin amount of collateral at new_entry_price with new_leverage
     pub fn add_margin_to_position(
         &mut self,
         added_margin: u64,
@@ -139,8 +150,11 @@ impl PerpPosition {
         .unwrap_or_default();
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
-            new_bankruptcy_price,
+            margin as u64,
+            self.position_size + added_size,
             &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
@@ -163,8 +177,9 @@ impl PerpPosition {
         self.hash = new_hash;
     }
 
-    /// Adds added_size amount of synthetic tokens to the position
-    /// This increases the size while worsening the liquidation price
+    //
+    /// *  Adds added_size amount of synthetic tokens to the position
+    /// *  This increases the size while worsening the liquidation price
     pub fn increase_position_size(
         &mut self,
         added_size: u64,
@@ -191,8 +206,11 @@ impl PerpPosition {
         .unwrap_or_default();
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
-            new_bankruptcy_price,
+            self.margin - fee_taken,
+            self.position_size + added_size,
             &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
@@ -215,8 +233,9 @@ impl PerpPosition {
         self.hash = new_hash;
     }
 
-    /// Reduces the position size by reduction_size amount of synthetic tokens at price
-    /// This reduces the size while  improving the liquidation price
+    //
+    /// * Reduces the position size by reduction_size amount of synthetic tokens at price
+    /// * This reduces the size while  improving the liquidation price
     pub fn reduce_position_size(
         &mut self,
         reduction_size: u64,
@@ -262,8 +281,14 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
-        let new_liquidation_price: u64 =
-            _get_liquidation_price(self.entry_price, new_bankruptcy_price, &self.order_side);
+        let new_liquidation_price: u64 = _get_liquidation_price(
+            self.entry_price,
+            updated_margin,
+            new_size,
+            &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
+        );
 
         let new_hash: BigUint = _hash_position(
             &self.order_side,
@@ -284,8 +309,9 @@ impl PerpPosition {
         self.hash = new_hash;
     }
 
-    /// Flip position side and update the position
-    /// If position is being reduced more than the size, then the position is opened in another direction
+    //
+    /// * Flip position side and update the position
+    /// * If position is being reduced more than the size, then the position is opened in another direction
     pub fn flip_position_side(
         &mut self,
         reduction_size: u64,
@@ -326,8 +352,6 @@ impl PerpPosition {
             OrderSide::Short => OrderSide::Long,
         };
 
-        // & bankruptcy_price = entry_price +/- margin/(amount+new_amount)
-        // & liquidation_price = bankruptcy_price -/+ maintnance_margin/(amount+new_amount)
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             price,
             updated_margin,
@@ -336,8 +360,14 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
-        let new_liquidation_price: u64 =
-            _get_liquidation_price(price, new_bankruptcy_price, &new_order_side);
+        let new_liquidation_price: u64 = _get_liquidation_price(
+            price,
+            updated_margin,
+            new_size,
+            &new_order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
+        );
 
         let new_hash: BigUint = _hash_position(
             &new_order_side,
@@ -359,6 +389,8 @@ impl PerpPosition {
         self.hash = new_hash;
     }
 
+    //
+    /// * Partially fill a position close order
     pub fn close_position_partialy(
         &mut self,
         reduction_size: u64,
@@ -427,6 +459,8 @@ impl PerpPosition {
         return Ok(return_collateral as u64);
     }
 
+    //
+    /// * Close a position and return the collateral +/- pnl
     pub fn close_position(
         &mut self,
         price: u64,
@@ -450,97 +484,184 @@ impl PerpPosition {
         return Ok(return_collateral as u64);
     }
 
-    pub fn liquidate_position_partialy(
-        &mut self,
-        liquidation_size: u64,
-        market_price: u64,
-        index_price: u64,
-        funding_idx: u32,
-    ) -> Result<i64, PerpSwapExecutionError> {
-        // & liquidates part of the position updating the margin and position size
-        // & returns part of the leftover margin (if positive add to IF else subtract from IF)
-
-        // ? Verifies that the position is liquidatable
+    //
+    /// * Gets the amount of position to be liquidated
+    /// * Returns: (is_fully_liquidation, liquidatable amount)
+    pub fn is_position_liquidatable(&self, market_price: u64, index_price: u64) -> (bool, u64) {
+        // & if market_price is greater than the bankruptcy price, the leftover collateral goes to the insurance fund
         if (self.order_side == OrderSide::Long && index_price > self.liquidation_price)
-            || self.order_side == OrderSide::Short && index_price < self.liquidation_price
+            || (self.order_side == OrderSide::Short && index_price < self.liquidation_price)
         {
-            return Err(send_perp_swap_error(
-                "Market price is not worse than the liquidation price".to_string(),
-                None,
-                None,
-            ));
+            return (false, 0);
         }
 
-        let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
-            .unwrap();
+        if self.allow_partial_liquidations
+            && self.position_size
+                > MIN_PARTIAL_LIQUIDATION_SIZE[self.synthetic_token.to_string().as_str()]
+        {
+            let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
+                .get(self.synthetic_token.to_string().as_str())
+                .unwrap();
 
-        let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
-            .unwrap();
+            let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
+                .get(self.synthetic_token.to_string().as_str())
+                .unwrap();
 
-        // & get the profit/loss to add/subtract from the margin
-        let decimal_conversion =
-            *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
-        let multiplier = 10_i128.pow(decimal_conversion as u32);
+            // & price_delta = entry_price - market_price for long and market_price - entry_price for short
+            // & new_size = (margin - position.size * price_delta) / ((entry_price +/- price_delta) * (im_fraction + lf_rate))  ; - if long, + if short
 
-        let updated_size = self.position_size - liquidation_size;
+            let decimal_conversion1 =
+                *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
+            let multiplier1 = 10_u128.pow(decimal_conversion1 as u32);
 
-        let reduction_margin = (liquidation_size * self.margin) / self.position_size;
-        let margin = self.margin - reduction_margin;
+            let price_delta = if self.order_side == OrderSide::Long {
+                self.entry_price as u64 - market_price as u64
+            } else {
+                market_price as u64 - self.entry_price as u64
+            };
 
-        // let liquidator_fee =
-        //     market_price as i128 * liquidation_size as i128 / (100 * multiplier) as i128;
+            let im_rate = 67; // 6.7 %
+            let liquidator_fee_rate = 5; // 0.5 %
 
-        let leftover_value: i128;
-        if self.order_side == OrderSide::Long {
-            leftover_value = (market_price as i64 - self.bankruptcy_price as i64) as i128
-                * liquidation_size as i128
-                / multiplier as i128;
-            // - liquidator_fee;
+            let s1 = self.margin as u128 * multiplier1;
+            let s2 = self.position_size as u128 * price_delta as u128;
+
+            let new_size =
+                (s1 - s2) / (market_price as u128 * (im_rate + liquidator_fee_rate) as u128) / 1000;
+
+            let liquidatable_size = self.position_size - new_size as u64;
+
+            return (true, liquidatable_size);
         } else {
-            leftover_value = (self.bankruptcy_price as i64 - market_price as i64) as i128
-                * liquidation_size as i128
-                / multiplier as i128;
-            // - liquidator_fee;
+            let liquidatable_size = self.position_size;
+
+            return (true, liquidatable_size);
         }
-
-        let new_hash: BigUint = _hash_position(
-            &self.order_side,
-            self.synthetic_token,
-            updated_size,
-            self.entry_price,
-            self.liquidation_price,
-            &self.position_address,
-            funding_idx,
-        );
-
-        // ? Make updates to the position
-        self.position_size = updated_size;
-        self.margin = margin;
-        self.last_funding_idx = funding_idx;
-        self.hash = new_hash;
-
-        return Ok(leftover_value as i64);
     }
 
+    //
+    /// * Liquidate the position either partially or fully
+    /// * Returns: (liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation)
     pub fn liquidate_position(
         &mut self,
         market_price: u64,
         index_price: u64,
-    ) -> Result<i64, PerpSwapExecutionError> {
+    ) -> Result<(u64, u64, i64, bool), PerpSwapExecutionError> {
         // & if market_price is greater than the bankruptcy price, the leftover collateral goes to the insurance fund
-
         if (self.order_side == OrderSide::Long && index_price > self.liquidation_price)
             || (self.order_side == OrderSide::Short && index_price < self.liquidation_price)
         {
             return Err(send_perp_swap_error(
-                "Market price is not worse than the liquidation price".to_string(),
+                "Index price is not worse than the liquidation price".to_string(),
                 None,
                 None,
             ));
         }
 
+        if self.allow_partial_liquidations
+            && self.position_size
+                > MIN_PARTIAL_LIQUIDATION_SIZE[self.synthetic_token.to_string().as_str()]
+        {
+            let (liquidator_fee, liquidated_size) =
+                self.partially_liquidate_position(market_price)?;
+
+            return Ok((liquidated_size, liquidator_fee, 0, true));
+        } else {
+            let size = self.position_size;
+            let (leftover_collateral, liquidator_fee) =
+                self.fully_liquidate_position(market_price)?;
+
+            return Ok((size, liquidator_fee, leftover_collateral, false));
+        }
+    }
+
+    //
+    // * Partially liquidate the position by closing enough of it to bring the margin back to the initial margin requirement
+    fn partially_liquidate_position(
+        &mut self,
+        market_price: u64,
+    ) -> Result<(u64, u64), PerpSwapExecutionError> {
+        let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
+            .get(self.synthetic_token.to_string().as_str())
+            .unwrap();
+
+        let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
+            .get(self.synthetic_token.to_string().as_str())
+            .unwrap();
+
+        // & price_delta = entry_price - market_price for long and market_price - entry_price for short
+        // & new_size = (margin - position.size * price_delta) / ((entry_price +/- price_delta) * (im_fraction + lf_rate))  ; - if long, + if short
+
+        let decimal_conversion1 =
+            *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
+        let multiplier1 = 10_u128.pow(decimal_conversion1 as u32);
+
+        let price_delta = if self.order_side == OrderSide::Long {
+            self.entry_price as u64 - market_price as u64
+        } else {
+            market_price as u64 - self.entry_price as u64
+        };
+
+        let im_rate = 67; // 6.7 %
+        let liquidator_fee_rate = 5; // 0.5 %
+
+        let s1 = self.margin as u128 * multiplier1;
+        let s2 = self.position_size as u128 * price_delta as u128;
+
+        let new_size =
+            (s1 - s2) / (market_price as u128 * (im_rate + liquidator_fee_rate) as u128) / 1000;
+
+        let liquidated_size = self.position_size - new_size as u64;
+
+        //& Leftover value: (market_price - bankruptcy_price) * position_size   (denominated in collateral - USD)
+
+        let liquidator_fee = (liquidated_size as u128 * market_price as u128 * liquidator_fee_rate
+            / multiplier1 as u128
+            + 1000) as u64;
+
+        let new_bankruptcy_price: u64 = _get_bankruptcy_price(
+            self.entry_price,
+            self.margin - liquidator_fee,
+            new_size as u64,
+            &self.order_side,
+            self.synthetic_token,
+        )
+        .unwrap_or_default();
+        let new_liquidation_price: u64 = _get_liquidation_price(
+            self.entry_price,
+            self.margin - liquidator_fee,
+            new_size as u64,
+            &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
+        );
+
+        let new_hash: BigUint = _hash_position(
+            &self.order_side,
+            self.synthetic_token,
+            new_size as u64,
+            self.entry_price,
+            new_liquidation_price,
+            &self.position_address,
+            self.last_funding_idx,
+        );
+
+        self.position_size = new_size as u64;
+        self.margin -= liquidator_fee;
+        self.bankruptcy_price = new_bankruptcy_price;
+        self.liquidation_price = new_liquidation_price;
+        self.hash = new_hash;
+
+        // if leftover_value > 0 add to insurance_fund else subtract
+        return Ok((liquidator_fee as u64, liquidated_size));
+    }
+
+    //
+    // * Liquidate the position by closing it fully and add/remove the leftover margin to/from the insurance fund
+    fn fully_liquidate_position(
+        &mut self,
+        market_price: u64,
+    ) -> Result<(i64, u64), PerpSwapExecutionError> {
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
             .unwrap();
@@ -554,26 +675,31 @@ impl PerpPosition {
             *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
         let multiplier = 10_i128.pow(decimal_conversion as u32);
 
-        //& Leftover value: (market_price - bankruptcy_price) * position_size   (denominated in collateral - USD)
+        let liquidator_fee_rate = 5; // 0.5 %
+        let liquidator_fee =
+            (self.position_size as u128 * market_price as u128 * liquidator_fee_rate as u128
+                / multiplier as u128
+                * 1000) as u64;
 
+        //& Leftover value: (market_price - bankruptcy_price) * position_size   (denominated in collateral - USD)
         let leftover_value: i128;
         if self.order_side == OrderSide::Long {
             leftover_value = (market_price as i64 - self.bankruptcy_price as i64) as i128
                 * self.position_size as i128
-                / multiplier as i128;
-            // - liquidator_fee;
+                / multiplier as i128
+                - liquidator_fee as i128;
         } else {
             leftover_value = (self.bankruptcy_price as i64 - market_price as i64) as i128
                 * self.position_size as i128
-                / multiplier as i128;
-            // - liquidator_fee;
+                / multiplier as i128
+                - liquidator_fee as i128;
         }
 
         self.position_size = 0;
         self.margin = 0;
 
         // if leftover_value > 0 add to insurance_fund else subtract
-        return Ok(leftover_value as i64);
+        return Ok((leftover_value as i64, liquidator_fee as u64));
     }
 
     // -----------------------------------------------------------------------
@@ -599,8 +725,14 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
-        let new_liquidation_price: u64 =
-            _get_liquidation_price(self.entry_price, new_bankruptcy_price, &self.order_side);
+        let new_liquidation_price: u64 = _get_liquidation_price(
+            self.entry_price,
+            margin,
+            self.position_size,
+            &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
+        );
 
         let new_hash: BigUint = _hash_position(
             &self.order_side,
@@ -728,8 +860,14 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
-        let new_liquidation_price: u64 =
-            _get_liquidation_price(self.entry_price, new_bankruptcy_price, &self.order_side);
+        let new_liquidation_price: u64 = _get_liquidation_price(
+            self.entry_price,
+            margin_after_funding as u64,
+            self.position_size,
+            &self.order_side,
+            self.synthetic_token,
+            self.allow_partial_liquidations,
+        );
 
         // ! Funding is always applied just before modifying the position, therefore we don't modify the hash
 
@@ -775,6 +913,10 @@ impl Serialize for PerpPosition {
         position.serialize_field("entry_price", &self.entry_price)?;
         position.serialize_field("liquidation_price", &self.liquidation_price)?;
         position.serialize_field("bankruptcy_price", &self.bankruptcy_price)?;
+        position.serialize_field(
+            "allow_partial_liquidations",
+            &self.allow_partial_liquidations,
+        )?;
         position.serialize_field("position_address", &self.position_address.to_string())?;
         position.serialize_field("last_funding_idx", &self.last_funding_idx)?;
         position.serialize_field("hash", &self.hash.to_string())?;
@@ -805,6 +947,7 @@ impl<'de> Deserialize<'de> for PerpPosition {
             entry_price: u64,
             liquidation_price: u64,
             bankruptcy_price: u64,
+            allow_partial_liquidations: bool,
             position_address: String,
             last_funding_idx: u32,
             hash: String,
@@ -826,6 +969,7 @@ impl<'de> Deserialize<'de> for PerpPosition {
             entry_price: helper.entry_price,
             liquidation_price: helper.liquidation_price,
             bankruptcy_price: helper.bankruptcy_price,
+            allow_partial_liquidations: helper.allow_partial_liquidations,
             position_address: BigUint::from_str(&helper.position_address).unwrap(),
             last_funding_idx: helper.last_funding_idx,
             hash: BigUint::from_str(&helper.hash).unwrap(),
@@ -896,26 +1040,62 @@ fn _get_entry_price(initial_margin: u64, leverage: u64, size: u64, synthetic_tok
     return price;
 }
 
-fn _get_liquidation_price(entry_price: u64, bankruptcy_price: u64, order_side: &OrderSide) -> u64 {
-    if bankruptcy_price == 0 {
-        return 0;
-    }
-
+fn _get_liquidation_price(
+    entry_price: u64,
+    position_size: u64,
+    margin: u64,
+    order_side: &OrderSide,
+    synthetic_token: u64,
+    is_partial_liquidation: bool,
+) -> u64 {
     // maintnance margin
-    let mm_rate = 3; // 3% of 100
-
-    // liquidation price is 2% above/below the bankruptcy price
-    if *order_side == OrderSide::Long {
-        return bankruptcy_price + (mm_rate * entry_price / 100);
+    let mm_fraction = if is_partial_liquidation
+        && position_size > MIN_PARTIAL_LIQUIDATION_SIZE[synthetic_token.to_string().as_str()]
+    {
+        4 //%
     } else {
-        return bankruptcy_price - (mm_rate * entry_price / 100);
+        3 //%
+    };
+
+    let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
+        .get(synthetic_token.to_string().as_str())
+        .unwrap();
+
+    let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
+        .get(synthetic_token.to_string().as_str())
+        .unwrap();
+
+    let dec_conversion1: i8 = *synthetic_decimals as i8 + *synthetic_price_decimals as i8
+        - COLLATERAL_TOKEN_DECIMALS as i8;
+    let multiplier1 = 10_u128.pow(dec_conversion1 as u32);
+
+    // & price_delta = (margin - mm_fraction * entry_price * size) / ((1 -/+ mm_fraction)*size) ; - for long, + for short
+
+    if *order_side == OrderSide::Long {
+        let d1 = margin as u128 * multiplier1;
+        let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
+
+        let price_delta = (d1 - d2 * 100) / (100_u128 - mm_fraction as u128);
+
+        let liquidation_price = entry_price - price_delta as u64;
+
+        return liquidation_price;
+    } else {
+        let d1 = margin as u128 * multiplier1;
+        let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
+
+        let price_delta = (d1 - d2 * 100) / (100_u128 + mm_fraction as u128);
+
+        let liquidation_price = entry_price + price_delta as u64;
+
+        return liquidation_price;
     }
 }
 
 fn _get_bankruptcy_price(
     entry_price: u64,
-    margin: u64,
     size: u64,
+    margin: u64,
     order_side: &OrderSide,
     synthetic_token: u64,
 ) -> Option<u64> {
@@ -951,3 +1131,77 @@ fn _get_bankruptcy_price(
 // }
 
 // * ---------------------------------------------
+
+//
+// /// * Partially fill a liquidation order
+// pub fn liquidate_position_partially(
+//     &mut self,
+//     liquidation_size: u64,
+//     market_price: u64,
+//     index_price: u64,
+//     funding_idx: u32,
+// ) -> Result<i64, PerpSwapExecutionError> {
+//     // & liquidates part of the position updating the margin and position size
+//     // & returns part of the leftover margin (if positive add to IF else subtract from IF)
+//     // ? Verifies that the position is liquidatable
+//     if (self.order_side == OrderSide::Long && index_price > self.liquidation_price)
+//         || self.order_side == OrderSide::Short && index_price < self.liquidation_price
+//     {
+//         return Err(send_perp_swap_error(
+//             "Market price is not worse than the liquidation price".to_string(),
+//             None,
+//             None,
+//         ));
+//     }
+//     let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
+//         .get(self.synthetic_token.to_string().as_str())
+//         .unwrap();
+
+//     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
+//         .get(self.synthetic_token.to_string().as_str())
+//         .unwrap();
+
+//     // & get the profit/loss to add/subtract from the margin
+//     let decimal_conversion =
+//         *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
+//     let multiplier = 10_i128.pow(decimal_conversion as u32);
+
+//     let updated_size = self.position_size - liquidation_size;
+
+//     let reduction_margin = (liquidation_size * self.margin) / self.position_size;
+//     let margin = self.margin - reduction_margin;
+
+//     // let liquidator_fee =
+//     //     market_price as i128 * liquidation_size as i128 / (100 * multiplier) as i128;
+
+//     let leftover_value: i128;
+//     if self.order_side == OrderSide::Long {
+//         leftover_value = (market_price as i64 - self.bankruptcy_price as i64) as i128
+//             * liquidation_size as i128
+//             / multiplier as i128;
+//         // - liquidator_fee;
+//     } else {
+//         leftover_value = (self.bankruptcy_price as i64 - market_price as i64) as i128
+//             * liquidation_size as i128
+//             / multiplier as i128;
+//         // - liquidator_fee;
+//     }
+
+//     let new_hash: BigUint = _hash_position(
+//         &self.order_side,
+//         self.synthetic_token,
+//         updated_size,
+//         self.entry_price,
+//         self.liquidation_price,
+//         &self.position_address,
+//         funding_idx,
+//     );
+
+//     // ? Make updates to the position
+//     self.position_size = updated_size;
+//     self.margin = margin;
+//     self.last_funding_idx = funding_idx;
+//     self.hash = new_hash;
+
+//     return Ok(leftover_value as i64);
+// }

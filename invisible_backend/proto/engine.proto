@@ -12,11 +12,11 @@ service Engine {
 
     rpc submit_perpetual_order (PerpOrderMessage) returns (OrderResponse);
 
+    rpc submit_liquidation_order (LiquidationOrderMessage) returns (LiquidationOrderResponse);
+
     rpc cancel_order (CancelOrderMessage) returns (CancelOrderResponse);
 
     rpc amend_order (AmendOrderRequest) returns (AmendOrderResponse);
-
-    // rpc liquidation_order (PerpOrderMessage) returns (OrderResponse);
 
     rpc get_liquidity (LiquidityReq) returns (LiquidityRes);
 
@@ -165,11 +165,38 @@ message GrpcPerpPosition {
     uint64 entry_price = 6;
     uint64 liquidation_price = 7;
     uint64 bankruptcy_price = 8;
-    string position_address = 9;
-    uint32 last_funding_idx = 10;
-    string hash = 11;
-    uint32 index = 12;
+    bool allow_partial_liquidations = 9;
+    string position_address = 10;
+    uint32 last_funding_idx = 11;
+    string hash = 12;
+    uint32 index = 13;
 }
+
+
+
+// ------ LIQUIDATION ORDER --------------
+
+
+message LiquidationOrderMessage {
+    GrpcPerpPosition position = 2;
+    uint32 order_side = 4; // 0-buy, 1-sell
+    uint64 synthetic_token = 5;
+    uint64 synthetic_amount = 7;
+    uint64 collateral_amount = 8;
+    GrpcOpenOrderFields open_order_fields = 10;
+    Signature signature = 12;
+    uint64 user_id = 14; // used to send a response thorugh a ws
+}
+
+
+
+
+message LiquidationOrderResponse {
+    bool successful = 1;
+    string error_message = 2;
+    GrpcPerpPosition new_position = 3;
+}
+
 
 
 // ------ ORDER BOOK ------------------
@@ -220,6 +247,7 @@ message GrpcOpenOrderFields {
     GrpcNote refund_note = 4;
     string position_address = 5;
     string blinding = 6;
+    bool allow_partial_liquidations = 7;
 }
 
 message GrpcCloseOrderFields {

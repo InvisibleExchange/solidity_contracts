@@ -1,13 +1,10 @@
-use std::str::FromStr;
-
 use crate::perpetual::DUST_AMOUNT_PER_ASSET;
 use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 use crate::utils::errors::{send_swap_error, SwapThreadExecutionError};
 
 use error_stack::Result;
-use num_bigint::{BigInt, BigUint};
+use num_bigint::BigUint;
 use num_traits::{FromPrimitive, Zero};
-use starknet::core::types::FieldElement;
 use starknet::curve::AffinePoint;
 
 //

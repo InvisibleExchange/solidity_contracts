@@ -225,25 +225,6 @@ impl OrderRequestValidator {
                             return Err("Position and order should have same synthetic token");
                         }
                     }
-                    PositionEffectType::Liquidation => {
-                        if let None = &perp_order.position {
-                            return Err("Position to update is undefined");
-                        }
-
-                        // ? Verify the position hash is valid and exists in the state
-                        if perp_order.position.as_ref().unwrap().hash
-                            != perp_order.position.as_ref().unwrap().hash_position()
-                        {
-                            return Err("position hash not valid");
-                        }
-
-                        // ? Check that order token matches synthetic token
-                        if perp_order.position.as_ref().unwrap().synthetic_token
-                            != perp_order.synthetic_token
-                        {
-                            return Err("Position and order should have same synthetic token");
-                        }
-                    }
                 }
             }
         }

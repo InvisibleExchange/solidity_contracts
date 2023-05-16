@@ -165,7 +165,7 @@ fn modify_position(
             swap_funding_info.current_funding_idx,
         );
 
-        let leverage = prev_position.get_current_leverage(index_price)?;
+        let leverage = position.get_current_leverage(index_price)?;
 
         // ? Check that leverage is valid relative to the notional position size after increasing size
         if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
@@ -197,6 +197,17 @@ fn modify_position(
                 fee_taken,
                 swap_funding_info.current_funding_idx,
             );
+
+            let leverage = position.get_current_leverage(index_price)?;
+
+            // ? Check that leverage is valid relative to the notional position size after increasing size
+            if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
+                return Err(send_perp_swap_error(
+                    "Leverage would be too high".to_string(),
+                    Some(order.order_id),
+                    None,
+                ));
+            }
         } else {
             // & Decreasing the position size
             position.reduce_position_size(

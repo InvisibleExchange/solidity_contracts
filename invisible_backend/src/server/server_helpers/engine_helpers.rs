@@ -16,17 +16,7 @@ use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 
 use crate::utils::notes::Note;
 
-pub fn verify_signature_format(
-    sig: &Option<GrpcSignature>,
-    pos_effect_type: u32,
-) -> Result<Signature, String> {
-    if pos_effect_type == 3 {
-        return Ok(Signature {
-            r: "0".to_string(),
-            s: "0".to_string(),
-        });
-    }
-
+pub fn verify_signature_format(sig: &Option<GrpcSignature>) -> Result<Signature, String> {
     // ? Verify the signature is defined and has a valid format
     let signature: Signature;
     if sig.is_none() {
@@ -35,7 +25,7 @@ pub fn verify_signature_format(
     match Signature::try_from(sig.as_ref().unwrap().clone()) {
         Ok(sig) => signature = sig,
         Err(_e) => {
-            return Err("Signature fromat is invalid".to_string());
+            return Err("Signature format is invalid".to_string());
         }
     }
 

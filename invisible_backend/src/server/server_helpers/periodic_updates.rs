@@ -1,21 +1,19 @@
-use num_bigint::{BigInt, BigUint};
-use num_traits::Zero;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
-use std::thread::{self, spawn};
+use serde_json::json;
+use std::println;
+use std::thread::{self};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
+use tokio_tungstenite::tungstenite::Message;
 
 use crate::matching_engine::orderbook::OrderBook;
 use crate::perpetual::IMPACT_NOTIONAL_PER_ASSET;
 use crate::server::grpc::{FundingUpdateMessage, GrpcMessage, GrpcTxResponse, MessageType};
-use crate::utils::crypto_utils::{EcPoint, Signature};
+use crate::server::server_helpers::broadcast_message;
 use crate::utils::errors::send_funding_error_reply;
-use crate::utils::firestore::{create_session, start_add_note_thread};
-use crate::utils::notes::Note;
-use crate::utils::storage::BackupStorage;
+use crate::utils::firestore::create_session;
 
-use firestore_db_and_auth::{documents, ServiceSession};
+use firestore_db_and_auth::ServiceSession;
 
 use tokio::sync::{
     mpsc::Sender as MpscSender,
@@ -25,11 +23,15 @@ use tokio::sync::{
 use tokio::task::JoinHandle as TokioJoinHandle;
 use tokio::time;
 
+use super::WsConnectionsMap;
+
 pub async fn start_periodic_updates(
     order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
     perp_order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
     mpsc_tx: &MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
     session: &Arc<Mutex<ServiceSession>>,
+    ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
 ) {
     let perp_order_books_ = perp_order_books.clone();
     let mpsc_tx = mpsc_tx.clone();
@@ -100,7 +102,7 @@ pub async fn start_periodic_updates(
     // });
 
     // * CLEAR EXPIRED ORDERS EVERY 3 SECONDS
-    let order_books = order_books.clone();
+    let order_books_ = order_books.clone();
     let perp_order_books_ = perp_order_books.clone();
     let session_ = session.clone();
 
@@ -110,7 +112,7 @@ pub async fn start_periodic_updates(
         loop {
             interval2.tick().await;
 
-            for book in order_books.values() {
+            for book in order_books_.values() {
                 book.lock().await.clear_expired_orders();
             }
 
@@ -130,4 +132,109 @@ pub async fn start_periodic_updates(
 
         drop(sess);
     });
+
+    // * SEND LIQUIDITY UPDATE EVERY SECOND
+    let order_books_ = order_books.clone();
+    let perp_order_books_ = perp_order_books.clone();
+    let ws_connections_ = ws_connections.clone();
+    let privileged_ws_connections_ = privileged_ws_connections.clone();
+
+    let mut interval3 = time::interval(time::Duration::from_millis(300));
+
+    tokio::spawn(async move {
+        loop {
+            interval3.tick().await;
+
+            let mut liquidity = Vec::new();
+
+            for book in order_books_.values() {
+                // ? Get the updated orderbook liquidity
+                let order_book = book.lock().await;
+                let market_id = order_book.market_id;
+                let ask_queue = order_book.ask_queue.visualize();
+                let bid_queue = order_book.bid_queue.visualize();
+                drop(order_book);
+
+                let update_msg = json!({
+                    "type": "spot",
+                    "market": market_id.to_string(),
+                    "ask_liquidity": ask_queue,
+                    "bid_liquidity": bid_queue
+                });
+
+                liquidity.push(update_msg)
+            }
+
+            for book in perp_order_books_.values() {
+                // ? Get the updated orderbook liquidity
+                let order_book = book.lock().await;
+                let market_id = order_book.market_id;
+                let ask_queue = order_book.ask_queue.visualize();
+                let bid_queue = order_book.bid_queue.visualize();
+                drop(order_book);
+
+                let update_msg = json!({
+                    "type": "perpetual",
+                    "market": market_id.to_string(),
+                    "ask_liquidity": ask_queue,
+                    "bid_liquidity": bid_queue
+                });
+
+                liquidity.push(update_msg);
+            }
+
+            let json_msg = json!({
+                "message_id": "LIQUIDITY_UPDATE",
+                "liquidity": liquidity
+            });
+            let msg = Message::Text(json_msg.to_string());
+
+            // ? Send the updated liquidity to anyone who's listening
+            if let Err(_) =
+                broadcast_message(&ws_connections_, &privileged_ws_connections_, msg).await
+            {
+                println!("Error sending liquidity update message")
+            };
+        }
+    });
 }
+
+//
+
+//
+
+//
+
+// fn update_and_compare(
+//     prev_bid_queue: &mut HashMap<usize, (f64, u64)>,
+//     prev_ask_queue: &mut HashMap<usize, (f64, u64)>,
+//     bid_queue: Vec<(f64, u64, u64, u64)>,
+//     ask_queue: Vec<(f64, u64, u64, u64)>,
+// ) -> (Vec<(usize, (f64, u64, u64))>, Vec<(usize, (f64, u64, u64))>) {
+//     let mut bid_diffs: Vec<(usize, (f64, u64, u64))> = Vec::new();
+
+//     bid_queue
+//         .iter()
+//         .enumerate()
+//         .for_each(|(i, bid)| match prev_bid_queue.get(&i) {
+//             Some(prev_bid) if prev_bid.0 == bid.0 && prev_bid.1 == bid.1 => {}
+//             _ => {
+//                 bid_diffs.push((i, (bid.0, bid.1, bid.2)));
+//                 prev_bid_queue.insert(i, (bid.0, bid.1));
+//             }
+//         });
+
+//     let mut ask_diffs: Vec<(usize, (f64, u64, u64))> = Vec::new();
+//     ask_queue
+//         .iter()
+//         .enumerate()
+//         .for_each(|(i, ask)| match prev_ask_queue.get(&i) {
+//             Some(prev_ask) if prev_ask.0 == ask.0 && prev_ask.1 == ask.1 => {}
+//             _ => {
+//                 ask_diffs.push((i, (ask.0, ask.1, ask.2)));
+//                 prev_ask_queue.insert(i, (ask.0, ask.1));
+//             }
+//         });
+
+//     (bid_diffs, ask_diffs)
+// }

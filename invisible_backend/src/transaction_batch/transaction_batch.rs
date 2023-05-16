@@ -16,6 +16,9 @@ use error_stack::Result;
 
 use crate::{
     perpetual::{
+        liquidations::{
+            liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
+        },
         perp_helpers::{
             perp_rollback::{rollback_perp_swap, PerpRollbackInfo},
             perp_swap_outptut::PerpSwapResponse,
@@ -141,9 +144,7 @@ pub struct TransactionBatch {
     pub running_index_price_count: u16, // number of index price updates in the current micro batch
 }
 
-
 // [720611572046124714047264528971193275274039884725841843024975277676352634647, 3277063050706459067292422006810458761666327299309045368540059255761977948163, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 0, 633169145156021810680094650136107711968775354738881437650002548915256114472, 633169145156021810680094650136107711968775354738881437650002548915256114472, 999865114641534551578343797337705745943197965388439213388506436713692204488, 421021076951682542324234567693006887925800082706539824582191228239311517383, 1251335263961598763003641874578203876372024766000865142645021246588933133207, 522924134205947440388003243818952293276466114427386446260495599410908902725, 1698665403995648829511386567217524516121600165071000909611522341821583497658]
-
 
 impl TransactionBatch {
     pub fn new(
@@ -347,7 +348,6 @@ impl TransactionBatch {
         let partialy_opened_positions = self.partialy_opened_positions.clone();
         let perpetual_updated_position_hashes = self.perpetual_updated_position_hashes.clone();
         let blocked_perp_order_ids = self.blocked_perp_order_ids.clone();
-        let insurance_fund = self.insurance_fund.clone();
 
         let session = self.firebase_session.clone();
         let backup_storage = self.backup_storage.clone();
@@ -360,51 +360,14 @@ impl TransactionBatch {
 
         let perp_rollback_safeguard = self.perp_rollback_safeguard.clone();
 
-        let mut prev_funding_idx_a: Option<u32> = None;
-        if let Some(position) = transaction.order_a.position.as_ref() {
-            prev_funding_idx_a = Some(position.last_funding_idx);
-        }
-
-        let mut prev_funding_idx_b: Option<u32> = None;
-        if let Some(position) = transaction.order_b.position.as_ref() {
-            prev_funding_idx_b = Some(position.last_funding_idx);
-        }
-
-        let swap_funding_rates: Vec<i64>;
-        let swap_funding_prices: Vec<u64>;
-        let min_swap_funding_idx: u32;
-        if prev_funding_idx_a.is_none() && prev_funding_idx_b.is_none() {
-            min_swap_funding_idx = 0;
-
-            swap_funding_rates = Vec::new();
-            swap_funding_prices = Vec::new();
-        } else {
-            min_swap_funding_idx = std::cmp::min(
-                prev_funding_idx_a.unwrap_or(u32::MAX),
-                prev_funding_idx_b.unwrap_or(u32::MAX),
-            );
-
-            swap_funding_rates = self
-                .funding_rates
-                .get(&transaction.order_a.synthetic_token)
-                .unwrap()[min_swap_funding_idx as usize..]
-                .to_vec()
-                .clone();
-
-            swap_funding_prices = self
-                .funding_prices
-                .get(&transaction.order_a.synthetic_token)
-                .unwrap()[min_swap_funding_idx as usize..]
-                .to_vec()
-                .clone();
-        };
-
-        let swap_funding_info = SwapFundingInfo {
-            current_funding_idx: self.current_funding_idx,
-            swap_funding_rates,
-            swap_funding_prices,
-            min_swap_funding_idx,
-        };
+        let swap_funding_info = SwapFundingInfo::new(
+            &self.funding_rates,
+            &self.funding_prices,
+            self.current_funding_idx,
+            transaction.order_a.synthetic_token,
+            &transaction.order_a.position,
+            &transaction.order_b.position,
+        );
 
         let handle = thread::spawn(move || {
             return transaction.execute(
@@ -416,7 +379,6 @@ impl TransactionBatch {
                 perpetual_partial_fill_tracker,
                 partialy_opened_positions,
                 perpetual_updated_position_hashes,
-                insurance_fund,
                 current_index_price,
                 min_funding_idxs,
                 swap_funding_info,
@@ -439,6 +401,60 @@ impl TransactionBatch {
 
         return handle;
     }
+
+    pub fn execute_liquidation_transaction(
+        &mut self,
+        liquidation_transaction: LiquidationSwap,
+    ) -> JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>> {
+        let state_tree = self.state_tree.clone();
+        let updated_note_hashes = self.updated_note_hashes.clone();
+        let swap_output_json = self.swap_output_json.clone();
+
+        let perpetual_state_tree = self.perpetual_state_tree.clone();
+        let perpetual_updated_position_hashes = self.perpetual_updated_position_hashes.clone();
+
+        let session = self.firebase_session.clone();
+        let backup_storage = self.backup_storage.clone();
+
+        let insurance_fund = self.insurance_fund.clone();
+
+        let current_index_price = *self
+            .latest_index_price
+            .get(&liquidation_transaction.liquidation_order.synthetic_token)
+            .unwrap();
+        let min_funding_idxs = self.min_funding_idxs.clone();
+
+        let swap_funding_info = SwapFundingInfo::new(
+            &self.funding_rates,
+            &self.funding_prices,
+            self.current_funding_idx,
+            liquidation_transaction.liquidation_order.synthetic_token,
+            &Some(liquidation_transaction.liquidation_order.position.clone()),
+            &None,
+        );
+
+        let handle = thread::spawn(move || {
+            return liquidation_transaction.execute(
+                state_tree,
+                updated_note_hashes,
+                swap_output_json,
+                perpetual_state_tree,
+                perpetual_updated_position_hashes,
+                insurance_fund,
+                current_index_price,
+                min_funding_idxs,
+                swap_funding_info,
+                session,
+                backup_storage,
+            );
+        });
+
+        self.running_tx_count += 1;
+
+        return handle;
+    }
+
+    // * Rollback the transaction execution state updates
 
     pub fn rollback_transaction(&mut self, rollback_info_message: (ThreadId, RollbackMessage)) {
         let thread_id = rollback_info_message.0;

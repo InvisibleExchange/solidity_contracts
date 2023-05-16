@@ -20,6 +20,8 @@ let db = new sqlite3.Database("./orderBooks.db", (err) => {
   }
 });
 
+// TODO: ONLY RESTORE THE ORDERS THAT HAVE NOT EXPIRED YET
+
 async function restoreOrderbooks() {
   let completedCount = 0;
 

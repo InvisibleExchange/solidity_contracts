@@ -159,46 +159,6 @@ impl PerpOrder {
         };
     }
 
-    pub fn new_liquidation_order(
-        order_id: u64,
-        expiration_timestamp: u64,
-        position: PerpPosition,
-        order_side: OrderSide,
-        synthetic_token: u64,
-        synthetic_amount: u64,
-        collateral_amount: u64,
-    ) -> PerpOrder {
-        let position_effect_type = PositionEffectType::Liquidation;
-
-        let hash = hash_order(
-            expiration_timestamp,
-            &position_effect_type,
-            &order_side,
-            synthetic_token,
-            synthetic_amount,
-            collateral_amount,
-            0,
-            &Some(&position),
-            &None,
-            &None,
-        );
-
-        return PerpOrder {
-            order_id,
-            expiration_timestamp,
-            position: Some(position),
-            position_effect_type,
-            order_side,
-            synthetic_token,
-            synthetic_amount,
-            collateral_amount,
-            fee_limit: 0,
-            open_order_fields: None,
-            close_order_fields: None,
-            hash,
-        };
-    }
-
     pub fn set_hash(&mut self) {
         let hash = hash_order(
             self.expiration_timestamp,
@@ -324,8 +284,7 @@ pub struct OpenOrderFields {
     pub refund_note: Option<Note>,
     pub position_address: BigUint,
     pub blinding: BigUint,
-    //
-    // pub unspent_margin: Cell<u64>,
+    pub allow_partial_liquidations: bool,
 }
 
 impl OpenOrderFields {
@@ -380,6 +339,10 @@ impl Serialize for OpenOrderFields {
         note.serialize_field("refund_note", &self.refund_note)?;
         note.serialize_field("position_address", &self.position_address.to_string())?;
         note.serialize_field("blinding", &self.blinding.to_string())?;
+        note.serialize_field(
+            "allow_partial_liquidations",
+            &self.allow_partial_liquidations.to_string(),
+        )?;
 
         return note.end();
     }
@@ -444,7 +407,6 @@ fn hash_order(
         PositionEffectType::Open => position_effect_type_ = BigUint::from_i8(0).unwrap(),
         PositionEffectType::Modify => position_effect_type_ = BigUint::from_i8(1).unwrap(),
         PositionEffectType::Close => position_effect_type_ = BigUint::from_i8(2).unwrap(),
-        PositionEffectType::Liquidation => position_effect_type_ = BigUint::from_i8(3).unwrap(),
     }
     hash_inputs.push(&position_effect_type_);
 

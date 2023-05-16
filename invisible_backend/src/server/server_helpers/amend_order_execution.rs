@@ -26,7 +26,7 @@ use crate::utils::storage::BackupStorage;
 use tokio::sync::{mpsc::Sender as MpscSender, oneshot::Sender as OneshotSender};
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse};
-use super::{WsConnectionsMap, WsIdsMap};
+use super::WsConnectionsMap;
 
 pub async fn execute_spot_swaps_after_amend_order(
     mpsc_tx: &MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
@@ -36,7 +36,7 @@ pub async fn execute_spot_swaps_after_amend_order(
     backup_storage: &Arc<Mutex<BackupStorage>>,
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     //
     order_id: u64,
     order_side: OBOrderSide,
@@ -65,7 +65,7 @@ pub async fn execute_spot_swaps_after_amend_order(
     };
 
     let retry_messages;
-    match await_swap_handles(&ws_connections, &ws_ids, handles).await {
+    match await_swap_handles(ws_connections, privileged_ws_connections, handles).await {
         Ok(rm) => retry_messages = rm,
         Err(e) => return Err(e),
     };
@@ -92,7 +92,7 @@ pub async fn execute_spot_swaps_after_amend_order(
                 user_id,
                 true,
                 &ws_connections,
-                &ws_ids,
+                &privileged_ws_connections,
                 retry_messages,
                 None,
             )
@@ -113,7 +113,7 @@ pub async fn execute_perp_swaps_after_amend_order(
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
     //
     order_id: u64,
@@ -131,7 +131,7 @@ pub async fn execute_perp_swaps_after_amend_order(
         session,
         backup_storage,
         ws_connections,
-        ws_ids,
+        privileged_ws_connections,
         processed_res,
     )
     .await
@@ -166,7 +166,7 @@ pub async fn execute_perp_swaps_after_amend_order(
                 user_id,
                 true,
                 ws_connections,
-                ws_ids,
+                privileged_ws_connections,
                 retry_messages,
                 None,
             )

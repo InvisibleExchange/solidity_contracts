@@ -217,8 +217,8 @@ pub fn send_matching_error(err_msg: String) -> Report<MatchingEngineError> {
 use tonic::{Response, Status};
 
 use crate::server::grpc::engine::{
-    AmendOrderResponse, CancelOrderResponse, DepositResponse, LiquidityRes, MarginChangeRes,
-    OrderResponse, SplitNotesRes, SuccessResponse,
+    AmendOrderResponse, CancelOrderResponse, DepositResponse, LiquidationOrderResponse,
+    LiquidityRes, MarginChangeRes, OrderResponse, SplitNotesRes, SuccessResponse,
 };
 
 // * ERROR GRPC REPLIES
@@ -228,6 +228,18 @@ pub fn send_order_error_reply(err_msg: String) -> Result<Response<OrderResponse>
         successful: false,
         error_message: err_msg,
         order_id: 0,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_liquidation_order_error_reply(
+    err_msg: String,
+) -> Result<Response<LiquidationOrderResponse>, Status> {
+    let reply = LiquidationOrderResponse {
+        successful: false,
+        error_message: err_msg,
+        liquidated_position: None,
     };
 
     return Ok(Response::new(reply));

@@ -1,20 +1,19 @@
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Arc,
     thread::{JoinHandle, ThreadId},
     time::Instant,
 };
-use tokio_tungstenite::tungstenite::Message;
 
 use super::{
     grpc::engine::{
-        AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, LimitOrderMessage,
-        LiquidityReq, LiquidityRes, OracleUpdateReq, OrderResponse, PerpOrderMessage,
-        RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq, StateInfoRes,
-        SuccessResponse, WithdrawalMessage,
+        AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, GrpcPerpPosition,
+        LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
+        LiquidityRes, OracleUpdateReq, OrderResponse, PerpOrderMessage, RestoreOrderBookMessage,
+        SpotOrderRestoreMessage, StateInfoReq, StateInfoRes, SuccessResponse, WithdrawalMessage,
     },
     server_helpers::{
         amend_order_execution::{
@@ -33,7 +32,7 @@ use super::{
 };
 use super::{
     grpc::engine::{OrdersReq, OrdersRes},
-    server_helpers::{brodcast_message, get_market_id_and_order_side, WsConnectionsMap, WsIdsMap},
+    server_helpers::{get_market_id_and_order_side, WsConnectionsMap},
 };
 use super::{
     grpc::{
@@ -53,11 +52,20 @@ use crate::{
         orderbook::OrderBook,
         orders::new_amend_order,
     },
-    perpetual::PositionEffectType,
+    perpetual::{
+        liquidations::{
+            liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
+            liquidation_output::LiquidationResponse,
+        },
+        PositionEffectType,
+    },
     transaction_batch::tx_batch_structs::OracleUpdate,
     trees::superficial_tree::SuperficialTree,
     utils::{
-        errors::send_amend_order_error_reply,
+        errors::{
+            send_amend_order_error_reply, send_liquidation_order_error_reply,
+            PerpSwapExecutionError,
+        },
         storage::{BackupStorage, MainStorage},
     },
 };
@@ -125,7 +133,7 @@ pub struct EngineService {
     pub perp_order_books: HashMap<u16, Arc<TokioMutex<OrderBook>>>,
     //
     pub ws_connections: Arc<TokioMutex<WsConnectionsMap>>,
-    pub ws_ids: Arc<TokioMutex<WsIdsMap>>,
+    pub privileged_ws_connections: Arc<TokioMutex<Vec<u64>>>,
     //
     pub tx_count: Arc<Mutex<u16>>, // TODO: For testing only
 }
@@ -148,7 +156,7 @@ impl Engine for EngineService {
 
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
-        match verify_signature_format(&req.signature, 0) {
+        match verify_signature_format(&req.signature) {
             Ok(sig) => signature = sig,
             Err(err) => {
                 return send_order_error_reply(err);
@@ -219,7 +227,13 @@ impl Engine for EngineService {
         let l = handles.len();
 
         let retry_messages;
-        match await_swap_handles(&self.ws_connections, &self.ws_ids, handles).await {
+        match await_swap_handles(
+            &self.ws_connections,
+            &self.privileged_ws_connections,
+            handles,
+        )
+        .await
+        {
             Ok(rm) => retry_messages = rm,
             Err(e) => return send_order_error_reply(e),
         };
@@ -237,7 +251,7 @@ impl Engine for EngineService {
                 user_id,
                 is_market,
                 &self.ws_connections,
-                &self.ws_ids,
+                &self.privileged_ws_connections,
                 retry_messages,
                 None,
             )
@@ -256,28 +270,6 @@ impl Engine for EngineService {
         }
 
         store_output_json(&self.swap_output_json, &self.main_storage);
-
-        let order_book_c = self.order_books.get(&market_id).clone().unwrap();
-        // ? Get the updated orderbook liquidity
-        let order_book = order_book_c.lock().await;
-        let ask_liquidity = order_book.ask_queue.visualize();
-        let bid_liquidity = order_book.bid_queue.visualize();
-        drop(order_book);
-
-        let json_msg = json!({
-            "message_id": "LIQUIDITY_UPDATE",
-            "type": "spot",
-            "market": market_id.to_string(),
-            "ask_liquidity": ask_liquidity,
-            "bid_liquidity": bid_liquidity
-        });
-
-        let msg = Message::Text(json_msg.to_string());
-
-        // ? Send the updated liquidity to anyone who's listening
-        if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
-            println!("Error sending liquidity update message")
-        };
 
         // Send a successul reply to the caller
         let reply = OrderResponse {
@@ -306,7 +298,7 @@ impl Engine for EngineService {
 
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
-        match verify_signature_format(&req.signature, req.position_effect_type) {
+        match verify_signature_format(&req.signature) {
             Ok(sig) => signature = sig,
             Err(err) => {
                 return send_order_error_reply(err);
@@ -375,7 +367,7 @@ impl Engine for EngineService {
             &self.session,
             &self.backup_storage,
             &self.ws_connections,
-            &self.ws_ids,
+            &self.privileged_ws_connections,
             &mut processed_res,
         )
         .await
@@ -401,7 +393,7 @@ impl Engine for EngineService {
             user_id,
             is_market,
             &self.ws_connections,
-            &self.ws_ids,
+            &self.privileged_ws_connections,
             retry_messages,
             None,
         )
@@ -412,30 +404,6 @@ impl Engine for EngineService {
 
         store_output_json(&self.swap_output_json, &self.main_storage);
 
-        // ? Get the updated orderbook liquidity
-        let order_book = self
-            .perp_order_books
-            .get(&market.unwrap())
-            .unwrap()
-            .lock()
-            .await;
-        let ask_liquidity = order_book.ask_queue.visualize();
-        let bid_liquidity = order_book.bid_queue.visualize();
-
-        let json_msg = json!({
-            "message_id": "LIQUIDITY_UPDATE",
-            "type": "perpetual",
-            "market": market.unwrap().to_string(),
-            "ask_liquidity": ask_liquidity,
-            "bid_liquidity": bid_liquidity
-        });
-        let msg = Message::Text(json_msg.to_string());
-
-        // ? Send the updated liquidity to anyone who's listening
-        if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
-            println!("Error sending liquidity update message")
-        };
-
         // Send a successul reply to the caller
         let reply = OrderResponse {
             successful: true,
@@ -444,6 +412,131 @@ impl Engine for EngineService {
         };
 
         return Ok(Response::new(reply));
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn submit_liquidation_order(
+        &self,
+        request: Request<LiquidationOrderMessage>,
+    ) -> Result<Response<LiquidationOrderResponse>, Status> {
+        tokio::task::yield_now().await;
+
+        let req: LiquidationOrderMessage = request.into_inner();
+
+        let user_id = req.user_id;
+
+        // ? Verify the signature is defined and has a valid format
+        let signature: Signature;
+        match verify_signature_format(&req.signature) {
+            Ok(sig) => signature = sig,
+            Err(err) => {
+                return send_liquidation_order_error_reply(err);
+            }
+        }
+
+        // ? Try to parse the grpc input as a LimitOrder
+        let liquidation_order: LiquidationOrder;
+        match LiquidationOrder::try_from(req) {
+            Ok(lo) => liquidation_order = lo,
+            Err(_e) => {
+                return send_liquidation_order_error_reply(
+                    "Error unpacking the liquidation order (verify the format is correct)"
+                        .to_string(),
+                );
+            }
+        };
+
+        // ? market for perpetuals can be just the synthetic token
+        let market = PERP_MARKET_IDS.get(&liquidation_order.synthetic_token.to_string());
+        if market.is_none() {
+            return send_liquidation_order_error_reply(
+                "Market (token pair) does not exist for this token".to_string(),
+            );
+        }
+
+        let perp_orderbook = self
+            .perp_order_books
+            .get(&market.unwrap())
+            .clone()
+            .unwrap()
+            .lock()
+            .await;
+        let market_price;
+        match perp_orderbook.get_market_price() {
+            Ok(mp) => market_price = mp,
+            Err(e) => {
+                return send_liquidation_order_error_reply(e);
+            }
+        };
+        drop(perp_orderbook);
+
+        let liquidation_swap = LiquidationSwap::new(liquidation_order, signature, market_price);
+
+        // TODO ==================================================================================
+
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
+
+        let handle: TokioJoinHandle<
+            JoinHandle<Result<LiquidationResponse, Report<PerpSwapExecutionError>>>,
+        > = tokio::spawn(async move {
+            let (resp_tx, resp_rx) = oneshot::channel();
+
+            let mut grpc_message = GrpcMessage::new();
+            grpc_message.msg_type = MessageType::LiquidationMessage;
+            grpc_message.liquidation_message = Some(liquidation_swap);
+
+            transaction_mpsc_tx
+                .send((grpc_message, resp_tx))
+                .await
+                .ok()
+                .unwrap();
+            let res = resp_rx.await.unwrap();
+
+            return res.liquidation_tx_handle.unwrap();
+        });
+
+        let liquidation_handle = handle.await.unwrap();
+
+        let liquidation_response = liquidation_handle.join();
+
+        // TODO ==================================================================================
+
+        match liquidation_response {
+            Ok(res1) => match res1 {
+                Ok(response) => {
+                    store_output_json(&self.swap_output_json, &self.main_storage);
+
+                    // TODO Send message to the user whose position was liquidated
+
+                    store_output_json(&self.swap_output_json, &self.main_storage);
+
+                    let reply = LiquidationOrderResponse {
+                        successful: true,
+                        error_message: "".to_string(),
+                        new_position: Some(GrpcPerpPosition::from(response.new_position)),
+                    };
+
+                    return Ok(Response::new(reply));
+                }
+                Err(err) => {
+                    println!("\n{:?}", err);
+
+                    let error_message_response: String = err.current_context().err_msg.to_string();
+
+                    return send_liquidation_order_error_reply(error_message_response);
+                }
+            },
+            Err(_e) => {
+                println!("Unknown Error in deposit execution");
+
+                return send_liquidation_order_error_reply(
+                    "Unknown Error occurred in the deposit execution".to_string(),
+                );
+            }
+        }
     }
 
     //
@@ -491,24 +584,6 @@ impl Engine for EngineService {
 
         match &res[0] {
             Ok(Success::Cancelled { .. }) => {
-                // ? Get the updated orderbook liquidity
-                let ask_liquidity = order_book.ask_queue.visualize();
-                let bid_liquidity = order_book.bid_queue.visualize();
-
-                let json_msg = json!({
-                    "message_id": "LIQUIDITY_UPDATE",
-                    "type": if req.is_perp {"perpetual"} else {"spot"},
-                    "market": market_id.to_string(),
-                    "ask_liquidity": ask_liquidity,
-                    "bid_liquidity": bid_liquidity
-                });
-                let msg = Message::Text(json_msg.to_string());
-
-                // ? Send the updated liquidity to anyone who's listening
-                if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
-                    println!("Error sending liquidity update message")
-                };
-
                 let pfr_note: Option<GrpcNote>;
                 if req.is_perp {
                     let mut perpetual_partial_fill_tracker_m =
@@ -571,7 +646,7 @@ impl Engine for EngineService {
 
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
-        match verify_signature_format(&req.signature, 0) {
+        match verify_signature_format(&req.signature) {
             Ok(sig) => signature = sig,
             Err(err) => {
                 return send_amend_order_error_reply(err);
@@ -625,7 +700,7 @@ impl Engine for EngineService {
                 &self.session,
                 &self.backup_storage,
                 &self.ws_connections,
-                &self.ws_ids,
+                &self.privileged_ws_connections,
                 &mut processed_res,
                 req.order_id,
                 order_side,
@@ -645,7 +720,7 @@ impl Engine for EngineService {
                 &self.backup_storage,
                 &mut processed_res,
                 &self.ws_connections,
-                &self.ws_ids,
+                &self.privileged_ws_connections,
                 req.order_id,
                 order_side,
                 signature,
@@ -658,27 +733,6 @@ impl Engine for EngineService {
         }
 
         store_output_json(&self.swap_output_json, &self.main_storage);
-
-        // =================================================================================================
-        // ? Get the updated orderbook liquidity
-        let order_book = order_book_m.lock().await;
-        let ask_liquidity = order_book.ask_queue.visualize();
-        let bid_liquidity = order_book.bid_queue.visualize();
-        drop(order_book);
-
-        let json_msg = json!({
-            "message_id": "LIQUIDITY_UPDATE",
-            "type": if req.is_perp {"perpetual"} else {"spot"},
-            "market": market_id.to_string(),
-            "ask_liquidity": ask_liquidity,
-            "bid_liquidity": bid_liquidity
-        });
-        let msg = Message::Text(json_msg.to_string());
-
-        // ? Send the updated liquidity to anyone who's listening
-        if let Err(_) = brodcast_message(&self.ws_connections, msg).await {
-            println!("Error sending liquidity update message")
-        };
 
         let reply: AmendOrderResponse = AmendOrderResponse {
             successful: true,
@@ -1092,7 +1146,6 @@ impl Engine for EngineService {
                         PositionEffectType::Open => 0,
                         PositionEffectType::Modify => 1,
                         PositionEffectType::Close => 2,
-                        PositionEffectType::Liquidation => 3,
                     };
 
                     let initial_margin: u64;
@@ -1330,18 +1383,9 @@ impl Engine for EngineService {
         let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
             let (resp_tx, resp_rx) = oneshot::channel();
 
-            let grpc_message = GrpcMessage {
-                msg_type: MessageType::MarginChange,
-                deposit_message: None,
-                swap_message: None,
-                withdrawal_message: None,
-                perp_swap_message: None,
-                split_notes_message: None,
-                change_margin_message,
-                rollback_info_message: None,
-                funding_update_message: None,
-                price_update_message: None,
-            };
+            let grpc_message = GrpcMessage::new();
+            grpc_message.msg_type = MessageType::MarginChange;
+            grpc_message.change_margin_message = change_margin_message;
 
             control_mpsc_tx
                 .send((grpc_message, resp_tx))
@@ -1477,14 +1521,3 @@ impl Engine for EngineService {
         return Ok(Response::new(reply));
     }
 }
-
-// "538008911369168051432248065878241525649522873154572727108880744601077173400"
-
-// perp_order: Some(PerpPosition { order_side: Short, synthetic_token: 54321, collateral_token: 55555, position_size: 27500, margin: 2000050737, entry_price: 1844981818, liquidation_price: 72730907341454, bankruptcy_price: 72730962690908, position_address: 3514384773872138362340130060212048101664838743785740788735942102124525782443, last_funding_idx: 0, hash: 538008911369168051432248065878241525649522873154572727108880744601077173400, index: 0 })
-// state_tree: [538008911369168051432248065878241525649522873154572727108880744601077173400, 2630781558719240229929103679269792454005699693605492196399924006917120011674]
-// position hash: 2523964826389713653866311089755088259973988226327358349885091698710519596521
-// position index: 0
-// ERROR: None
-// unblocking order 1245206 and 983062
-
-// PerpSwapExecutionError { err_msg: "position does not exist in the state", invalid_order: Some(1245206) }

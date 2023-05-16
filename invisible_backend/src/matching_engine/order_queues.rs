@@ -3,12 +3,10 @@ use std::collections::{BinaryHeap, HashMap};
 use std::time::{self, SystemTime};
 
 use crate::perpetual::perp_position::PerpPosition;
-use crate::perpetual::VALID_COLLATERAL_TOKENS;
 use crate::utils::crypto_utils::Signature;
 
 use super::domain::{Order, OrderSide, OrderWrapper};
 use super::orders::amend_inner;
-use super::{get_qty_from_quote, get_quote_qty};
 
 #[derive(Clone, Debug)]
 struct OrderIndex {

@@ -1,6 +1,7 @@
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
 
+pub mod liquidations;
 pub mod order_execution;
 pub mod perp_helpers;
 pub mod perp_order;
@@ -22,7 +23,6 @@ pub enum PositionEffectType {
     Open,
     Close,
     Modify,
-    Liquidation,
 }
 
 pub static LEVERAGE_BOUNDS_PER_ASSET: phf::Map<&'static str, [f32; 2]> = phf_map! {
@@ -57,6 +57,12 @@ pub static DUST_AMOUNT_PER_ASSET: phf::Map<&'static str, u64> = phf_map! {
 "12345" => 2500, // BTC ~ 5c
 "54321" => 25000, // ETH ~ 5c
 "55555" => 50000, // USDC ~ 5c
+};
+
+// Only allow partial liquidations on positions that are at least this size
+pub static MIN_PARTIAL_LIQUIDATION_SIZE: phf::Map<&'static str, u64> = phf_map! {
+"12345" => 50_000_000, // BTC
+"54321" => 500_000_000, // ETH
 };
 
 pub const LEVERAGE_DECIMALS: u8 = 6; // 6 decimals for leverage
@@ -200,4 +206,14 @@ pub fn scale_up_price(price: f64, token: u64) -> u64 {
     let price = price * 10_f64.powi(*price_decimals as i32);
 
     return price as u64;
+}
+
+pub fn scale_down_price(price: u64, token: u64) -> f64 {
+    let price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
+        .get(token.to_string().as_str())
+        .unwrap();
+
+    let price = price as f64 / 10_f64.powi(*price_decimals as i32);
+
+    return price;
 }

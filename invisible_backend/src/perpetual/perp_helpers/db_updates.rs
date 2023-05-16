@@ -48,13 +48,10 @@ pub fn update_db_after_perp_swap(
                     backup_storage.clone(),
                 );
                 handles.push(handle);
-            }
-
-            if refund_note_a.is_none()
-                || refund_note_a.as_ref().unwrap().address.x
-                    != order_a.open_order_fields.as_ref().unwrap().notes_in[0]
-                        .address
-                        .x
+            } else if refund_note_a.as_ref().unwrap().address.x
+                != order_a.open_order_fields.as_ref().unwrap().notes_in[0]
+                    .address
+                    .x
             {
                 let n0 = &order_a.open_order_fields.as_ref().unwrap().notes_in[0];
                 let handle = start_delete_note_thread(
@@ -105,13 +102,10 @@ pub fn update_db_after_perp_swap(
                     backup_storage.clone(),
                 );
                 handles.push(handle);
-            }
-
-            if refund_note_b.is_none()
-                || refund_note_b.as_ref().unwrap().address.x
-                    != order_b.open_order_fields.as_ref().unwrap().notes_in[0]
-                        .address
-                        .x
+            } else if refund_note_b.as_ref().unwrap().address.x
+                != order_b.open_order_fields.as_ref().unwrap().notes_in[0]
+                    .address
+                    .x
             {
                 let n0 = &order_b.open_order_fields.as_ref().unwrap().notes_in[0];
                 let handle = start_delete_note_thread(
@@ -150,9 +144,7 @@ pub fn update_db_after_perp_swap(
     }
 
     // ? Store the return collateral note and remove closed positions (when necessary)
-    if order_a.position_effect_type == PositionEffectType::Close
-        || order_a.position_effect_type == PositionEffectType::Liquidation
-    {
+    if order_a.position_effect_type == PositionEffectType::Close {
         if order_a.position_effect_type == PositionEffectType::Close {
             let handle = start_add_note_thread(
                 return_collateral_note_a.as_ref().unwrap().clone(),
@@ -176,9 +168,7 @@ pub fn update_db_after_perp_swap(
             handles.push(handle);
         }
     }
-    if order_b.position_effect_type == PositionEffectType::Close
-        || order_b.position_effect_type == PositionEffectType::Liquidation
-    {
+    if order_b.position_effect_type == PositionEffectType::Close {
         if order_b.position_effect_type == PositionEffectType::Close {
             let handle = start_add_note_thread(
                 return_collateral_note_b.as_ref().unwrap().clone(),

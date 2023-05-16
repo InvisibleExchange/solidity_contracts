@@ -18,7 +18,6 @@ use crate::matching_engine::{
 };
 use crate::perpetual::{get_cross_price, scale_up_price};
 
-use crate::server::server_helpers::brodcast_message;
 use crate::transactions::limit_order::LimitOrder;
 use crate::transactions::swap::OrderFillResponse;
 use crate::transactions::transaction_helpers::db_updates::store_spot_fill;
@@ -37,7 +36,9 @@ use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType, RollbackMessage};
 use super::super::server_helpers::get_order_side;
-use super::{proccess_spot_matching_result, send_direct_message, WsConnectionsMap, WsIdsMap};
+use super::{
+    broadcast_message, proccess_spot_matching_result, send_direct_message, WsConnectionsMap,
+};
 
 pub async fn execute_swap(
     swap: Swap,
@@ -143,18 +144,9 @@ pub async fn execute_swap(
     > = tokio::spawn(async move {
         let (resp_tx, resp_rx) = oneshot::channel();
 
-        let grpc_message = GrpcMessage {
-            msg_type: MessageType::SwapMessage,
-            deposit_message: None,
-            swap_message: Some(swap),
-            withdrawal_message: None,
-            perp_swap_message: None,
-            split_notes_message: None,
-            change_margin_message: None,
-            rollback_info_message: None,
-            funding_update_message: None,
-            price_update_message: None,
-        };
+        let mut grpc_message = GrpcMessage::new();
+        grpc_message.msg_type = MessageType::SwapMessage;
+        grpc_message.swap_message = Some(swap);
 
         tx_mpsc_tx.send((grpc_message, resp_tx)).await.ok().unwrap();
         let res = resp_rx.await.unwrap();
@@ -171,7 +163,7 @@ pub async fn execute_swap(
     match swap_response {
         Ok(res1) => match res1 {
             Ok(response) => {
-                println!("swap executed successfuly in the beckend engine\n");
+                println!("swap executed successfully in the backend engine\n");
 
                 let mut book = order_book.lock().await;
 
@@ -456,7 +448,7 @@ type SwapExecutionResultMessage = std::result::Result<
 
 pub async fn await_swap_handles(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     messages: Vec<SwapExecutionResultMessage>,
 ) -> std::result::Result<Vec<(Option<u64>, u64, u64)>, String> {
     // ? Wait for the swaps to finish
@@ -471,17 +463,19 @@ pub async fn await_swap_handles(
             let ((msg_a, msg_b), (user_id_a, user_id_b), fill_msg) = msg_.unwrap().0.unwrap();
 
             // ? Send a message to the user_id websocket
-            if let Err(_) = send_direct_message(ws_connections, ws_ids, user_id_a, msg_a).await {
+            if let Err(_) = send_direct_message(ws_connections, user_id_a, msg_a).await {
                 println!("Error sending swap message")
             };
 
             // ? Send a message to the user_id websocket
-            if let Err(_) = send_direct_message(ws_connections, ws_ids, user_id_b, msg_b).await {
+            if let Err(_) = send_direct_message(ws_connections, user_id_b, msg_b).await {
                 println!("Error sending swap message")
             };
 
             // ? Send the swap fill to anyone who's listening
-            if let Err(_) = brodcast_message(&ws_connections, fill_msg).await {
+            if let Err(_) =
+                broadcast_message(&ws_connections, privileged_ws_connections, fill_msg).await
+            {
                 println!("Error sending swap fill message")
             };
         } else if msg_.as_ref().unwrap().1.is_some() {
@@ -507,7 +501,7 @@ pub async fn retry_failed_swaps(
     user_id: u64,
     is_market: bool,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-    ws_ids: &Arc<TokioMutex<WsIdsMap>>,
+    privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     retry_messages: Vec<(Option<u64>, u64, u64)>,
     failed_counterpart_ids: Option<Vec<u64>>,
 ) -> std::result::Result<(), String> {
@@ -561,7 +555,7 @@ pub async fn retry_failed_swaps(
         };
 
         let retry_messages;
-        match await_swap_handles(ws_connections, ws_ids, new_handles).await {
+        match await_swap_handles(ws_connections, privileged_ws_connections, new_handles).await {
             Ok(rm) => retry_messages = rm,
             Err(e) => return Err(e),
         };
@@ -579,7 +573,7 @@ pub async fn retry_failed_swaps(
                 user_id,
                 is_market,
                 ws_connections,
-                ws_ids,
+                privileged_ws_connections,
                 retry_messages,
                 None,
             )

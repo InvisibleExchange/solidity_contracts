@@ -257,6 +257,11 @@ fn open_new_position(
             .open_order_fields
             .as_ref()
             .unwrap()
+            .allow_partial_liquidations,
+        order
+            .open_order_fields
+            .as_ref()
+            .unwrap()
             .position_address
             .clone(),
         funding_idx,

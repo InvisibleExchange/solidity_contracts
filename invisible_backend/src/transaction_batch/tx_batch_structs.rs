@@ -13,8 +13,9 @@ use serde_json::Value;
 
 use crate::{
     perpetual::{
-        DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS,
-        PRICE_DECIMALS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
+        perp_position::PerpPosition, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET,
+        LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, PRICE_DECIMALS_PER_ASSET, TOKENS,
+        VALID_COLLATERAL_TOKENS,
     },
     utils::crypto_utils::verify,
     utils::errors::{send_oracle_update_error, OracleUpdateError},
@@ -247,6 +248,61 @@ pub struct SwapFundingInfo {
     pub swap_funding_rates: Vec<i64>,  // funding rates aplicable to positions in the swap
     pub swap_funding_prices: Vec<u64>, // funding prices aplicable to positions in the swap
     pub min_swap_funding_idx: u32, // min last_modified funding index of the positions for the swap
+}
+
+impl SwapFundingInfo {
+    pub fn new(
+        funding_rates: &HashMap<u64, Vec<i64>>,
+        funding_prices: &HashMap<u64, Vec<u64>>,
+        current_funding_idx: u32,
+        synthetic_token: u64,
+        position_a: &Option<PerpPosition>,
+        position_b: &Option<PerpPosition>,
+    ) -> SwapFundingInfo {
+        let mut prev_funding_idx_a: Option<u32> = None;
+        if let Some(position) = position_a.as_ref() {
+            prev_funding_idx_a = Some(position.last_funding_idx);
+        }
+
+        let mut prev_funding_idx_b: Option<u32> = None;
+        if let Some(position) = position_b.as_ref() {
+            prev_funding_idx_b = Some(position.last_funding_idx);
+        }
+
+        let swap_funding_rates: Vec<i64>;
+        let swap_funding_prices: Vec<u64>;
+        let min_swap_funding_idx: u32;
+        if prev_funding_idx_a.is_none() && prev_funding_idx_b.is_none() {
+            min_swap_funding_idx = 0;
+
+            swap_funding_rates = Vec::new();
+            swap_funding_prices = Vec::new();
+        } else {
+            min_swap_funding_idx = std::cmp::min(
+                prev_funding_idx_a.unwrap_or(u32::MAX),
+                prev_funding_idx_b.unwrap_or(u32::MAX),
+            );
+
+            swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()
+                [min_swap_funding_idx as usize..]
+                .to_vec()
+                .clone();
+
+            swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()
+                [min_swap_funding_idx as usize..]
+                .to_vec()
+                .clone();
+        };
+
+        let swap_funding_info = SwapFundingInfo {
+            current_funding_idx,
+            swap_funding_rates,
+            swap_funding_prices,
+            min_swap_funding_idx,
+        };
+
+        return swap_funding_info;
+    }
 }
 
 // * PRICING ================================================================================

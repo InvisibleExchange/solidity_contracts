@@ -5,7 +5,12 @@ const port = 4000;
 const amqp = require("amqplib/callback_api");
 
 const cors = require("cors");
-const { listenToLiquidtiyUpdates, initDb } = require("./helpers");
+const {
+  listenToLiquidityUpdates,
+  initDb,
+  compileLiqUpdateMessage,
+  initOrderBooks,
+} = require("./helpers");
 
 const corsOptions = {
   origin: "*",
@@ -18,24 +23,72 @@ app.use(express.json());
 
 const db = initDb();
 
+const CONFIG_CODE = "1234567890";
+
 const SERVER_URL = "localhost";
 // const SERVER_URL = "54.212.28.196";
 
-// ORDER BOOKS AND LIQUIDITY ====================================================================================
+// * ORDER BOOKS AND LIQUIDITY ====================================================================================
 
+const orderBooks = initOrderBooks();
+let fillUpdates = [];
+let wsConnections = [];
+
+// & WEBSOCKET CLIENT
 let W3CWebSocket = require("websocket").w3cwebsocket;
 let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
-  wsClient.send("1234567654321");
+  wsClient.send({ user_id: "11223344556677", config_code: CONFIG_CODE });
 };
 
 wsClient.onmessage = function (e) {
-  listenToLiquidtiyUpdates(e, db);
+  listenToLiquidityUpdates(e, db, orderBooks, fillUpdates);
 };
 
-/// =============================================================================
+// & WEBSOCKET SERVER
+const WebSocket = require("ws");
+const wss = new WebSocket.Server({ port: 4040 });
+const SEND_LIQUIDITY_PERIOD = 2000;
+
+wss.on("connection", (ws) => {
+  ws.on("message", (message) => {});
+
+  wsConnections.push(ws);
+
+  ws.on("close", () => {});
+});
+
+// ? Send the update to all connected clients
+setInterval(() => {
+  let updates = compileLiqUpdateMessage(orderBooks);
+
+  let message = JSON.stringify({
+    message_id: "LIQUIDITY_UPDATE",
+    liquidity_updates: updates,
+  });
+
+  let fillMessage = fillUpdates.length
+    ? JSON.stringify({
+        message_id: "SWAP_FILLED",
+        fillUpdates: fillUpdates,
+      })
+    : null;
+
+  fillUpdates = [];
+
+  for (const ws of wsConnections) {
+    ws.send(message);
+    if (fillMessage) {
+      ws.send(fillMessage);
+    }
+  }
+}, SEND_LIQUIDITY_PERIOD);
+
+console.log("WebSocket server started on port 4040");
+
+// * RABBITMQ CONFIG ====================================================================================
 
 const rabbitmqConfig = {
   protocol: "amqp",
@@ -205,7 +258,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
     // * GET ORDERS ---------------------------------------------------------------------
 
     app.post("/get_orders", (req, res) => {
-
       delegateRequest(
         req.body,
         "get_orders",
