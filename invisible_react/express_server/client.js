@@ -11,6 +11,8 @@ const {
   initOrderBooks,
   compileLiqUpdateMessage,
   listenToLiquidityUpdates,
+  getOracleUpdate,
+  getLiquidatablePositions,
 } = require("./helpers");
 
 const grpc = require("@grpc/grpc-js");
@@ -32,6 +34,7 @@ const packageDefinition = protoLoader.loadSync(
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
 
 const CONFIG_CODE = "1234567890";
+const RELAY_SERVER_ID = "43147634234";
 const SERVER_URL = "localhost:50052";
 
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
@@ -51,7 +54,7 @@ let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
   wsClient.send(
-    JSON.stringify({ user_id: "11223344556677", config_code: CONFIG_CODE })
+    JSON.stringify({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE })
   );
 };
 
@@ -96,6 +99,27 @@ setInterval(() => {
 }, SEND_LIQUIDITY_PERIOD);
 
 console.log("WebSocket server started on port 4040");
+
+setInterval(async () => {
+  // Call an API here
+
+  let updates = [];
+  for (let token of [12345, 54321]) {
+    let update = await getOracleUpdate(token);
+    updates.push(update);
+  }
+
+  client.update_index_price(
+    { oracle_price_updates: updates },
+    function (err, response) {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log(response);
+      }
+    }
+  );
+}, 3000);
 
 /// =============================================================================
 
@@ -147,6 +171,25 @@ app.post("/submit_perpetual_order", (req, res) => {
   });
 });
 
+// * EXECUTE LIQUIDATION ORDER -----------------------------------------------------------
+app.post("/submit_liquidation_order", (req, res) => {
+  client.submit_liquidation_order(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
+// * GET LIQUIDATABLE POSITIONS -----------------------------------------------------------
+app.post("/get_liquidatable_positions", (req, res) => {
+  let { token, price } = req.body;
+  let response = getLiquidatablePositions(db, token, price);
+
+  res.send({ response: response });
+});
+
 // * CANCEL ORDER ---------------------------------------------------------------------
 app.post("/cancel_order", (req, res) => {
   client.cancel_order(req.body, function (err, response) {
@@ -180,7 +223,7 @@ app.post("/split_notes", (req, res) => {
   });
 });
 
-// *  CGANGE POSITION MARGIN -----------------------------------------------------------
+// *  CHANGE POSITION MARGIN -----------------------------------------------------------
 app.post("/change_position_margin", (req, res) => {
   client.change_position_margin(req.body, function (err, response) {
     if (err) {

@@ -569,11 +569,22 @@ pub struct GrpcTxResponse {
     pub perp_tx_handle: Option<JoinHandle<Result<PerpSwapResponse, PerpSwapExecutionError>>>,
     pub liquidation_tx_handle:
         Option<JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>>>,
+    pub margin_change_response: Option<MarginChangeResponse>, //
     pub new_idxs: Option<std::result::Result<Vec<u64>, String>>, // For deposit orders
     pub successful: bool,
 }
 
 // * CONTROL ENGINE ======================================================================
+
+#[derive(Debug)]
+pub struct MarginChangeResponse {
+    pub new_note_idx: u64,
+    pub position_address: String,
+    pub position_idx: u64,
+    pub synthetic_token: u64,
+    pub order_side: OrderSide,
+    pub liquidation_price: u64,
+}
 
 pub enum ControlActionType {
     FinalizeBatch,

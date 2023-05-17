@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     fs::File,
     path::Path,
+    println,
     str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle, ThreadId},
@@ -21,6 +22,7 @@ use crate::{
         },
         perp_helpers::{
             perp_rollback::{rollback_perp_swap, PerpRollbackInfo},
+            perp_swap_helpers::get_max_leverage,
             perp_swap_outptut::PerpSwapResponse,
         },
         perp_position::PerpPosition,
@@ -544,7 +546,7 @@ impl TransactionBatch {
             || note_out2.blinding != note_in2.blinding
             || note_out2.address.x != note_in2.address.x
         {
-            return Err("Missmatch od address and blinding between input/output notes".to_string());
+            return Err("Mismatch od address and blinding between input/output notes".to_string());
         }
 
         if sum_in != note_out1.amount + note_out2.amount {
@@ -625,7 +627,12 @@ impl TransactionBatch {
     pub fn change_position_margin(
         &self,
         margin_change: ChangeMarginMessage,
-    ) -> std::result::Result<Vec<u64>, String> {
+    ) -> std::result::Result<(u64, PerpPosition), String> {
+        let current_index_price = *self
+            .latest_index_price
+            .get(&margin_change.position.synthetic_token)
+            .unwrap();
+
         verify_margin_change_signature(&margin_change)?;
 
         let mut position = margin_change.position.clone();
@@ -633,7 +640,16 @@ impl TransactionBatch {
 
         position.modify_margin(margin_change.margin_change)?;
 
-        let z_indexes: Vec<u64>;
+        let leverage = position
+            .get_current_leverage(current_index_price)
+            .map_err(|e| e.to_string())?;
+
+        // ? Check that leverage is valid relative to the notional position size after increasing size
+        if get_max_leverage(position.synthetic_token, position.position_size) < leverage {
+            return Err("Leverage would be too high".to_string());
+        }
+
+        let mut z_index: u64 = 0;
         let mut valid: bool = true;
         if margin_change.margin_change >= 0 {
             let amount_in = margin_change
@@ -704,8 +720,6 @@ impl TransactionBatch {
                     );
                 }
             }
-
-            z_indexes = vec![];
         } else {
             let mut tree = self.state_tree.lock();
 
@@ -752,7 +766,7 @@ impl TransactionBatch {
                 self.backup_storage.clone(),
             );
 
-            z_indexes = vec![index];
+            z_index = index;
         }
 
         // ----------------------------------------------
@@ -772,19 +786,14 @@ impl TransactionBatch {
         );
         json_map.insert(
             String::from("zero_idx"),
-            serde_json::to_value(if z_indexes.len() == 0 {
-                0
-            } else {
-                z_indexes[0]
-            })
-            .unwrap(),
+            serde_json::to_value(z_index).unwrap(),
         );
 
         let mut swap_output_json = self.swap_output_json.lock();
         swap_output_json.push(json_map);
         drop(swap_output_json);
 
-        Ok(z_indexes)
+        Ok((z_index, position))
     }
 
     // * =================================================================
@@ -1078,13 +1087,13 @@ impl TransactionBatch {
     pub fn update_index_prices(
         &mut self,
         oracle_updates: Vec<OracleUpdate>,
-    ) -> Result<HashMap<u64, u64>, OracleUpdateError> {
+    ) -> Result<(), OracleUpdateError> {
         // Oracle prices received from the oracle provider (e.g. Chainlink, Pontis, Stork)
 
         // Todo: check signatures only if the price is more/less then the max/min price this batch
-        // Todo || *(could check all signatures if we dedicate a cpu just to that, probably not neccessary)*
         // Todo: Should also check signatures (at least a few) if the price deviates from the previous price by more than some threshold
-        // Todo: Maybe check signatures every few seconds (e.g. 5 seconds)
+
+        // TODO: VERIFY TIMESTAMP OF ORACLE UPDATE !!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         for mut update in oracle_updates {
             let token = update.token;
@@ -1130,6 +1139,7 @@ impl TransactionBatch {
             }
 
             self.latest_index_price.insert(token, median);
+            println!("Updated price for token {} to {}", token, median)
         }
 
         self.running_index_price_count += 1;
@@ -1144,17 +1154,13 @@ impl TransactionBatch {
             drop(main_storage);
         }
 
-        Ok(self.latest_index_price.clone())
+        Ok(())
     }
 
     pub fn get_index_price(&self, token: u64) -> u64 {
         // returns latest oracle price
 
         return self.latest_index_price.get(&token).unwrap().clone();
-    }
-
-    fn _mark_price() {
-        // Average price of different exchanges
     }
 
     // * RESET * //

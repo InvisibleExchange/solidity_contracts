@@ -460,6 +460,7 @@ fn handle_error(e: &Failed) -> Report<MatchingEngineError> {
 
 pub type WsConnectionsMap = HashMap<u64, SplitSink<WebSocketStream<TcpStream>, Message>>;
 
+const RELAY_SERVER_ID: u64 = 43147634234;
 const CONFIG_CODE: u64 = 1234567890;
 
 pub async fn handle_connection(
@@ -557,6 +558,22 @@ pub async fn broadcast_message(
 
         ws_sender.unwrap().send(msg.clone()).await?;
     }
+
+    Ok(())
+}
+
+pub async fn send_to_relay_server(
+    ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
+    msg: Message,
+) -> WsResult<()> {
+    let mut ws_connections__ = ws_connections.lock().await;
+    let ws_sender = ws_connections__.get_mut(&RELAY_SERVER_ID);
+
+    if let None = ws_sender {
+        return Ok(());
+    }
+
+    ws_sender.unwrap().send(msg.clone()).await?;
 
     Ok(())
 }

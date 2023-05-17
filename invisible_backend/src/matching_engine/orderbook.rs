@@ -1312,7 +1312,7 @@ impl OrderBook {
     }
 
     ///  * get market_price
-    pub fn get_market_price(&self) -> Result<u64, String> {
+    pub fn get_market_price(&mut self) -> Result<u64, String> {
         let top_bid_order = self.bid_queue.peek();
         if top_bid_order.is_none() {
             return Err("No market price".to_string());

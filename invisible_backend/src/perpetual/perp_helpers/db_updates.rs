@@ -48,10 +48,12 @@ pub fn update_db_after_perp_swap(
                     backup_storage.clone(),
                 );
                 handles.push(handle);
-            } else if refund_note_a.as_ref().unwrap().address.x
-                != order_a.open_order_fields.as_ref().unwrap().notes_in[0]
-                    .address
-                    .x
+            }
+            if refund_note_a.is_none()
+                || refund_note_a.as_ref().unwrap().address.x
+                    != order_a.open_order_fields.as_ref().unwrap().notes_in[0]
+                        .address
+                        .x
             {
                 let n0 = &order_a.open_order_fields.as_ref().unwrap().notes_in[0];
                 let handle = start_delete_note_thread(
@@ -102,10 +104,12 @@ pub fn update_db_after_perp_swap(
                     backup_storage.clone(),
                 );
                 handles.push(handle);
-            } else if refund_note_b.as_ref().unwrap().address.x
-                != order_b.open_order_fields.as_ref().unwrap().notes_in[0]
-                    .address
-                    .x
+            }
+            if refund_note_b.is_none()
+                || refund_note_b.as_ref().unwrap().address.x
+                    != order_b.open_order_fields.as_ref().unwrap().notes_in[0]
+                        .address
+                        .x
             {
                 let n0 = &order_b.open_order_fields.as_ref().unwrap().notes_in[0];
                 let handle = start_delete_note_thread(

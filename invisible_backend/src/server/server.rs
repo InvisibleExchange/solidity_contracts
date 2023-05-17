@@ -1,3 +1,4 @@
+use invisible_backend::server::grpc::MarginChangeResponse;
 use invisible_backend::server::server_helpers::periodic_updates::start_periodic_updates;
 use invisible_backend::transaction_batch::transaction_batch::TransactionBatch;
 use parking_lot::Mutex;
@@ -94,6 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -109,6 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -125,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -141,6 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: Some(handle),
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -157,6 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: Some(handle),
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -173,6 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: Some(zero_idxs),
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -181,15 +188,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .expect("failed sending back the TxResponse in split notes");
                 }
                 MessageType::MarginChange => {
-                    let new_idxs = tx_batch
+                    let result = tx_batch
                         .change_position_margin(grpc_message.change_margin_message.unwrap());
+
+                    let success: bool;
+                    let margin_change_response: Option<MarginChangeResponse>;
+                    if let Ok((new_idxs, position)) = result {
+                        success = true;
+
+                        margin_change_response = Some(MarginChangeResponse {
+                            new_note_idx: new_idxs,
+                            position_address: position.position_address.to_string(),
+                            position_idx: position.index as u64,
+                            order_side: position.order_side,
+                            synthetic_token: position.synthetic_token,
+                            liquidation_price: position.liquidation_price,
+                        });
+                    } else {
+                        success = false;
+                        margin_change_response = None;
+                    }
 
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
-                        new_idxs: Some(new_idxs),
-                        successful: true,
+                        new_idxs: None,
+                        margin_change_response,
+                        successful: success,
                     };
 
                     response
@@ -204,6 +230,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -221,6 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
+                        margin_change_response: None,
                         successful: true,
                     };
 
@@ -231,14 +259,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::IndexPriceUpdate => {
                     let oracle_updates = grpc_message.price_update_message.unwrap();
 
-                    let updated_prices = tx_batch.update_index_prices(oracle_updates).ok();
+                    let updated_prices = tx_batch.update_index_prices(oracle_updates);
 
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,
                         perp_tx_handle: None,
                         liquidation_tx_handle: None,
                         new_idxs: None,
-                        successful: updated_prices.is_some(),
+                        margin_change_response: None,
+                        successful: updated_prices.is_ok(),
                     };
 
                     response

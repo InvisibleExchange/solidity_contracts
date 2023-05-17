@@ -134,6 +134,75 @@ function listenToLiquidityUpdates(e, db, orderBooks, fillUpdates) {
     // });
 
     fillUpdates.push(JSON.stringify(msg));
+  } else if (msg.message_id == "NEW_POSITIONS") {
+    // "message_id": "NEW_POSITIONS",
+    // "position1": [position_address, position_index, synthetic_token, is_long, liquidation_price]
+    // "position2":  [position_address, position_index, synthetic_token, is_long, liquidation_price]
+
+    if (msg.position1) {
+      let [
+        position_address,
+        position_index,
+        synthetic_token,
+        is_long,
+        liquidation_price,
+      ] = msg.position1;
+      is_long = is_long ? 1 : 0;
+      let command =
+        "INSERT OR REPLACE INTO liquidations (position_index, position_address, synthetic_token, order_side, liquidation_price ) VALUES($1, $2, $3, $4, $5)";
+
+      try {
+        db.run(
+          command,
+          [
+            position_index,
+            position_address,
+            synthetic_token,
+            is_long,
+            liquidation_price,
+          ],
+          function (err) {
+            if (err) {
+              return console.error(err.message);
+            }
+          }
+        );
+      } catch (error) {
+        console.log("error: ", error);
+      }
+    }
+    if (msg.position2) {
+      let [
+        position_address,
+        position_index,
+        synthetic_token,
+        is_long,
+        liquidation_price,
+      ] = msg.position2;
+      is_long = is_long ? 1 : 0;
+      let command =
+        "INSERT OR REPLACE INTO liquidations (position_index, position_address, synthetic_token, order_side, liquidation_price) VALUES($1, $2, $3, $4, $5)";
+
+      try {
+        db.run(
+          command,
+          [
+            position_index,
+            position_address,
+            synthetic_token,
+            is_long,
+            liquidation_price,
+          ],
+          function (err) {
+            if (err) {
+              return console.error(err.message);
+            }
+          }
+        );
+      } catch (error) {
+        console.log("error: ", error);
+      }
+    }
   }
 }
 
@@ -160,6 +229,40 @@ function compileLiqUpdateMessage(orderBooks) {
   }
 
   return updates;
+}
+
+function getLiquidatablePositions(db, syntheticToken, price) {
+  // (position_address TEXT NOT NULL, synthetic_token INTEGER NOT NULL, order_side BIT NOT NULL, liquidation_price INTEGER NOT NULL)
+
+  let liquidatablePositions = [];
+
+  const longLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${1} AND liquidation_price >= ${price}`;
+  db.all(longLiquidatableQuery, [], (err, rows) => {
+    if (err) {
+      console.error(err.message);
+    }
+
+    console.log("long liquidatable positions: ", rows);
+
+    for (const row of rows) {
+      liquidatablePositions.push(row);
+    }
+  });
+
+  const shortLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${0} AND liquidation_price <= ${price}`;
+  db.all(shortLiquidatableQuery, [], (err, rows) => {
+    if (err) {
+      console.error(err.message);
+    }
+
+    console.log("short liquidatable positions: ", rows);
+
+    for (const row of rows) {
+      liquidatablePositions.push(row);
+    }
+  });
+
+  return liquidatablePositions;
 }
 
 // DB HELPERS ============================================================================================================================
@@ -233,21 +336,6 @@ function initDb() {
     signature TEXT NOT NULL, 
     user_id INTEGER )`;
 
-  // ON DUPLICATE KEY UPDATE
-  // order_id = VALUES(order_id),
-  // expiration_timestamp = VALUES(expiration_timestamp),
-  // position = VALUES(position),
-  // position_effect_type = VALUES(position_effect_type),
-  // order_side = VALUES(order_side),
-  // synthetic_token = VALUES(synthetic_token),
-  // synthetic_amount = VALUES(synthetic_amount),
-  // collateral_amount = VALUES(collateral_amount),
-  // fee_limit = VALUES(fee_limit),
-  // open_order_fields = VALUES(open_order_fields),
-  // close_order_fields = VALUES(close_order_fields),
-  // signature = VALUES(signature),
-  // user_id = VALUES(user_id);
-
   const createSpotTableCommand = `
   CREATE TABLE IF NOT EXISTS spotOrders
   (order_id INTEGER PRIMARY KEY NOT NULL, 
@@ -265,21 +353,6 @@ function initDb() {
   signature TEXT NOT NULL, 
   user_id INTEGER )  `;
 
-  // ON DUPLICATE KEY UPDATE
-  // expiration_timestamp = VALUES(expiration_timestamp),
-  // token_spent = VALUES(token_spent),
-  // token_received = VALUES(token_received),
-  // amount_spent = VALUES(amount_spent),
-  // amount_received = VALUES(amount_received),
-  // fee_limit = VALUES(fee_limit),
-  // dest_received_address = VALUES(dest_received_address),
-  // dest_received_blinding = VALUES(dest_received_blinding),
-  // dest_spent_blinding = VALUES(dest_spent_blinding),
-  // notes_in = VALUES(notes_in),
-  // refund_note = VALUES(refund_note),
-  // signature = VALUES(signature),
-  // user_id = VALUES(user_id);
-
   let db = new sqlite3.Database("./orderBooks.db", (err) => {
     if (err) {
       console.error(err.message);
@@ -290,21 +363,30 @@ function initDb() {
   db.run(createSpotTableCommand);
   db.run(createPerpTableCommand);
 
-  const createSpotLiquidtyTableCommand =
+  const createSpotLiquidityTableCommand =
     "CREATE TABLE IF NOT EXISTS spotLiquidity (market_id INTEGER PRIMARY KEY UNIQUE NOT NULL, bidQueue TEXT NOT NULL, askQueue TEXT NOT NULL)";
-  const createPerpLiquidtyTableCommand =
+  const createPerpLiquidityTableCommand =
     "CREATE TABLE IF NOT EXISTS perpLiquidity (market_id INTEGER PRIMARY KEY UNIQUE NOT NULL, bidQueue TEXT NOT NULL, askQueue TEXT NOT NULL)";
 
-  db.run(createSpotLiquidtyTableCommand, (res, err) => {
+  db.run(createSpotLiquidityTableCommand, (res, err) => {
     if (err) {
       console.log(err);
     }
-    db.run(createPerpLiquidtyTableCommand, (res, err) => {
+    db.run(createPerpLiquidityTableCommand, (res, err) => {
       if (err) {
         console.log(err);
       }
       initLiquidity(db);
     });
+  });
+
+  const createLiquidationTable =
+    "CREATE TABLE IF NOT EXISTS liquidations (position_index INTEGER PRIMARY KEY NOT NULL, position_address TEXT NOT NULL, synthetic_token INTEGER NOT NULL, order_side BIT NOT NULL, liquidation_price INTEGER NOT NULL)";
+
+  db.run(createLiquidationTable, (res, err) => {
+    if (err) {
+      console.log(err);
+    }
   });
 
   return db;
@@ -358,15 +440,6 @@ function initLiquidity(db) {
   }
 }
 
-module.exports = {
-  listenToLiquidityUpdates,
-  compileLiqUpdateMessage,
-  storeSpotOrder,
-  storePerpOrder,
-  initDb,
-  initOrderBooks,
-};
-
 // Warn if overriding existing method
 if (Array.prototype.equals)
   console.warn(
@@ -395,3 +468,61 @@ Array.prototype.equals = function (array) {
 };
 // Hide method from for-in loops
 Object.defineProperty(Array.prototype, "equals", { enumerable: false });
+
+// * TESTING ========================================================
+
+let token2symbol = {
+  12345: "btcusd",
+  54321: "ethusd",
+};
+
+const PRICE_DECIMALS_PER_ASSET = {
+  12345: 6, // BTC
+  54321: 6, // ETH
+};
+
+const { getKeyPair, sign } = require("starknet").ec;
+
+/**
+ *
+ * @param {"btcusd" / "ethusd"} symbol
+ */
+async function getOracleUpdate(token) {
+  let symbol = token2symbol[token];
+
+  let response = await fetch(
+    `https://api.cryptowat.ch/markets/coinbase/${symbol}/price`
+  );
+
+  let res = await response.json();
+  let price = Number(res.result.price * 10 ** PRICE_DECIMALS_PER_ASSET[token]);
+  let timestamp = Math.floor(Date.now() / 1000);
+
+  let msg =
+    (BigInt(price) * 2n ** 64n + BigInt(token)) * 2n ** 64n + BigInt(timestamp);
+
+  let keyPair = getKeyPair("0x1");
+
+  let sig = sign(keyPair, msg.toString(16));
+
+  let oracleUpdate = {
+    token: token,
+    timestamp: timestamp,
+    observer_ids: [1],
+    prices: [price],
+    signatures: [{ r: sig[0], s: sig[1] }],
+  };
+
+  return oracleUpdate;
+}
+
+module.exports = {
+  listenToLiquidityUpdates,
+  compileLiqUpdateMessage,
+  getLiquidatablePositions,
+  storeSpotOrder,
+  storePerpOrder,
+  initDb,
+  initOrderBooks,
+  getOracleUpdate,
+};

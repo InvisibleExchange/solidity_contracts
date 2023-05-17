@@ -1,7 +1,8 @@
+use std::println;
 use std::str::FromStr;
 
 use num_bigint::BigUint;
-use num_traits::{FromPrimitive, One, Zero};
+use num_traits::FromPrimitive;
 
 use error_stack::Result;
 use serde::Deserialize as DeserializeTrait;
@@ -80,6 +81,7 @@ impl PerpPosition {
             liquidation_price,
             &position_address,
             current_funding_idx,
+            allow_partial_liquidations,
         );
 
         PerpPosition {
@@ -165,6 +167,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -221,6 +224,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -298,6 +302,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -377,6 +382,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -448,6 +454,7 @@ impl PerpPosition {
             self.liquidation_price,
             &self.position_address,
             funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -644,6 +651,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             self.last_funding_idx,
+            self.allow_partial_liquidations,
         );
 
         self.position_size = new_size as u64;
@@ -742,6 +750,7 @@ impl PerpPosition {
             new_liquidation_price,
             &self.position_address,
             self.last_funding_idx,
+            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -888,6 +897,7 @@ impl PerpPosition {
             self.liquidation_price,
             &self.position_address,
             self.last_funding_idx,
+            self.allow_partial_liquidations,
         );
 
         return position_hash;
@@ -988,15 +998,25 @@ pub fn _hash_position(
     liquidation_price: u64,
     position_address: &BigUint,
     current_funding_idx: u32,
+    allow_partial_liquidations: bool,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    let order_side = if *order_side == OrderSide::Long {
-        BigUint::zero()
+    let input_one: u8 = if *order_side == OrderSide::Long {
+        if allow_partial_liquidations {
+            1
+        } else {
+            0
+        }
     } else {
-        BigUint::one()
+        if allow_partial_liquidations {
+            2
+        } else {
+            3
+        }
     };
-    hash_inputs.push(&order_side);
+    let input_one = BigUint::from_u8(input_one).unwrap();
+    hash_inputs.push(&input_one);
     let synthetic_token = BigUint::from_u64(synthetic_token).unwrap();
     hash_inputs.push(&synthetic_token);
     let position_size = BigUint::from_u64(position_size).unwrap();
@@ -1042,13 +1062,13 @@ fn _get_entry_price(initial_margin: u64, leverage: u64, size: u64, synthetic_tok
 
 fn _get_liquidation_price(
     entry_price: u64,
-    position_size: u64,
     margin: u64,
+    position_size: u64,
     order_side: &OrderSide,
     synthetic_token: u64,
     is_partial_liquidation: bool,
 ) -> u64 {
-    // maintnance margin
+    // maintenance margin
     let mm_fraction = if is_partial_liquidation
         && position_size > MIN_PARTIAL_LIQUIDATION_SIZE[synthetic_token.to_string().as_str()]
     {
@@ -1071,20 +1091,19 @@ fn _get_liquidation_price(
 
     // & price_delta = (margin - mm_fraction * entry_price * size) / ((1 -/+ mm_fraction)*size) ; - for long, + for short
 
-    if *order_side == OrderSide::Long {
-        let d1 = margin as u128 * multiplier1;
-        let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
+    let d1 = margin as u128 * multiplier1 as u128;
+    let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
 
-        let price_delta = (d1 - d2 * 100) / (100_u128 - mm_fraction as u128);
+    if *order_side == OrderSide::Long {
+        let price_delta =
+            ((d1 - d2) * 100) / ((100_u128 - mm_fraction as u128) * position_size as u128);
 
         let liquidation_price = entry_price - price_delta as u64;
 
         return liquidation_price;
     } else {
-        let d1 = margin as u128 * multiplier1;
-        let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
-
-        let price_delta = (d1 - d2 * 100) / (100_u128 + mm_fraction as u128);
+        let price_delta =
+            ((d1 - d2) * 100) / ((100_u128 + mm_fraction as u128) * position_size as u128);
 
         let liquidation_price = entry_price + price_delta as u64;
 

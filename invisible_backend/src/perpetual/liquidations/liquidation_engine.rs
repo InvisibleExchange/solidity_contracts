@@ -4,6 +4,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::{print, println};
 
 use crossbeam::thread;
 
@@ -62,7 +63,7 @@ impl LiquidationSwap {
         perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         insurance_fund: Arc<Mutex<i64>>,
         //
-        index_price: u64,
+        index_price_: u64,
         min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
         swap_funding_info: SwapFundingInfo,
         //
@@ -70,6 +71,9 @@ impl LiquidationSwap {
         backup_storage: Arc<Mutex<BackupStorage>>,
     ) -> Result<LiquidationResponse, PerpSwapExecutionError> {
         //
+
+        // TODO: This is only for testing purposes -- remove after
+        let index_price = self.market_price;
 
         // ? Execute orders in parallel ===========================================================
 
@@ -81,6 +85,12 @@ impl LiquidationSwap {
             // ? Verify the position hash is valid and exists in the state
             verify_position_existence(&perpetual_state_tree, &liquidated_position)?;
 
+            // ? Verify the signature
+            self.liquidation_order
+                .verify_order_signature(&self.signature)?;
+
+            println!("position exists in state tree and signature is valid");
+
             let (liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation) =
                 execute_liquidation(
                     self.market_price,
@@ -90,15 +100,16 @@ impl LiquidationSwap {
                     &mut liquidated_position,
                 )?;
 
+            println!(
+                "liquidation executed successfully {} {} {} {}",
+                liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation
+            );
+
             let new_idx = if is_partial_liquidation {
                 perpetual_state_tree.lock().first_zero_idx() as u32
             } else {
                 liquidated_position.index
             };
-
-            // ? Verify the signature
-            self.liquidation_order
-                .verify_order_signature(&self.signature)?;
 
             let new_position = open_new_position_after_liquidation(
                 &self.liquidation_order,
@@ -108,6 +119,11 @@ impl LiquidationSwap {
                 current_funding_idx,
                 new_idx,
             )?;
+
+            println!(
+                "new position opened successfully {} {}",
+                new_position.margin, new_position.position_size
+            );
 
             // * UPDATE STATE AFTER SWAP ——————————————————————————————————————————
 
@@ -179,6 +195,8 @@ impl LiquidationSwap {
             self.liquidation_order.position.last_funding_idx,
             current_funding_idx,
         );
+
+        println!("json_output: {:?}", json_output);
 
         let mut swap_output_json_m = swap_output_json.lock();
         swap_output_json_m.push(json_output);

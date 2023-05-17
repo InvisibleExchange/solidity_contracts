@@ -24,7 +24,7 @@ app.use(express.json());
 const db = initDb();
 
 const CONFIG_CODE = "1234567890";
-
+const RELAY_SERVER_ID = "43147634234";
 const SERVER_URL = "localhost";
 // const SERVER_URL = "54.212.28.196";
 
@@ -40,7 +40,7 @@ let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
-  wsClient.send({ user_id: "11223344556677", config_code: CONFIG_CODE });
+  wsClient.send({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE });
 };
 
 wsClient.onmessage = function (e) {
@@ -87,6 +87,29 @@ setInterval(() => {
 }, SEND_LIQUIDITY_PERIOD);
 
 console.log("WebSocket server started on port 4040");
+
+//
+
+// setInterval(async () => {
+//   // Call an API here
+
+//   let updates = [];
+//   for (let token of [12345, 54321]) {
+//     let update = await getOracleUpdate(token);
+//     updates.push(update);
+//   }
+
+//   client.update_index_price(
+//     { oracle_price_updates: updates },
+//     function (err, response) {
+//       if (err) {
+//         console.log(err);
+//       } else {
+//         console.log(response);
+//       }
+//     }
+//   );
+// }, 3000);
 
 // * RABBITMQ CONFIG ====================================================================================
 

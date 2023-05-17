@@ -95,8 +95,9 @@ impl OracleUpdate {
             }
         }
 
-        const THRESHOLD: usize = 2; // TODO:
-                                    // ? Check that there are enough valid observations
+        // TODO change to N later
+        const THRESHOLD: usize = 1;
+        // ? Check that there are enough valid observations
         if valid_observations_count < THRESHOLD {
             return Err(send_oracle_update_error(
                 "not enough valid observations".to_string(),

@@ -1,3 +1,4 @@
+use std::println;
 use std::thread::{JoinHandle, ThreadId};
 use std::time::SystemTime;
 use std::{collections::HashMap, sync::Arc};
@@ -41,7 +42,8 @@ use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType, RollbackMessage};
 use super::{
-    broadcast_message, proccess_perp_matching_result, send_direct_message, WsConnectionsMap,
+    broadcast_message, proccess_perp_matching_result, send_direct_message, send_to_relay_server,
+    WsConnectionsMap,
 };
 
 pub async fn execute_perp_swap(
@@ -311,7 +313,7 @@ pub async fn process_and_execute_perp_swaps(
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
 ) -> std::result::Result<(Vec<(Option<u64>, u64, u64)>, u64), String> {
-    // ? Parse proccessed_res into swaps and get the new order_id
+    // ? Parse processed_res into swaps and get the new order_id
     let res = proccess_perp_matching_result(processed_res);
 
     if let Err(err) = &res {
@@ -445,6 +447,52 @@ pub async fn await_perp_handle(
         {
             println!("Error sending perp swap fill update message")
         };
+
+        // ? Send the new_positions to the relay server
+        let position1 = if position_pair.0.is_some() {
+            Some((
+                position_pair
+                    .0
+                    .as_ref()
+                    .unwrap()
+                    .position_address
+                    .to_string(),
+                position_pair.0.as_ref().unwrap().index,
+                position_pair.0.as_ref().unwrap().synthetic_token,
+                position_pair.0.as_ref().unwrap().order_side == OrderSide::Long,
+                position_pair.0.as_ref().unwrap().liquidation_price,
+            ))
+        } else {
+            None
+        };
+        let position2 = if position_pair.1.is_some() {
+            Some((
+                position_pair
+                    .1
+                    .as_ref()
+                    .unwrap()
+                    .position_address
+                    .to_string(),
+                position_pair.1.as_ref().unwrap().index,
+                position_pair.1.as_ref().unwrap().synthetic_token,
+                position_pair.1.as_ref().unwrap().order_side == OrderSide::Long,
+                position_pair.1.as_ref().unwrap().liquidation_price,
+            ))
+        } else {
+            None
+        };
+        if position1.is_some() || position2.is_some() {
+            let msg = json!({
+                "message_id": "NEW_POSITIONS",
+                "position1": position1,
+                "position2": position2,
+            });
+            let msg = Message::Text(msg.to_string());
+
+            if let Err(_) = send_to_relay_server(ws_connections, msg).await {
+                println!("Error sending perp swap fill update message")
+            };
+        }
 
         return (None, Some(position_pair));
     // If the taker swap failed, try matching it again with another order

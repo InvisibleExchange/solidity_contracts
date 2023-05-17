@@ -1,12 +1,13 @@
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
     collections::HashMap,
     sync::Arc,
     thread::{JoinHandle, ThreadId},
     time::Instant,
 };
+use tokio_tungstenite::tungstenite::Message;
 
 use super::{
     grpc::engine::{
@@ -23,6 +24,7 @@ use super::{
         perp_swap_execution::{
             process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
         },
+        send_to_relay_server,
         swap_execution::{
             await_swap_handles, process_and_execute_spot_swaps, process_limit_order_request,
             retry_failed_swaps,
@@ -57,7 +59,7 @@ use crate::{
             liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
             liquidation_output::LiquidationResponse,
         },
-        PositionEffectType,
+        OrderSide, PositionEffectType,
     },
     transaction_batch::tx_batch_structs::OracleUpdate,
     trees::superficial_tree::SuperficialTree,
@@ -426,8 +428,6 @@ impl Engine for EngineService {
 
         let req: LiquidationOrderMessage = request.into_inner();
 
-        let user_id = req.user_id;
-
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
         match verify_signature_format(&req.signature) {
@@ -457,7 +457,7 @@ impl Engine for EngineService {
             );
         }
 
-        let perp_orderbook = self
+        let mut perp_orderbook = self
             .perp_order_books
             .get(&market.unwrap())
             .clone()
@@ -530,10 +530,10 @@ impl Engine for EngineService {
                 }
             },
             Err(_e) => {
-                println!("Unknown Error in deposit execution");
+                println!("Unknown Error in liquidation execution");
 
                 return send_liquidation_order_error_reply(
-                    "Unknown Error occurred in the deposit execution".to_string(),
+                    "Unknown Error occurred in the liquidation execution".to_string(),
                 );
             }
         }
@@ -1383,7 +1383,7 @@ impl Engine for EngineService {
         let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
             let (resp_tx, resp_rx) = oneshot::channel();
 
-            let grpc_message = GrpcMessage::new();
+            let mut grpc_message = GrpcMessage::new();
             grpc_message.msg_type = MessageType::MarginChange;
             grpc_message.change_margin_message = change_margin_message;
 
@@ -1397,20 +1397,40 @@ impl Engine for EngineService {
         });
 
         if let Ok(grpc_res) = handle.await {
-            match grpc_res.new_idxs.unwrap() {
-                Ok(zero_idxs) => {
+            match grpc_res.margin_change_response {
+                Some(margin_change_response) => {
                     store_output_json(&self.swap_output_json, &self.main_storage);
+
+                    let pos = Some((
+                        margin_change_response.position_address,
+                        margin_change_response.position_idx,
+                        margin_change_response.synthetic_token,
+                        margin_change_response.order_side == OrderSide::Long,
+                        margin_change_response.liquidation_price,
+                    ));
+                    let msg = json!({
+                        "message_id": "NEW_POSITIONS",
+                        "position1":  pos,
+                        "position2":  null
+                    });
+                    let msg = Message::Text(msg.to_string());
+
+                    if let Err(_) = send_to_relay_server(&self.ws_connections, msg).await {
+                        println!("Error sending perp swap fill update message")
+                    };
 
                     let reply = MarginChangeRes {
                         successful: true,
                         error_message: "".to_string(),
-                        return_collateral_index: if zero_idxs.len() > 0 { zero_idxs[0] } else { 0 },
+                        return_collateral_index: margin_change_response.new_note_idx,
                     };
 
                     return Ok(Response::new(reply));
                 }
-                Err(e) => {
-                    return send_margin_change_error_reply(e.to_string());
+                None => {
+                    return send_margin_change_error_reply(
+                        "Unknown error in split_notes, this should have been bypassed".to_string(),
+                    );
                 }
             }
         } else {
@@ -1444,7 +1464,7 @@ impl Engine for EngineService {
                 Ok(oracle_update) => oracle_updates.push(oracle_update),
                 Err(_) => {
                     return send_oracle_update_error_reply(
-                        "Error occured while parsing the oracle update".to_string(),
+                        "Error occurred while parsing the oracle update".to_string(),
                     );
                 }
             }
@@ -1480,14 +1500,14 @@ impl Engine for EngineService {
                 println!("Error updating the index price");
 
                 return send_oracle_update_error_reply(
-                    "Error occured while updating index price ".to_string(),
+                    "Error occurred while updating index price ".to_string(),
                 );
             }
         } else {
             println!("Error updating the index price");
 
             return send_oracle_update_error_reply(
-                "Unknown Error occured while updating index price".to_string(),
+                "Unknown Error occurred while updating index price".to_string(),
             );
         }
     }

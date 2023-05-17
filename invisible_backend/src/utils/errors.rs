@@ -239,7 +239,7 @@ pub fn send_liquidation_order_error_reply(
     let reply = LiquidationOrderResponse {
         successful: false,
         error_message: err_msg,
-        liquidated_position: None,
+        new_position: None,
     };
 
     return Ok(Response::new(reply));

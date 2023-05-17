@@ -322,6 +322,13 @@ impl OpenOrderFields {
 
         hash_inputs.push(&self.blinding);
 
+        let allow_partial_liquidations = if self.allow_partial_liquidations {
+            BigUint::one()
+        } else {
+            BigUint::zero()
+        };
+        hash_inputs.push(&allow_partial_liquidations);
+
         return pedersen_on_vec(&hash_inputs);
     }
 }
