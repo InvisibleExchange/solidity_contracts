@@ -1,3 +1,4 @@
+use core::num;
 use std::println;
 use std::str::FromStr;
 
@@ -615,8 +616,10 @@ impl PerpPosition {
         let s1 = self.margin as u128 * multiplier1;
         let s2 = self.position_size as u128 * price_delta as u128;
 
-        let new_size =
-            (s1 - s2) / (market_price as u128 * (im_rate + liquidator_fee_rate) as u128) / 1000;
+        let numerator = s1 - s2;
+        let denominator = market_price as u128 * (im_rate + liquidator_fee_rate) as u128 / 1000;
+
+        let new_size = numerator / denominator;
 
         let liquidated_size = self.position_size - new_size as u64;
 
@@ -624,7 +627,7 @@ impl PerpPosition {
 
         let liquidator_fee = (liquidated_size as u128 * market_price as u128 * liquidator_fee_rate
             / multiplier1 as u128
-            + 1000) as u64;
+            / 1000) as u64;
 
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             self.entry_price,
@@ -634,6 +637,7 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
+
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             self.margin - liquidator_fee,
@@ -869,6 +873,7 @@ impl PerpPosition {
             self.synthetic_token,
         )
         .unwrap_or_default();
+
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             margin_after_funding as u64,
@@ -1098,9 +1103,9 @@ fn _get_liquidation_price(
         let price_delta =
             ((d1 - d2) * 100) / ((100_u128 - mm_fraction as u128) * position_size as u128);
 
-        let liquidation_price = entry_price - price_delta as u64;
+        let liquidation_price = entry_price.checked_sub(price_delta as u64);
 
-        return liquidation_price;
+        return liquidation_price.unwrap_or(0);
     } else {
         let price_delta =
             ((d1 - d2) * 100) / ((100_u128 + mm_fraction as u128) * position_size as u128);

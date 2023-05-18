@@ -172,7 +172,7 @@ impl TryFrom<PerpOrderMessage> for PerpOrder {
                 result = PerpOrder::new_open_order(
                     0,
                     req.expiration_timestamp,
-                    if req.order_side == 0 {
+                    if req.order_side == 1 {
                         OrderSide::Long
                     } else {
                         OrderSide::Short
@@ -189,7 +189,7 @@ impl TryFrom<PerpOrderMessage> for PerpOrder {
                     0,
                     req.expiration_timestamp,
                     PerpPosition::try_from(req.position.ok_or(GrpcMessageError {})?)?,
-                    if req.order_side == 0 {
+                    if req.order_side == 1 {
                         OrderSide::Long
                     } else {
                         OrderSide::Short
@@ -208,7 +208,7 @@ impl TryFrom<PerpOrderMessage> for PerpOrder {
                     0,
                     req.expiration_timestamp,
                     PerpPosition::try_from(req.position.ok_or(GrpcMessageError {})?)?,
-                    if req.order_side == 0 {
+                    if req.order_side == 1 {
                         OrderSide::Long
                     } else {
                         OrderSide::Short
@@ -294,7 +294,7 @@ impl TryFrom<LiquidationOrderMessage> for LiquidationOrder {
 
         let result = LiquidationOrder::new(
             position,
-            if req.order_side == 0 {
+            if req.order_side == 1 {
                 OrderSide::Long
             } else {
                 OrderSide::Short
@@ -317,9 +317,9 @@ impl From<PerpPosition> for GrpcPerpPosition {
     fn from(req: PerpPosition) -> Self {
         GrpcPerpPosition {
             order_side: if req.order_side == OrderSide::Long {
-                0
-            } else {
                 1
+            } else {
+                0
             },
             position_size: req.position_size,
             synthetic_token: req.synthetic_token,
@@ -343,7 +343,7 @@ impl TryFrom<GrpcPerpPosition> for PerpPosition {
     type Error = Report<GrpcMessageError>;
 
     fn try_from(req: GrpcPerpPosition) -> Result<Self, GrpcMessageError> {
-        let order_side = if req.order_side == 0 {
+        let order_side = if req.order_side == 1 {
             OrderSide::Long
         } else {
             OrderSide::Short

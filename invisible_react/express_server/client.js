@@ -4,14 +4,12 @@ const port = 4000;
 
 const cors = require("cors");
 const {
-  listenToLiquidtiyUpdates,
   initDb,
   storeSpotOrder,
   storePerpOrder,
   initOrderBooks,
   compileLiqUpdateMessage,
   listenToLiquidityUpdates,
-  getOracleUpdate,
   getLiquidatablePositions,
 } = require("./helpers");
 
@@ -65,7 +63,7 @@ wsClient.onmessage = function (e) {
 // & WEBSOCKET SERVER
 const WebSocket = require("ws");
 const wss = new WebSocket.Server({ port: 4040 });
-const SEND_LIQUIDITY_PERIOD = 1_000;
+const SEND_LIQUIDITY_PERIOD = 1000;
 
 wss.on("connection", (ws) => {
   ws.on("message", (message) => {});
@@ -99,27 +97,6 @@ setInterval(() => {
 }, SEND_LIQUIDITY_PERIOD);
 
 console.log("WebSocket server started on port 4040");
-
-setInterval(async () => {
-  // Call an API here
-
-  let updates = [];
-  for (let token of [12345, 54321]) {
-    let update = await getOracleUpdate(token);
-    updates.push(update);
-  }
-
-  client.update_index_price(
-    { oracle_price_updates: updates },
-    function (err, response) {
-      if (err) {
-        console.log(err);
-      } else {
-        console.log(response);
-      }
-    }
-  );
-}, 3000);
 
 /// =============================================================================
 
@@ -185,9 +162,9 @@ app.post("/submit_liquidation_order", (req, res) => {
 // * GET LIQUIDATABLE POSITIONS -----------------------------------------------------------
 app.post("/get_liquidatable_positions", (req, res) => {
   let { token, price } = req.body;
-  let response = getLiquidatablePositions(db, token, price);
-
-  res.send({ response: response });
+  getLiquidatablePositions(db, token, price).then((response) => {
+    res.send({ response: response });
+  });
 });
 
 // * CANCEL ORDER ---------------------------------------------------------------------

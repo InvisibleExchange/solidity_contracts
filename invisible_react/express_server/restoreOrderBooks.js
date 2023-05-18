@@ -133,6 +133,9 @@ async function restoreOrderbooks() {
       sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity);
     }
   });
+
+
+  
 }
 
 async function sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity) {

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
+use sled::Db;
 
 use crate::{
     transactions::limit_order::LimitOrder,
@@ -268,3 +269,21 @@ pub fn update_db_after_note_split(
         handles.push(handle);
     }
 }
+
+// pub struct DbNoteUpdater<'a> {
+//     pub session: &'a Arc<Mutex<ServiceSession>>,
+//     pub backup_storage: &'a Arc<Mutex<BackupStorage>>,
+//     pub delete_notes: Vec<&'a (u64, String)>,
+//     pub add_notes: Vec<&'a Note>,
+// }
+
+// impl DbNoteUpdater {
+//     fn update_db(&self) {
+
+
+//         let mut added_notes
+
+
+
+//     }
+// }

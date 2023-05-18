@@ -231,38 +231,45 @@ function compileLiqUpdateMessage(orderBooks) {
   return updates;
 }
 
-function getLiquidatablePositions(db, syntheticToken, price) {
-  // (position_address TEXT NOT NULL, synthetic_token INTEGER NOT NULL, order_side BIT NOT NULL, liquidation_price INTEGER NOT NULL)
+async function getLiquidatablePositions(db, syntheticToken, price) {
+  // (position_index INTEGER PRIMARY KEY NOT NULL, position_address TEXT NOT NULL, synthetic_token INTEGER NOT NULL, order_side BIT NOT NULL, liquidation_price INTEGER NOT NULL)
 
+  let completedCount = 0;
   let liquidatablePositions = [];
 
-  const longLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${1} AND liquidation_price >= ${price}`;
-  db.all(longLiquidatableQuery, [], (err, rows) => {
-    if (err) {
-      console.error(err.message);
-    }
+  return new Promise((resolve, reject) => {
+    const longLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${1} AND liquidation_price >= ${price}`;
+    db.all(longLiquidatableQuery, [], (err, rows) => {
+      if (err) {
+        console.error(err.message);
+      }
 
-    console.log("long liquidatable positions: ", rows);
+      for (const row of rows) {
+        liquidatablePositions.push(row);
+      }
 
-    for (const row of rows) {
-      liquidatablePositions.push(row);
-    }
+      completedCount++;
+      if (completedCount == 2) {
+        resolve(liquidatablePositions);
+      }
+    });
+
+    const shortLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${0} AND liquidation_price <= ${price}`;
+    db.all(shortLiquidatableQuery, [], (err, rows) => {
+      if (err) {
+        console.error(err.message);
+      }
+
+      for (const row of rows) {
+        liquidatablePositions.push(row);
+      }
+
+      completedCount++;
+      if (completedCount == 2) {
+        resolve(liquidatablePositions);
+      }
+    });
   });
-
-  const shortLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${0} AND liquidation_price <= ${price}`;
-  db.all(shortLiquidatableQuery, [], (err, rows) => {
-    if (err) {
-      console.error(err.message);
-    }
-
-    console.log("short liquidatable positions: ", rows);
-
-    for (const row of rows) {
-      liquidatablePositions.push(row);
-    }
-  });
-
-  return liquidatablePositions;
 }
 
 // DB HELPERS ============================================================================================================================
@@ -471,51 +478,6 @@ Object.defineProperty(Array.prototype, "equals", { enumerable: false });
 
 // * TESTING ========================================================
 
-let token2symbol = {
-  12345: "btcusd",
-  54321: "ethusd",
-};
-
-const PRICE_DECIMALS_PER_ASSET = {
-  12345: 6, // BTC
-  54321: 6, // ETH
-};
-
-const { getKeyPair, sign } = require("starknet").ec;
-
-/**
- *
- * @param {"btcusd" / "ethusd"} symbol
- */
-async function getOracleUpdate(token) {
-  let symbol = token2symbol[token];
-
-  let response = await fetch(
-    `https://api.cryptowat.ch/markets/coinbase/${symbol}/price`
-  );
-
-  let res = await response.json();
-  let price = Number(res.result.price * 10 ** PRICE_DECIMALS_PER_ASSET[token]);
-  let timestamp = Math.floor(Date.now() / 1000);
-
-  let msg =
-    (BigInt(price) * 2n ** 64n + BigInt(token)) * 2n ** 64n + BigInt(timestamp);
-
-  let keyPair = getKeyPair("0x1");
-
-  let sig = sign(keyPair, msg.toString(16));
-
-  let oracleUpdate = {
-    token: token,
-    timestamp: timestamp,
-    observer_ids: [1],
-    prices: [price],
-    signatures: [{ r: sig[0], s: sig[1] }],
-  };
-
-  return oracleUpdate;
-}
-
 module.exports = {
   listenToLiquidityUpdates,
   compileLiqUpdateMessage,
@@ -524,5 +486,4 @@ module.exports = {
   storePerpOrder,
   initDb,
   initOrderBooks,
-  getOracleUpdate,
 };

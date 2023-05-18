@@ -50,7 +50,7 @@ wsClient.onmessage = function (e) {
 // & WEBSOCKET SERVER
 const WebSocket = require("ws");
 const wss = new WebSocket.Server({ port: 4040 });
-const SEND_LIQUIDITY_PERIOD = 2000;
+const SEND_LIQUIDITY_PERIOD = 1000;
 
 wss.on("connection", (ws) => {
   ws.on("message", (message) => {});
@@ -89,27 +89,6 @@ setInterval(() => {
 console.log("WebSocket server started on port 4040");
 
 //
-
-// setInterval(async () => {
-//   // Call an API here
-
-//   let updates = [];
-//   for (let token of [12345, 54321]) {
-//     let update = await getOracleUpdate(token);
-//     updates.push(update);
-//   }
-
-//   client.update_index_price(
-//     { oracle_price_updates: updates },
-//     function (err, response) {
-//       if (err) {
-//         console.log(err);
-//       } else {
-//         console.log(response);
-//       }
-//     }
-//   );
-// }, 3000);
 
 // * RABBITMQ CONFIG ====================================================================================
 
@@ -206,11 +185,23 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       );
     });
 
-    // // * EXECUTE PERPETUAL SWAP -----------------------------------------------------------
+    // * EXECUTE PERPETUAL SWAP -----------------------------------------------------------
     app.post("/submit_perpetual_order", (req, res) => {
       delegateRequest(
         req.body,
         "perp_order",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // * EXECUTE PERPETUAL SWAP -----------------------------------------------------------
+    app.post("/submit_liquidation_order", (req, res) => {
+      delegateRequest(
+        req.body,
+        "liquidation_order",
         channel,
         res,
         queue,

@@ -17,6 +17,7 @@ use super::liquidation_output::{wrap_liquidation_output, LiquidationResponse};
 use super::state_updates::{
     update_perpetual_state_after_liquidation, update_state_after_liquidation,
 };
+use crate::perpetual::perp_position::PerpPosition;
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
@@ -89,8 +90,6 @@ impl LiquidationSwap {
             self.liquidation_order
                 .verify_order_signature(&self.signature)?;
 
-            println!("position exists in state tree and signature is valid");
-
             let (liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation) =
                 execute_liquidation(
                     self.market_price,
@@ -99,11 +98,6 @@ impl LiquidationSwap {
                     &self.liquidation_order,
                     &mut liquidated_position,
                 )?;
-
-            println!(
-                "liquidation executed successfully {} {} {} {}",
-                liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation
-            );
 
             let new_idx = if is_partial_liquidation {
                 perpetual_state_tree.lock().first_zero_idx() as u32
@@ -120,10 +114,11 @@ impl LiquidationSwap {
                 new_idx,
             )?;
 
-            println!(
-                "new position opened successfully {} {}",
-                new_position.margin, new_position.position_size
-            );
+            let liquidated_position: Option<PerpPosition> = if is_partial_liquidation {
+                Some(liquidated_position)
+            } else {
+                None
+            };
 
             // * UPDATE STATE AFTER SWAP ——————————————————————————————————————————
 
@@ -139,11 +134,6 @@ impl LiquidationSwap {
                 &self.liquidation_order.open_order_fields.refund_note,
             )?;
 
-            let liquidated_position = if is_partial_liquidation {
-                Some(liquidated_position)
-            } else {
-                None
-            };
             update_perpetual_state_after_liquidation(
                 &perpetual_state_tree,
                 &perpetual_updated_position_hashes,
@@ -195,8 +185,6 @@ impl LiquidationSwap {
             self.liquidation_order.position.last_funding_idx,
             current_funding_idx,
         );
-
-        println!("json_output: {:?}", json_output);
 
         let mut swap_output_json_m = swap_output_json.lock();
         swap_output_json_m.push(json_output);

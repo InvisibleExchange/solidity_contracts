@@ -110,6 +110,11 @@ async function processOrder(correlationId, order) {
     let res = await callPerpOrderRpcWithPromise(order);
 
     return res;
+  } else if (correlationId.startsWith("liquidation_order")) {
+    // Execute order in the backend engine
+    let res = await callLiquidationOrderRpcWithPromise(order);
+
+    return res;
   } else if (correlationId.startsWith("cancel")) {
     // Cancels order in the backend engine
     let res = await callCancelRpcWithPromise(order);
@@ -190,6 +195,22 @@ function callSpotOrderRpcWithPromise(orderObject) {
 function callPerpOrderRpcWithPromise(orderObject) {
   return new Promise((resolve, reject) => {
     client.submit_perpetual_order(orderObject, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        if (response.successful) {
+          storePerpOrder(db, response.order_id, orderObject);
+        }
+
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callLiquidationOrderRpcWithPromise(orderObject) {
+  return new Promise((resolve, reject) => {
+    client.submit_liquidation_order(orderObject, function (err, response) {
       if (err) {
         reject(err);
       } else {

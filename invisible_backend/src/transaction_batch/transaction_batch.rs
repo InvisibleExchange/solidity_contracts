@@ -66,8 +66,9 @@ use super::{
         },
     },
     restore_state_helpers::{
-        restore_deposit_update, restore_margin_update, restore_note_split,
-        restore_perp_order_execution, restore_spot_order_execution, restore_withdrawal_update,
+        restore_deposit_update, restore_liquidation_order_execution, restore_margin_update,
+        restore_note_split, restore_perp_order_execution, restore_spot_order_execution,
+        restore_withdrawal_update,
     },
     tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info},
     tx_batch_structs::{get_price_info, GlobalConfig},
@@ -1018,7 +1019,13 @@ impl TransactionBatch {
 
                     self.running_tx_count += 1;
                 }
-
+                "liquidation_swap" => restore_liquidation_order_execution(
+                    &self.state_tree,
+                    &self.updated_note_hashes,
+                    &self.perpetual_state_tree,
+                    &self.perpetual_updated_position_hashes,
+                    &transaction,
+                ),
                 "margin_change" => restore_margin_update(
                     &self.state_tree,
                     &self.updated_note_hashes,
@@ -1139,7 +1146,6 @@ impl TransactionBatch {
             }
 
             self.latest_index_price.insert(token, median);
-            println!("Updated price for token {} to {}", token, median)
         }
 
         self.running_index_price_count += 1;

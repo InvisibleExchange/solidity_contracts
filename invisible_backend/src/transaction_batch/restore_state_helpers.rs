@@ -6,8 +6,10 @@ use starknet::{core::types::FieldElement, curve::AffinePoint};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
-    perpetual::DUST_AMOUNT_PER_ASSET, trees::superficial_tree::SuperficialTree,
-    utils::crypto_utils::EcPoint, utils::notes::Note,
+    perpetual::{order_execution::open_order, DUST_AMOUNT_PER_ASSET},
+    trees::superficial_tree::SuperficialTree,
+    utils::crypto_utils::EcPoint,
+    utils::notes::Note,
 };
 
 pub fn restore_spot_order_execution(
@@ -175,6 +177,100 @@ pub fn restore_perp_order_execution(
     );
 }
 
+// * ======
+// * =========
+// * ======
+
+pub fn restore_liquidation_order_execution(
+    tree_m: &Arc<Mutex<SuperficialTree>>,
+    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
+    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    transaction: &Map<String, Value>,
+) {
+    let liquidation_order = transaction.get("liquidation_order").unwrap();
+
+    let mut tree = tree_m.lock();
+    let mut updated_note_hashes = updated_note_hashes_m.lock();
+
+    let open_order_fields = liquidation_order.get("open_order_fields").unwrap();
+
+    let notes_in = open_order_fields
+        .get("notes_in")
+        .unwrap()
+        .as_array()
+        .unwrap();
+    let refund_note = open_order_fields.get("refund_note");
+
+    let refund_idx = notes_in[0].get("index").unwrap().as_u64().unwrap();
+    let refund_note_hash = if refund_note.unwrap().is_null() {
+        BigUint::zero()
+    } else {
+        BigUint::from_str(refund_note.unwrap().get("hash").unwrap().as_str().unwrap()).unwrap()
+    };
+
+    tree.update_leaf_node(&refund_note_hash, refund_idx);
+    updated_note_hashes.insert(refund_idx, refund_note_hash);
+
+    // ========
+
+    for i in 1..notes_in.len() {
+        let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
+
+        tree.update_leaf_node(&BigUint::zero(), idx);
+        updated_note_hashes.insert(idx, BigUint::zero());
+    }
+
+    drop(tree);
+    drop(updated_note_hashes);
+
+    // & Update Perpetual State Tree
+
+    let new_position_idx = transaction
+        .get("indexes")
+        .unwrap()
+        .get("new_position_index")
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    let new_liquidated_position_idx = transaction
+        .get("prev_liquidated_position")
+        .unwrap()
+        .get("index")
+        .unwrap()
+        .as_u64()
+        .unwrap();
+
+    let new_position_hash = transaction
+        .get("new_position_hash")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let new_liquidated_position_hash = transaction
+        .get("new_liquidated_position_hash")
+        .unwrap()
+        .as_str()
+        .unwrap();
+
+    let mut perpetual_state_tree = perpetual_state_tree_m.lock();
+    let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();
+
+    perpetual_state_tree.update_leaf_node(
+        &BigUint::from_str(new_position_hash).unwrap(),
+        new_position_idx,
+    );
+    perpetual_updated_position_hashes.insert(
+        new_position_idx,
+        BigUint::from_str(new_position_hash).unwrap(),
+    );
+
+    let hash = BigUint::from_str(new_liquidated_position_hash).unwrap();
+    if hash != BigUint::zero() {
+        perpetual_state_tree.update_leaf_node(&hash, new_liquidated_position_idx);
+        perpetual_updated_position_hashes.insert(new_liquidated_position_idx, hash);
+    }
+}
+
 // * =============================================================================================================
 // * =============================================================================================================
 // * =============================================================================================================
@@ -230,7 +326,7 @@ pub fn restore_withdrawal_update(
     drop(tree);
 }
 
-pub fn restore_after_swap_first_fill(
+fn restore_after_swap_first_fill(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     notes_in: &Vec<Value>,
@@ -285,7 +381,7 @@ pub fn restore_after_swap_first_fill(
     drop(updated_note_hashes);
 }
 
-pub fn restore_after_swap_later_fills(
+fn restore_after_swap_later_fills(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     swap_note: Note,
@@ -313,7 +409,7 @@ pub fn restore_after_swap_later_fills(
 }
 
 // * PERP STATE RESTORE FUNCTIONS ================================================================================
-pub fn restore_after_perp_swap_first_fill(
+fn restore_after_perp_swap_first_fill(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
@@ -373,7 +469,7 @@ pub fn restore_after_perp_swap_first_fill(
     drop(updated_note_hashes);
 }
 
-pub fn restore_after_perp_swap_later_fills(
+fn restore_after_perp_swap_later_fills(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
@@ -405,7 +501,7 @@ pub fn restore_after_perp_swap_later_fills(
     drop(tree);
 }
 
-pub fn restore_return_collateral_note(
+fn restore_return_collateral_note(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     ret_collatera_note_idx: &Value,
