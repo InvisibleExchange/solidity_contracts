@@ -44,8 +44,8 @@ impl Withdrawal {
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: Arc<Mutex<ServiceSession>>,
-        backup_storage: Arc<Mutex<BackupStorage>>,
+        session: &Arc<Mutex<ServiceSession>>,
+        backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<(), WithdrawalThreadExecutionError> {
         let withdrawal_handle = thread::scope(move |_s| {
             let mut valid: bool = true;
@@ -120,7 +120,7 @@ impl Withdrawal {
         // ? Update the database
         update_db_after_withdrawal(
             &session,
-            backup_storage,
+            &backup_storage,
             &self.notes_in,
             self.refund_note.clone(),
         );
@@ -195,8 +195,8 @@ impl Transaction for Withdrawal {
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: Arc<Mutex<ServiceSession>>,
-        backup_storage: Arc<Mutex<BackupStorage>>,
+        session: &Arc<Mutex<ServiceSession>>,
+        backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError> {
         self.execute_withdrawal(
             tree,

@@ -20,10 +20,8 @@ pub struct LimitOrder {
     pub amount_spent: u64,
     pub amount_received: u64,
     pub fee_limit: u64,
-    //& dest_spent is for the refund and partial fill refund notes
     //& dest_received is for the swap output notes (should be the ec sum of input note addresses)
     pub dest_received_address: EcPoint,
-    pub dest_spent_blinding: BigUint,
     pub dest_received_blinding: BigUint,
     //
     pub notes_in: Vec<Note>,
@@ -41,7 +39,6 @@ impl LimitOrder {
         amount_received: u64,
         fee_limit: u64,
         dest_received_address: EcPoint,
-        dest_spent_blinding: BigUint,
         dest_received_blinding: BigUint,
         notes_in: Vec<Note>,
         refund_note_: Option<Note>,
@@ -66,9 +63,7 @@ impl LimitOrder {
             amount_spent,
             amount_received,
             fee_limit,
-            // &dest_spent_address,
             &dest_received_address,
-            &dest_spent_blinding,
             &dest_received_blinding,
             &notes_in,
             &refund_note,
@@ -82,9 +77,7 @@ impl LimitOrder {
             amount_spent,
             amount_received,
             fee_limit,
-            // dest_spent_address,
             dest_received_address,
-            dest_spent_blinding,
             dest_received_blinding,
             notes_in,
             refund_note,
@@ -100,9 +93,7 @@ impl LimitOrder {
             self.amount_spent,
             self.amount_received,
             self.fee_limit,
-            // &dest_spent_address,
             &self.dest_received_address,
-            &self.dest_spent_blinding,
             &self.dest_received_blinding,
             &self.notes_in,
             &self.refund_note,
@@ -114,7 +105,7 @@ impl LimitOrder {
     pub fn verify_order_signature(
         &self,
         signature: &Signature,
-    ) -> Result<EcPoint, SwapThreadExecutionError> {
+    ) -> Result<(), SwapThreadExecutionError> {
         let order_hash = &self.hash;
 
         let mut pub_key_sum: AffinePoint = AffinePoint::identity();
@@ -130,7 +121,7 @@ impl LimitOrder {
         let valid = verify(&pub_key.x.to_biguint().unwrap(), &order_hash, &signature);
 
         if valid {
-            return Ok(pub_key);
+            return Ok(());
         } else {
             return Err(send_swap_error(
                 "Invalid Signature".to_string(),
@@ -164,7 +155,6 @@ impl Serialize for LimitOrder {
         note.serialize_field("fee_limit", &self.fee_limit)?;
         // note.serialize_field("dest_spent_address", &self.dest_spent_address)?;
         note.serialize_field("dest_received_address", &self.dest_received_address)?;
-        note.serialize_field("dest_spent_blinding", &self.dest_spent_blinding.to_string())?;
         note.serialize_field(
             "dest_received_blinding",
             &self.dest_received_blinding.to_string(),
@@ -186,9 +176,7 @@ fn hash_order(
     amount_spent: u64,
     amount_received: u64,
     fee_limit: u64,
-    // dest_spent_address: &EcPoint,
     dest_received_address: &EcPoint,
-    dest_spent_blinding: &BigUint,
     dest_received_blinding: &BigUint,
     notes_in: &Vec<Note>,
     refund_note: &Option<Note>,
@@ -224,11 +212,8 @@ fn hash_order(
     hash_inputs.push(&amount_received);
     let fee_limit = BigUint::from_u64(fee_limit).unwrap();
     hash_inputs.push(&fee_limit);
-    // let dsa_x = dest_spent_address.x.to_biguint().unwrap();
-    // hash_inputs.push(&dsa_x);
     let dra_x = dest_received_address.x.to_biguint().unwrap();
     hash_inputs.push(&dra_x);
-    hash_inputs.push(&dest_spent_blinding);
     hash_inputs.push(&dest_received_blinding);
 
     let order_hash = pedersen_on_vec(&hash_inputs);

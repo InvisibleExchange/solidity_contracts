@@ -71,14 +71,12 @@ message LimitOrderMessage {
     uint64 amount_received = 5;
     uint64 fee_limit = 6;
     Address dest_received_address = 7;
-    Address dest_spent_address = 8;
-    string dest_received_blinding = 9;
-    string dest_spent_blinding = 10;
-    repeated GrpcNote notes_in = 11;
-    GrpcNote refund_note = 12;
-    Signature signature = 13;
-    bool is_market = 14; // true - market order, false - limit order
-    uint64 user_id = 15; // used to send a response thorugh a ws
+    string dest_received_blinding = 8;
+    repeated GrpcNote notes_in = 9;
+    GrpcNote refund_note = 10;
+    Signature signature = 11;
+    bool is_market = 12; // true - market order, false - limit order
+    uint64 user_id = 13; // used to send a response thorugh a ws
 }
 
 message OrderResponse {
@@ -246,7 +244,6 @@ message GrpcOpenOrderFields {
     repeated GrpcNote notes_in = 3;
     GrpcNote refund_note = 4;
     string position_address = 5;
-    string blinding = 6;
     bool allow_partial_liquidations = 7;
 }
 

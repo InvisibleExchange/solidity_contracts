@@ -8,8 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     perpetual::{
         perp_helpers::perp_swap_helpers::{
-            _check_note_sums, _check_prev_fill_consistencies, _open_order_specific_checks,
-            block_until_prev_fill_finished, get_max_leverage, refund_partial_fill,
+            _check_note_sums, _check_prev_fill_consistencies, block_until_prev_fill_finished,
+            get_max_leverage, refund_partial_fill,
         },
         perp_order::PerpOrder,
         perp_position::PerpPosition,
@@ -17,7 +17,6 @@ use crate::{
     },
     trees::superficial_tree::SuperficialTree,
     utils::{
-        crypto_utils::EcPoint,
         errors::{send_perp_swap_error, PerpSwapExecutionError},
         notes::Note,
     },
@@ -29,7 +28,6 @@ pub fn execute_open_order(
     partialy_filled_positions_m: &Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>,
     blocked_perp_order_ids_m: &Arc<Mutex<HashMap<u64, bool>>>,
     order: &PerpOrder,
-    pub_key_sum: EcPoint,
     fee_taken: u64,
     perp_state_zero_index: u64,
     funding_idx: u32,
@@ -55,18 +53,6 @@ pub fn execute_open_order(
         order.order_id,
     )?;
 
-    // TODO: IS this necessary: If the order was partially filled and the server crashed than we reject the order
-    // if partial_fill_info.is_some()
-    //     && partial_fill_info.as_ref().unwrap().1 == 69
-    //     && partial_fill_info.as_ref().unwrap().2 == 69
-    // {
-    //     return Err(send_perp_swap_error(
-    //         "Order rejected".to_string(),
-    //         Some(order.order_id),
-    //         None,
-    //     ));
-    // }
-
     let is_first_fill = partial_fill_info.is_none();
 
     // ? Get the new total amount filled after this swap
@@ -77,9 +63,6 @@ pub fn execute_open_order(
     };
 
     let open_order_fields = order.open_order_fields.as_ref().unwrap();
-
-    // ? Check Open order specific consistencies
-    _open_order_specific_checks(order, init_margin, spent_synthetic)?;
 
     // ? Check if the note sums are sufficient for amount spent
     let prev_pfr_note: Option<Note>;
@@ -147,8 +130,8 @@ pub fn execute_open_order(
 
         new_partial_refund_note = refund_partial_fill(
             open_order_fields.collateral_token,
-            &open_order_fields.blinding,
-            pub_key_sum,
+            &open_order_fields.notes_in[0].blinding,
+            open_order_fields.notes_in[0].address.clone(),
             unspent_margin,
             new_pfr_idx,
         );

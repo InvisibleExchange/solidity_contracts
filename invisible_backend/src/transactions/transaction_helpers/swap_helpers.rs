@@ -7,7 +7,6 @@ use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 use crate::{
     perpetual::{DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
     trees::superficial_tree::SuperficialTree,
-    utils::crypto_utils::EcPoint,
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
         notes::Note,
@@ -31,7 +30,6 @@ use error_stack::Result;
 pub fn refund_partial_fill(
     spend_amount_left: u64,
     order: &LimitOrder,
-    pub_key: EcPoint,
     spent_amount_x: u64,
     idx: u64,
 ) -> Note {
@@ -39,10 +37,10 @@ pub fn refund_partial_fill(
 
     let new_partial_refund_note: Note = Note::new(
         idx,
-        pub_key,
+        order.notes_in[0].address.clone(),
         order.token_spent,
         new_partial_refund_amount,
-        order.dest_spent_blinding.clone(),
+        order.notes_in[0].blinding.clone(),
     );
 
     return new_partial_refund_note;
@@ -154,7 +152,6 @@ pub fn unblock_order(
     order_id_a: u64,
     order_id_b: u64,
 ) {
-    println!("unblocking order {} and {}", order_id_a, order_id_b);
     let mut blocked_order_ids = blocked_order_ids_m.lock();
     blocked_order_ids.remove(&order_id_a);
     blocked_order_ids.remove(&order_id_b);
@@ -205,6 +202,7 @@ pub fn check_prev_fill_consistencies(
 ) -> Result<(), SwapThreadExecutionError> {
     let partial_refund_note = &partial_fill_info.as_ref().unwrap().0;
 
+    // ? Check that the partial refund note has the right token, amount, and address
     if partial_refund_note.token != order.token_spent {
         return Err(send_swap_error(
             "spending wrong token".to_string(),
@@ -216,6 +214,15 @@ pub fn check_prev_fill_consistencies(
     if partial_refund_note.amount < spend_amount_x {
         return Err(send_swap_error(
             "refund note amount is to small for this swap".to_string(),
+            Some(order.order_id),
+            None,
+        ));
+    }
+
+    // ? Assumption: If you know the sum of private keys you know the individual private keys
+    if partial_refund_note.address.x != order.notes_in[0].address.x {
+        return Err(send_swap_error(
+            "pfr note address invalid".to_string(),
             Some(order.order_id),
             None,
         ));

@@ -6,10 +6,8 @@ use starknet::{core::types::FieldElement, curve::AffinePoint};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
-    perpetual::{order_execution::open_order, DUST_AMOUNT_PER_ASSET},
-    trees::superficial_tree::SuperficialTree,
-    utils::crypto_utils::EcPoint,
-    utils::notes::Note,
+    perpetual::DUST_AMOUNT_PER_ASSET, trees::superficial_tree::SuperficialTree,
+    utils::crypto_utils::EcPoint, utils::notes::Note,
 };
 
 pub fn restore_spot_order_execution(

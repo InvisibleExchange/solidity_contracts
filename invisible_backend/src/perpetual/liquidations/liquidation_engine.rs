@@ -4,7 +4,6 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::{print, println};
 
 use crossbeam::thread;
 

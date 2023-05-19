@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use crate::utils::crypto_utils::{EcPoint, Signature};
+use crate::utils::crypto_utils::Signature;
 
 use super::{
     limit_order::LimitOrder,
@@ -47,7 +47,7 @@ pub fn execute_order(
     let is_first_fill = partial_fill_info.is_none();
 
     // ? This proves the transaction is valid and the state can be updated
-    let pub_key_sum: EcPoint = check_order_validity(
+    check_order_validity(
         tree_m,
         &partial_fill_info,
         order,
@@ -68,7 +68,6 @@ pub fn execute_order(
         &partial_fill_info,
         is_first_fill,
         order,
-        pub_key_sum,
         spent_amount_x,
         spent_amount_y,
         fee_taken_x,
@@ -88,7 +87,6 @@ fn execute_order_modifications(
     partial_fill_info: &Option<(Note, u64)>,
     is_first_fill: bool,
     order: &LimitOrder,
-    pub_key_sum: EcPoint,
     spent_amount_x: u64,
     spent_amount_y: u64,
     fee_taken_x: u64,
@@ -137,7 +135,6 @@ fn execute_order_modifications(
         let new_partial_refund_note_ = refund_partial_fill(
             spend_amount_left,
             &order,
-            pub_key_sum,
             spent_amount_x,
             partial_refund_idx,
         );
@@ -179,8 +176,12 @@ fn check_order_validity(
     is_first_fill: bool,
     spent_amount: u64,
     signature: &Signature,
-) -> Result<EcPoint, SwapThreadExecutionError> {
+) -> Result<(), SwapThreadExecutionError> {
     //
+
+    // ? Verify that the order were signed correctly
+    order.verify_order_signature(signature)?;
+
     // ? Check the sum of notes in matches refund and output amounts
     if is_first_fill {
         // ? if this is the first fill
@@ -199,20 +200,6 @@ fn check_order_validity(
         // ? if order was partially filled befor
         check_prev_fill_consistencies(partial_fill_info, &order, spent_amount)?;
     }
-
-    // ? Verify that the order were signed correctly
-    let pub_key_sum = order.verify_order_signature(signature)?;
-
-    // if order.dest_spent_address.x != pub_key_sum.x {
-    //     return Err(send_swap_error(
-    //         "order.dest_spent_address should be equal pub_key_sum".to_string(),
-    //         Some(order.order_id),
-    //         Some(format!(
-    //             "order.dest_spent_address = {:?}, pub_key_sum = {:?}",
-    //             order.dest_spent_address.x, pub_key_sum.x
-    //         )),
-    //     ));
-    // }
 
     // ? Verify the notes exist in the state
     let tree = tree_m.lock();
@@ -247,7 +234,7 @@ fn check_order_validity(
     }
     drop(tree);
 
-    return Ok(pub_key_sum);
+    return Ok(());
 }
 
 pub fn update_state_after_order(

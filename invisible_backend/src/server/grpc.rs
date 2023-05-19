@@ -104,11 +104,7 @@ impl TryFrom<LimitOrderMessage> for LimitOrder {
             req.amount_spent,
             req.amount_received,
             req.fee_limit,
-            // EcPoint::try_from(req.dest_spent_address.ok_or(GrpcMessageError {})?)?,
             EcPoint::try_from(req.dest_received_address.ok_or(GrpcMessageError {})?)?,
-            BigUint::from_str(req.dest_spent_blinding.as_str())
-                .ok()
-                .ok_or(GrpcMessageError {})?,
             BigUint::from_str(req.dest_received_blinding.as_str())
                 .ok()
                 .ok_or(GrpcMessageError {})?,
@@ -255,9 +251,6 @@ impl TryFrom<GrpcOpenOrderFields> for OpenOrderFields {
             refund_note,
             position_address: BigUint::from_str(&req.position_address)
                 .map_err(|_| GrpcMessageError {})?,
-            blinding: BigUint::from_str(&req.blinding)
-                .ok()
-                .ok_or(GrpcMessageError {})?,
             allow_partial_liquidations: req.allow_partial_liquidations,
         };
 

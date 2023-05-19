@@ -5,11 +5,12 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::{perp_order::PerpOrder, perp_position::PerpPosition, PositionEffectType},
-    transactions::transaction_helpers::transaction_output::PerpFillInfo,
+    transactions::transaction_helpers::{
+        db_updates::DbNoteUpdater, transaction_output::PerpFillInfo,
+    },
     utils::{
         firestore::{
-            start_add_note_thread, start_add_perp_fill_thread, start_add_position_thread,
-            start_delete_note_thread, start_delete_position_thread,
+            start_add_perp_fill_thread, start_add_position_thread, start_delete_position_thread,
         },
         notes::Note,
         storage::BackupStorage,
@@ -18,7 +19,7 @@ use crate::{
 
 pub fn update_db_after_perp_swap(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     order_a: &PerpOrder,
     order_b: &PerpOrder,
     prev_pfr_note_a: &Option<Note>,
@@ -31,7 +32,10 @@ pub fn update_db_after_perp_swap(
     position_b: &Option<PerpPosition>,
     // swap_response: &PerpSwapResponse,
 ) {
-    let mut handles = Vec::new();
+    let mut delete_notes: Vec<(u64, String)> = Vec::new();
+    let mut add_notes: Vec<&Note> = Vec::new();
+
+    let mut position_handles = Vec::new();
 
     // ? Remove the notes spent from the database if necessary ==============================================================
     if order_a.position_effect_type == PositionEffectType::Open {
@@ -39,128 +43,63 @@ pub fn update_db_after_perp_swap(
 
         if is_first_fill {
             // ? Store refund note (*if necessary) -----------------------------------------
-
             let refund_note_a = &order_a.open_order_fields.as_ref().unwrap().refund_note;
             if refund_note_a.is_some() {
-                let handle = start_add_note_thread(
-                    refund_note_a.as_ref().unwrap().clone(),
-                    session,
-                    backup_storage.clone(),
-                );
-                handles.push(handle);
-            }
-            if refund_note_a.is_none()
-                || refund_note_a.as_ref().unwrap().address.x
-                    != order_a.open_order_fields.as_ref().unwrap().notes_in[0]
-                        .address
-                        .x
-            {
-                let n0 = &order_a.open_order_fields.as_ref().unwrap().notes_in[0];
-                let handle = start_delete_note_thread(
-                    session,
-                    n0.address.x.to_string(),
-                    n0.index.to_string(),
-                );
-                handles.push(handle);
+                // ? Store the refund note in place of the first note
+                add_notes.push(&refund_note_a.as_ref().unwrap())
             }
 
-            // ? Remove the notes spent from the database -----------------------------------------
+            // ? Delete all notes in
             for n in order_a.open_order_fields.as_ref().unwrap().notes_in[1..].iter() {
-                let handle =
-                    start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-                handles.push(handle);
+                // let tup = (n.index, n.address.x.to_string());
+                delete_notes.push((n.index, n.address.x.to_string()))
             }
         } else {
-            // ? Remove the previous partial fill refund note -----------------------------------------
-            let handle = start_delete_note_thread(
-                session,
-                prev_pfr_note_a.as_ref().unwrap().address.x.to_string(),
-                prev_pfr_note_a.as_ref().unwrap().index.to_string(),
-            );
-            handles.push(handle);
+            let n: &Note = prev_pfr_note_a.as_ref().unwrap();
+            delete_notes.push((n.index, n.address.x.to_string()));
         }
 
         // ? store partial fill refund notes (if necessary)
         if new_pfr_note_a.is_some() {
-            let handle = start_add_note_thread(
-                new_pfr_note_a.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
+            add_notes.push(&new_pfr_note_a.as_ref().unwrap());
         }
     }
+
     if order_b.position_effect_type == PositionEffectType::Open {
         let is_first_fill = prev_pfr_note_b.is_none();
 
         if is_first_fill {
             // ? Store refund note (*if necessary) -----------------------------------------
-
             let refund_note_b = &order_b.open_order_fields.as_ref().unwrap().refund_note;
             if refund_note_b.is_some() {
-                let handle = start_add_note_thread(
-                    refund_note_b.as_ref().unwrap().clone(),
-                    session,
-                    backup_storage.clone(),
-                );
-                handles.push(handle);
-            }
-            if refund_note_b.is_none()
-                || refund_note_b.as_ref().unwrap().address.x
-                    != order_b.open_order_fields.as_ref().unwrap().notes_in[0]
-                        .address
-                        .x
-            {
-                let n0 = &order_b.open_order_fields.as_ref().unwrap().notes_in[0];
-                let handle = start_delete_note_thread(
-                    session,
-                    n0.address.x.to_string(),
-                    n0.index.to_string(),
-                );
-                handles.push(handle);
+                // ? Store the refund note in place of the first note
+                add_notes.push(&refund_note_b.as_ref().unwrap())
             }
 
-            // ? Remove the notes spent from the database -----------------------------------------
+            // ? Delete all notes in
             for n in order_b.open_order_fields.as_ref().unwrap().notes_in[1..].iter() {
-                let handle =
-                    start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-                handles.push(handle);
+                delete_notes.push((n.index, n.address.x.to_string()))
             }
         } else {
-            // ? Remove the previous partial fill refund note
-            let handle = start_delete_note_thread(
-                session,
-                prev_pfr_note_b.as_ref().unwrap().address.x.to_string(),
-                prev_pfr_note_b.as_ref().unwrap().index.to_string(),
-            );
-            handles.push(handle);
+            let n: &Note = prev_pfr_note_b.as_ref().unwrap();
+            delete_notes.push((n.index, n.address.x.to_string()));
         }
 
         // ? store partial fill refund notes (if necessary)
         if new_pfr_note_b.is_some() {
-            let handle = start_add_note_thread(
-                new_pfr_note_b.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
+            add_notes.push(&new_pfr_note_b.as_ref().unwrap());
         }
     }
 
     // ? Store the return collateral note and remove closed positions (when necessary)
     if order_a.position_effect_type == PositionEffectType::Close {
-        if order_a.position_effect_type == PositionEffectType::Close {
-            let handle = start_add_note_thread(
-                return_collateral_note_a.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
-        }
+        //
+        add_notes.push(&return_collateral_note_a.as_ref().unwrap());
 
         if position_a.is_none() {
             let handle = start_delete_position_thread(
                 session,
+                backup_storage,
                 order_a
                     .position
                     .as_ref()
@@ -169,22 +108,17 @@ pub fn update_db_after_perp_swap(
                     .to_string(),
                 order_a.position.as_ref().unwrap().index.to_string(),
             );
-            handles.push(handle);
+            position_handles.push(handle);
         }
     }
     if order_b.position_effect_type == PositionEffectType::Close {
-        if order_b.position_effect_type == PositionEffectType::Close {
-            let handle = start_add_note_thread(
-                return_collateral_note_b.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
-        }
+        //
+        add_notes.push(&return_collateral_note_b.as_ref().unwrap());
 
         if position_b.is_none() {
             let handle = start_delete_position_thread(
                 session,
+                backup_storage,
                 order_b
                     .position
                     .as_ref()
@@ -193,7 +127,7 @@ pub fn update_db_after_perp_swap(
                     .to_string(),
                 order_b.position.as_ref().unwrap().index.to_string(),
             );
-            handles.push(handle);
+            position_handles.push(handle);
         }
     }
 
@@ -202,25 +136,34 @@ pub fn update_db_after_perp_swap(
         let handle = start_add_position_thread(
             position_a.as_ref().unwrap().clone(),
             session,
-            backup_storage.clone(),
+            backup_storage,
         );
-        handles.push(handle);
+        position_handles.push(handle);
     }
     if position_b.is_some() {
         let handle = start_add_position_thread(
             position_b.as_ref().unwrap().clone(),
             session,
-            backup_storage.clone(),
+            backup_storage,
         );
-        handles.push(handle);
+        position_handles.push(handle);
     }
+
+    let updater = DbNoteUpdater {
+        session,
+        backup_storage,
+        delete_notes,
+        add_notes,
+    };
+
+    let _handles = updater.update_db();
 }
 
 // Store perp fill
 
 pub fn store_perp_fill(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     amount: u64,
     price: u64,
     user_id_a: u64,

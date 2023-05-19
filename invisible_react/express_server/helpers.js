@@ -276,7 +276,7 @@ async function getLiquidatablePositions(db, syntheticToken, price) {
 
 function storeSpotOrder(db, order_id, orderObject) {
   let command =
-    "INSERT OR REPLACE INTO spotOrders (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, dest_received_address, dest_received_blinding, dest_spent_blinding, notes_in, refund_note, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)";
+    "INSERT OR REPLACE INTO spotOrders (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, dest_received_address, dest_received_blinding,  notes_in, refund_note, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)";
 
   try {
     db.run(command, [
@@ -289,7 +289,6 @@ function storeSpotOrder(db, order_id, orderObject) {
       orderObject.fee_limit,
       JSON.stringify(orderObject.dest_received_address),
       orderObject.dest_received_blinding,
-      orderObject.dest_spent_blinding,
       JSON.stringify(orderObject.notes_in),
       JSON.stringify(orderObject.refund_note),
       JSON.stringify(orderObject.signature),
@@ -354,7 +353,6 @@ function initDb() {
   fee_limit INTEGER NOT NULL,  
   dest_received_address TEXT NOT NULL, 
   dest_received_blinding TEXT NOT NULL,  
-  dest_spent_blinding TEXT NOT NULL, 
   notes_in TEXT NOT NULL, 
   refund_note TEXT,
   signature TEXT NOT NULL, 

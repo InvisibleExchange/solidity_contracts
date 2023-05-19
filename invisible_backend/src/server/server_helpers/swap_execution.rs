@@ -208,7 +208,7 @@ pub async fn execute_swap(
                 // ? Store the fill info in the datatbase
                 store_spot_fill(
                     &session,
-                    backup_storage,
+                    &backup_storage,
                     qty,
                     price,
                     user_id_pair.0,

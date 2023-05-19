@@ -5,11 +5,10 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::perp_position::PerpPosition,
+    transactions::transaction_helpers::db_updates::DbNoteUpdater,
     utils::{
-        firestore::{
-            start_add_note_thread, start_add_position_thread, start_delete_note_thread,
-            start_delete_position_thread,
-        },
+        firestore::{start_add_position_thread, start_delete_position_thread},
+        notes::Note,
         storage::BackupStorage,
     },
 };
@@ -23,33 +22,22 @@ pub fn update_db_after_liquidation_swap(
     liquidated_position: &Option<PerpPosition>,
     new_position: &PerpPosition,
 ) {
-    let mut handles = Vec::new();
+    let mut delete_notes: Vec<(u64, String)> = Vec::new();
+    let mut add_notes: Vec<&Note> = Vec::new();
 
-    // let mut spot_removed_notes: Vec<(String, String)> = Vec::new();
-    // let mut spot_added_notes: Vec<Note> = Vec::new();
+    let mut position_handles = Vec::new();
 
-    let notes_in = &liquidation_order.open_order_fields.notes_in;
+    // ? Store refund note (*if necessary) -----------------------------------------
     let refund_note = &liquidation_order.open_order_fields.refund_note;
     if refund_note.is_some() {
-        let handle = start_add_note_thread(
-            refund_note.as_ref().unwrap().clone(),
-            session,
-            backup_storage.clone(),
-        );
-        handles.push(handle);
-    } else if refund_note.as_ref().unwrap().address.x != notes_in[0].address.x {
-        //
-        let n0 = &notes_in[0];
-        let handle =
-            start_delete_note_thread(session, n0.address.x.to_string(), n0.index.to_string());
-        handles.push(handle);
+        // ? Store the refund note in place of the first note
+        add_notes.push(&refund_note.as_ref().unwrap())
     }
 
     // ? Remove the notes spent from the database -----------------------------------------
-    for n in notes_in[1..].iter() {
-        let handle =
-            start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-        handles.push(handle);
+    let notes_in = &liquidation_order.open_order_fields.notes_in;
+    for n in notes_in.iter() {
+        delete_notes.push((n.index, n.address.x.to_string()))
     }
 
     // ? Update/Remove Liquidated position from database -----------------------------------------
@@ -57,19 +45,29 @@ pub fn update_db_after_liquidation_swap(
         let handle = start_add_position_thread(
             liquidated_position.as_ref().unwrap().clone(),
             session,
-            backup_storage.clone(),
+            backup_storage,
         );
-        handles.push(handle);
+        position_handles.push(handle);
     } else {
         let handle = start_delete_position_thread(
             session,
+            backup_storage,
             liquidation_order.position.position_address.to_string(),
             liquidation_order.position.index.to_string(),
         );
-        handles.push(handle);
+        position_handles.push(handle);
     }
 
     // ? Store new position in database -----------------------------------------
-    let handle = start_add_position_thread(new_position.clone(), session, backup_storage.clone());
-    handles.push(handle);
+    let handle = start_add_position_thread(new_position.clone(), session, &backup_storage);
+    position_handles.push(handle);
+
+    let updater = DbNoteUpdater {
+        session,
+        backup_storage,
+        delete_notes,
+        add_notes,
+    };
+
+    let _handles = updater.update_db();
 }

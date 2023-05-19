@@ -68,30 +68,6 @@ pub fn get_max_leverage(token: u64, amount: u64) -> u64 {
 // * ==============================================================================
 // * CONSISTENCY CHECKS * //
 
-pub fn _open_order_specific_checks(
-    order: &PerpOrder,
-    init_margin: u64,
-    spent_synthetic: u64,
-) -> Result<(), PerpSwapExecutionError> {
-    // ? Check that the init_margin ratio is good enough
-
-    // TODO: See if this is necessary at all?
-    // TODO: Should probably be done slightly differently
-    // if init_margin * order.synthetic_amount
-    //     < order.open_order_fields.as_ref().unwrap().initial_margin * spent_synthetic
-    // {
-    //     return Err(send_perp_swap_error(
-    //         "init_margin ratio is too low".to_string(),
-    //         None,
-    //         None,
-    //     ));
-    // }
-
-    //
-
-    Ok(())
-}
-
 /// Ckecks the tokens of all notes are the collateral token being spent \
 /// and that the sum of inputs is at least equal to the initial margin + refund amount
 pub fn _check_note_sums(order: &PerpOrder) -> Result<(), PerpSwapExecutionError> {
@@ -103,10 +79,10 @@ pub fn _check_note_sums(order: &PerpOrder) -> Result<(), PerpSwapExecutionError>
     for note in open_order_fields.notes_in.iter() {
         if note.token != open_order_fields.collateral_token {
             return Err(send_perp_swap_error(
-                "note and collateral token missmatch".to_string(),
+                "note and collateral token mismatch".to_string(),
                 Some(order.order_id),
                 Some(format!(
-                    "token missmatch: note token: {}, collateral token: {}",
+                    "token mismatch: note token: {}, collateral token: {}",
                     note.token, open_order_fields.collateral_token
                 )),
             ));
@@ -121,9 +97,9 @@ pub fn _check_note_sums(order: &PerpOrder) -> Result<(), PerpSwapExecutionError>
         0
     };
     // ? Check that the sum of notes is at least equal to the initial margin
-    if sum_notes < refund_amount + open_order_fields.initial_margin {
+    if sum_notes != refund_amount + open_order_fields.initial_margin {
         return Err(send_perp_swap_error(
-            "sum of inputs is to small for this order".to_string(),
+            "sum of inputs does not match amount spent".to_string(),
             Some(order.order_id),
             Some(format!(
                 "note sum: {} < refund amount: {} + initial margin: {}",
@@ -141,20 +117,23 @@ pub fn _check_prev_fill_consistencies(
     order: &PerpOrder,
     initial_margin: u64,
 ) -> Result<Note, PerpSwapExecutionError> {
-    let partial_refund_note = partial_refund_info
-        .as_ref()
-        .unwrap()
-        .clone()
-        .0
-        .unwrap()
-        .clone();
+    // unwrap partial_refund_info or return an error
+    if partial_refund_info.is_none() || partial_refund_info.as_ref().unwrap().clone().0.is_none() {
+        return Err(send_perp_swap_error(
+            "no partial refund info".to_string(),
+            None,
+            None,
+        ));
+    }
+    let partial_refund_note = partial_refund_info.as_ref().unwrap().clone().0.unwrap();
 
+    // ? Check that the partial refund note has the right token, amount, and address
     if partial_refund_note.token != order.open_order_fields.as_ref().unwrap().collateral_token {
         return Err(send_perp_swap_error(
             "spending wrong token".to_string(),
             None,
             Some(format!(
-                "token missmatch: pfr_note token: {}, collateral token: {}",
+                "token mismatch: pfr_note token: {}, collateral token: {}",
                 partial_refund_note.token,
                 order.open_order_fields.as_ref().unwrap().collateral_token
             )),
@@ -169,6 +148,19 @@ pub fn _check_prev_fill_consistencies(
                 "refund note amount: {} < initial margin: {}",
                 partial_refund_note.amount, initial_margin
             )),
+        ));
+    }
+
+    // ? Assumption: If you know the sum of private keys you know the individual private keys
+    if partial_refund_note.address.x
+        != order.open_order_fields.as_ref().unwrap().notes_in[0]
+            .address
+            .x
+    {
+        return Err(send_perp_swap_error(
+            "pfr note address invalid".to_string(),
+            Some(order.order_id),
+            None,
         ));
     }
 

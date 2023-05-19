@@ -1,8 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, thread::JoinHandle};
 
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
-use sled::Db;
 
 use crate::{
     transactions::limit_order::LimitOrder,
@@ -21,7 +20,7 @@ use super::transaction_output::FillInfo;
 ///
 pub fn update_db_after_spot_swap(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     order_a: &LimitOrder,
     order_b: &LimitOrder,
     prev_pfr_note_a: Option<Note>,
@@ -31,147 +30,71 @@ pub fn update_db_after_spot_swap(
     new_pfr_note_a: &Option<Note>,
     new_pfr_note_b: &Option<Note>,
 ) {
-    let mut handles = Vec::new();
+    let mut delete_notes: Vec<(u64, String)> = Vec::new();
+    let mut add_notes: Vec<&Note> = Vec::new();
 
     let is_first_fill_a = prev_pfr_note_a.is_none();
     let is_first_fill_b = prev_pfr_note_b.is_none();
 
     // ? Delete notes spent from the database
     if is_first_fill_a {
-        // ? Delete all notes in
-
-        for n in order_a.notes_in.iter() {
-            // println!("deleting note in: {:?} {}", n.address.x, n.index);
-
-            let handle =
-                start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-            handles.push(handle);
+        if order_a.refund_note.is_some() {
+            // ? Store the refund note in place of the first note
+            add_notes.push(&order_a.refund_note.as_ref().unwrap())
         }
 
-        // ? Store refund note (*if necessary)
-        if order_a.refund_note.is_some() {
-            // println!(
-            //     "storing refund note: {:?} {}",
-            //     order_a.refund_note.as_ref().unwrap().address.x,
-            //     order_a.refund_note.as_ref().unwrap().index
-            // );
-
-            let handle = start_add_note_thread(
-                order_a.refund_note.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
+        // ? Delete all notes in
+        for n in order_a.notes_in.iter() {
+            delete_notes.push((n.index, n.address.x.to_string()))
         }
     }
     if is_first_fill_b {
-        // ? Delete all notes in
-        for n in order_b.notes_in.iter() {
-            // println!("deleting note in: {:?} {}", n.address.x, n.index);
-
-            let handle =
-                start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-            handles.push(handle);
-        }
-
         // ? Store refund note (*if necessary)
         if order_b.refund_note.is_some() {
-            // println!(
-            //     "storing refund note: {:?} {}",
-            //     order_b.refund_note.as_ref().unwrap().address.x,
-            //     order_b.refund_note.as_ref().unwrap().index
-            // );
+            add_notes.push(&order_b.refund_note.as_ref().unwrap())
+        }
 
-            let handle = start_add_note_thread(
-                order_b.refund_note.as_ref().unwrap().clone(),
-                session,
-                backup_storage.clone(),
-            );
-            handles.push(handle);
+        // ? Delete all notes in
+        for n in order_b.notes_in.iter() {
+            delete_notes.push((n.index, n.address.x.to_string()))
         }
     }
 
-    // ? Delete prev partiall fill refund notes (*if necessary)
+    // ? Delete prev partially fill refund notes (*if necessary)
     if prev_pfr_note_a.is_some() {
-        // println!(
-        //     "deleting prev pfr note: {:?} {}",
-        //     prev_pfr_note_a.as_ref().unwrap().address.x,
-        //     prev_pfr_note_a.as_ref().unwrap().index
-        // );
-
-        let handle = start_delete_note_thread(
-            session,
-            prev_pfr_note_a.as_ref().unwrap().address.x.to_string(),
-            prev_pfr_note_a.as_ref().unwrap().index.to_string(),
-        );
-        handles.push(handle);
+        let n = prev_pfr_note_a.as_ref().unwrap();
+        delete_notes.push((n.index, n.address.x.to_string()));
     }
     if prev_pfr_note_b.is_some() {
-        // println!(
-        //     "deleting prev pfr note: {:?} {}",
-        //     prev_pfr_note_b.as_ref().unwrap().address.x,
-        //     prev_pfr_note_b.as_ref().unwrap().index
-        // );
-
-        let handle = start_delete_note_thread(
-            session,
-            prev_pfr_note_b.as_ref().unwrap().address.x.to_string(),
-            prev_pfr_note_b.as_ref().unwrap().index.to_string(),
-        );
-        handles.push(handle);
+        let n = prev_pfr_note_b.as_ref().unwrap();
+        delete_notes.push((n.index, n.address.x.to_string()));
     }
 
-    // println!(
-    //     "storing swap note: a {:?} {}",
-    //     swap_note_a.address.x, swap_note_a.index
-    // );
-
     // ? Store swap notes
-    let handle = start_add_note_thread(swap_note_a.clone(), session, backup_storage.clone());
-    handles.push(handle);
-
-    // println!(
-    //     "storing swap note: b {:?} {}",
-    //     swap_note_b.address.x, swap_note_b.index
-    // );
-
-    let handle = start_add_note_thread(swap_note_b.clone(), session, backup_storage.clone());
-    handles.push(handle);
+    add_notes.push(&swap_note_a);
+    add_notes.push(&swap_note_b);
 
     // ? Store partial fill refund notes if order was partially filled
     if new_pfr_note_a.is_some() {
-        // println!(
-        //     "storing new pfr note: {:?} {}",
-        //     new_pfr_note_a.as_ref().unwrap().address.x,
-        //     new_pfr_note_a.as_ref().unwrap().index
-        // );
-
-        let handle = start_add_note_thread(
-            new_pfr_note_a.as_ref().unwrap().clone(),
-            session,
-            backup_storage.clone(),
-        );
-        handles.push(handle);
+        add_notes.push(&new_pfr_note_a.as_ref().unwrap());
     }
     if new_pfr_note_b.is_some() {
-        // println!(
-        //     "storing new pfr note: {:?} {}",
-        //     new_pfr_note_b.as_ref().unwrap().address.x,
-        //     new_pfr_note_b.as_ref().unwrap().index
-        // );
-
-        let handle = start_add_note_thread(
-            new_pfr_note_b.as_ref().unwrap().clone(),
-            session,
-            backup_storage.clone(),
-        );
-        handles.push(handle);
+        add_notes.push(&new_pfr_note_b.as_ref().unwrap());
     }
+
+    let updater = DbNoteUpdater {
+        session,
+        backup_storage,
+        delete_notes,
+        add_notes,
+    };
+
+    let _handles = updater.update_db();
 }
 
 pub fn store_spot_fill(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     amount: u64,
     price: u64,
     user_id_a: u64,
@@ -202,16 +125,16 @@ pub fn store_spot_fill(
 /// Add all the newly generated deposit notes (in most cases only one) to the database
 pub fn update_db_after_deposit(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     new_notes: Vec<Note>,
     zero_indexes: &Vec<u64>,
 ) {
-    let mut handles = Vec::new();
+    let mut _handles = Vec::new();
 
     for (mut note, z_idx) in new_notes.into_iter().zip(zero_indexes.iter()) {
         note.index = *z_idx;
-        let handle = start_add_note_thread(note.clone(), session, backup_storage.clone());
-        handles.push(handle);
+        let handle = start_add_note_thread(note.clone(), session, backup_storage);
+        _handles.push(handle);
     }
 }
 
@@ -220,29 +143,30 @@ pub fn update_db_after_deposit(
 /// Remove the withdrawn notes from the database and add the refund note (if necessary)
 pub fn update_db_after_withdrawal(
     session: &Arc<Mutex<ServiceSession>>,
-    backup_storage: Arc<Mutex<BackupStorage>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
     notes_in: &Vec<Note>,
     refund_note: Option<Note>,
 ) {
-    let mut handles = Vec::new();
+    let mut delete_notes: Vec<(u64, String)> = Vec::new();
+    let mut add_notes: Vec<&Note> = Vec::new();
 
     if refund_note.is_some() {
-        let handle = start_add_note_thread(refund_note.unwrap(), session, backup_storage);
-        handles.push(handle);
-    } else {
-        let handle = start_delete_note_thread(
-            session,
-            notes_in[0].address.x.to_string(),
-            notes_in[0].index.to_string(),
-        );
-        handles.push(handle);
+        // ? Store the refund note in place of the first note
+        add_notes.push(&refund_note.as_ref().unwrap())
     }
 
-    for n in notes_in.into_iter().skip(1) {
-        let handle =
-            start_delete_note_thread(session, n.address.x.to_string(), n.index.to_string());
-        handles.push(handle);
+    for n in notes_in.into_iter() {
+        delete_notes.push((n.index, n.address.x.to_string()))
     }
+
+    let updater = DbNoteUpdater {
+        session,
+        backup_storage,
+        delete_notes,
+        add_notes,
+    };
+
+    let _handles = updater.update_db();
 }
 
 // NOTE SPLITS -----------------------------------------------------
@@ -254,36 +178,59 @@ pub fn update_db_after_note_split(
     notes_out: Vec<Note>,
     zero_idxs: &Vec<u64>,
 ) {
-    let mut handles = Vec::new();
+    let mut _handles = Vec::new();
 
     for note in notes_in {
-        let handle =
-            start_delete_note_thread(session, note.address.x.to_string(), note.index.to_string());
-        handles.push(handle);
+        let handle = start_delete_note_thread(
+            session,
+            backup_storage,
+            note.address.x.to_string(),
+            note.index.to_string(),
+        );
+        _handles.push(handle);
     }
 
     for (i, mut note) in notes_out.into_iter().enumerate() {
         note.index = zero_idxs[i];
 
-        let handle = start_add_note_thread(note, session, backup_storage.clone());
-        handles.push(handle);
+        let handle = start_add_note_thread(note.clone().clone(), session, backup_storage);
+        _handles.push(handle);
     }
 }
 
-// pub struct DbNoteUpdater<'a> {
-//     pub session: &'a Arc<Mutex<ServiceSession>>,
-//     pub backup_storage: &'a Arc<Mutex<BackupStorage>>,
-//     pub delete_notes: Vec<&'a (u64, String)>,
-//     pub add_notes: Vec<&'a Note>,
-// }
+pub struct DbNoteUpdater<'a> {
+    pub session: &'a Arc<Mutex<ServiceSession>>,
+    pub backup_storage: &'a Arc<Mutex<BackupStorage>>,
+    pub delete_notes: Vec<(u64, String)>,
+    pub add_notes: Vec<&'a Note>,
+}
 
-// impl DbNoteUpdater {
-//     fn update_db(&self) {
+impl DbNoteUpdater<'_> {
+    pub fn update_db(&self) -> Vec<JoinHandle<()>> {
+        let mut _handles: Vec<_> = Vec::new();
+        let mut added_notes = HashMap::new();
 
+        for note in self.add_notes.iter() {
+            let handle =
+                start_add_note_thread(note.clone().clone(), self.session, self.backup_storage);
+            _handles.push(handle);
+            added_notes.insert((note.index, note.address.x.to_string()), false);
+        }
 
-//         let mut added_notes
+        for deletion in self.delete_notes.iter() {
+            if added_notes.contains_key(&deletion) {
+                continue;
+            }
 
+            let handle = start_delete_note_thread(
+                self.session,
+                self.backup_storage,
+                deletion.1.to_string(),
+                deletion.0.to_string(),
+            );
+            _handles.push(handle);
+        }
 
-
-//     }
-// }
+        return _handles;
+    }
+}

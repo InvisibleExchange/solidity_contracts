@@ -102,8 +102,8 @@ pub trait Transaction {
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: Arc<Mutex<ServiceSession>>,
-        backup_storage: Arc<Mutex<BackupStorage>>,
+        session: &Arc<Mutex<ServiceSession>>,
+        backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError>;
 }
 
@@ -146,8 +146,6 @@ pub struct TransactionBatch {
     pub running_tx_count: u16, // number of transactions in the current micro batch
     pub running_index_price_count: u16, // number of index price updates in the current micro batch
 }
-
-// [720611572046124714047264528971193275274039884725841843024975277676352634647, 3277063050706459067292422006810458761666327299309045368540059255761977948163, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 2562919246125525194133149830679868209708641275857578728717940908705613159542, 0, 633169145156021810680094650136107711968775354738881437650002548915256114472, 633169145156021810680094650136107711968775354738881437650002548915256114472, 999865114641534551578343797337705745943197965388439213388506436713692204488, 421021076951682542324234567693006887925800082706539824582191228239311517383, 1251335263961598763003641874578203876372024766000865142645021246588933133207, 522924134205947440388003243818952293276466114427386446260495599410908902725, 1698665403995648829511386567217524516121600165071000909611522341821583497658]
 
 impl TransactionBatch {
     pub fn new(
@@ -308,8 +306,8 @@ impl TransactionBatch {
                 swap_output_json,
                 blocked_order_ids,
                 rollback_safeguard,
-                session,
-                backup_storage,
+                &session,
+                &backup_storage,
             );
             return res;
         });
@@ -691,12 +689,13 @@ impl TransactionBatch {
             let _handle = start_add_position_thread(
                 position.clone(),
                 &self.firebase_session,
-                self.backup_storage.clone(),
+                &self.backup_storage,
             );
 
             for note in margin_change.notes_in.as_ref().unwrap().iter().skip(1) {
                 let _handle = start_delete_note_thread(
                     &self.firebase_session,
+                    &self.backup_storage,
                     note.address.x.to_string(),
                     note.index.to_string(),
                 );
@@ -706,7 +705,7 @@ impl TransactionBatch {
                 let _handle = start_add_note_thread(
                     margin_change.refund_note.as_ref().unwrap().clone(),
                     &self.firebase_session,
-                    self.backup_storage.clone(),
+                    &self.backup_storage,
                 );
 
                 // ? If the index and address of the first note in the notes_in array is the same as the refund note then we don't need to delete the note becasue it will be overwritten anyway
@@ -716,6 +715,7 @@ impl TransactionBatch {
                 {
                     let _handle = start_delete_note_thread(
                         &self.firebase_session,
+                        &self.backup_storage,
                         n0.address.x.to_string(),
                         n0.index.to_string(),
                     );
@@ -758,13 +758,13 @@ impl TransactionBatch {
             let _handle = start_add_position_thread(
                 position.clone(),
                 &self.firebase_session,
-                self.backup_storage.clone(),
+                &self.backup_storage,
             );
 
             let _handle = start_add_note_thread(
                 return_collateral_note,
                 &self.firebase_session,
-                self.backup_storage.clone(),
+                &self.backup_storage,
             );
 
             z_index = index;

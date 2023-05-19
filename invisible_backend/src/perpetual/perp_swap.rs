@@ -139,10 +139,8 @@ impl PerpSwap {
                         // ? Check the collateral token is valid
                         check_valid_collateral_token(&self.order_a)?;
 
-                        let pub_key_sum = self
-                            .order_a
-                            .verify_order_signature(&self.signature_a.as_ref().unwrap(), None)?
-                            .unwrap();
+                        self.order_a
+                            .verify_order_signature(&self.signature_a.as_ref().unwrap(), None)?;
 
                         // Get the zero indexes from the tree
                         let mut per_state_tree = perpetual_state_tree__.lock();
@@ -166,7 +164,6 @@ impl PerpSwap {
                             &partialy_filled_positions__,
                             &blocked_perp_order_ids__,
                             &self.order_a,
-                            pub_key_sum,
                             self.fee_taken_a,
                             perp_zero_idx,
                             swap_funding_info__.current_funding_idx,
@@ -298,10 +295,8 @@ impl PerpSwap {
                         // ? Check the collateral token is valid
                         check_valid_collateral_token(&self.order_b)?;
 
-                        let pub_key_sum = self
-                            .order_b
-                            .verify_order_signature(&self.signature_b.as_ref().unwrap(), None)?
-                            .unwrap();
+                        self.order_b
+                            .verify_order_signature(&self.signature_b.as_ref().unwrap(), None)?;
 
                         // Get the zero indexes from the tree
                         let mut per_state_tree = perpetual_state_tree__.lock();
@@ -325,7 +320,6 @@ impl PerpSwap {
                             &partialy_filled_positions__,
                             &blocked_perp_order_ids__,
                             &self.order_b,
-                            pub_key_sum,
                             self.fee_taken_b,
                             perp_zero_idx,
                             swap_funding_info__.current_funding_idx,
@@ -956,7 +950,7 @@ impl PerpSwap {
         // ? Update the database
         update_db_after_perp_swap(
             &session,
-            backup_storage,
+            &backup_storage,
             &self.order_a,
             &self.order_b,
             &execution_output_a.prev_pfr_note,

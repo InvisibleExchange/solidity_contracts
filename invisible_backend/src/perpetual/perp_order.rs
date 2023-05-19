@@ -180,7 +180,7 @@ impl PerpOrder {
         &self,
         signature: &Signature,
         position_address: Option<&BigUint>,
-    ) -> Result<Option<EcPoint>, PerpSwapExecutionError> {
+    ) -> Result<(), PerpSwapExecutionError> {
         let order_hash = &self.hash;
 
         if self.position_effect_type == PositionEffectType::Open {
@@ -198,7 +198,7 @@ impl PerpOrder {
             let valid = verify(&pub_key.x.to_biguint().unwrap(), &order_hash, &signature);
 
             if valid {
-                return Ok(Some(pub_key));
+                return Ok(());
             } else {
                 return Err(send_perp_swap_error(
                     "Invalid Signature".to_string(),
@@ -213,7 +213,7 @@ impl PerpOrder {
             let valid = verify(&position_address.unwrap(), &order_hash, &signature);
 
             if valid {
-                return Ok(None);
+                return Ok(());
             } else {
                 return Err(send_perp_swap_error(
                     "Invalid Signature".to_string(),
@@ -283,7 +283,6 @@ pub struct OpenOrderFields {
     pub notes_in: Vec<Note>,
     pub refund_note: Option<Note>,
     pub position_address: BigUint,
-    pub blinding: BigUint,
     pub allow_partial_liquidations: bool,
 }
 
@@ -320,8 +319,6 @@ impl OpenOrderFields {
         let addr_x = &self.position_address;
         hash_inputs.push(addr_x);
 
-        hash_inputs.push(&self.blinding);
-
         let allow_partial_liquidations = if self.allow_partial_liquidations {
             BigUint::one()
         } else {
@@ -345,7 +342,6 @@ impl Serialize for OpenOrderFields {
         note.serialize_field("notes_in", &self.notes_in)?;
         note.serialize_field("refund_note", &self.refund_note)?;
         note.serialize_field("position_address", &self.position_address.to_string())?;
-        note.serialize_field("blinding", &self.blinding.to_string())?;
         note.serialize_field(
             "allow_partial_liquidations",
             &self.allow_partial_liquidations.to_string(),

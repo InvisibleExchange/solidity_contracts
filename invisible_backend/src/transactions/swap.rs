@@ -75,8 +75,8 @@ impl Swap {
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: Arc<Mutex<ServiceSession>>,
-        backup_storage: Arc<Mutex<BackupStorage>>,
+        session: &Arc<Mutex<ServiceSession>>,
+        backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
 
@@ -373,7 +373,7 @@ impl Swap {
         // *  Update the database
         update_db_after_spot_swap(
             &session,
-            backup_storage,
+            &backup_storage,
             &self.order_a,
             &self.order_b,
             execution_output_a.prev_partial_fill_refund_note,
@@ -410,8 +410,8 @@ impl Transaction for Swap {
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: Arc<Mutex<ServiceSession>>,
-        backup_storage: Arc<Mutex<BackupStorage>>,
+        session: &Arc<Mutex<ServiceSession>>,
+        backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError> {
         let swap_response = self
             .execute_swap(
