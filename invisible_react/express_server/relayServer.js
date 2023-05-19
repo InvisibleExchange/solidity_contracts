@@ -25,8 +25,7 @@ const db = initDb();
 
 const CONFIG_CODE = "1234567890";
 const RELAY_SERVER_ID = "43147634234";
-const SERVER_URL = "localhost";
-// const SERVER_URL = "54.212.28.196";
+const SERVER_URL = "54.212.28.196";
 
 // * ORDER BOOKS AND LIQUIDITY ====================================================================================
 
@@ -36,7 +35,7 @@ let wsConnections = [];
 
 // & WEBSOCKET CLIENT
 let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
+let wsClient = new W3CWebSocket(`ws://localhost:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
