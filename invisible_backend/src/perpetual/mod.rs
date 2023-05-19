@@ -26,8 +26,8 @@ pub enum PositionEffectType {
 }
 
 pub static LEVERAGE_BOUNDS_PER_ASSET: phf::Map<&'static str, [f32; 2]> = phf_map! {
-"12345" => [2.5, 50.0], // BTC
-"54321" => [25.0, 500.0], // ETH
+"12345" => [1.5, 30.0], // BTC
+"54321" => [15.0, 150.0], // ETH
 };
 
 // BTC - 12345
