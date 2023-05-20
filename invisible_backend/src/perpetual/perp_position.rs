@@ -61,8 +61,8 @@ impl PerpPosition {
             position_size,
             &order_side,
             synthetic_token,
-        )
-        .unwrap_or_default();
+        );
+
         let liquidation_price: u64 = _get_liquidation_price(
             entry_price,
             margin,
@@ -147,8 +147,7 @@ impl PerpPosition {
             self.position_size + added_size,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
             margin as u64,
@@ -204,8 +203,7 @@ impl PerpPosition {
             self.position_size + added_size,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
             self.margin - fee_taken,
@@ -275,15 +273,14 @@ impl PerpPosition {
         let updated_margin = (self.margin as i128 + realized_pnl - fee_taken as i128) as u64;
 
         // & bankruptcy_price = entry_price +/- margin/(amount+new_amount)
-        // & liquidation_price = bankruptcy_price -/+ maintnance_margin/(amount+new_amount)
+        // & liquidation_price = bankruptcy_price -/+ maintenance_margin/(amount+new_amount)
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             self.entry_price,
             updated_margin,
             new_size,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             updated_margin,
@@ -362,8 +359,7 @@ impl PerpPosition {
             new_size,
             &new_order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
         let new_liquidation_price: u64 = _get_liquidation_price(
             price,
             updated_margin,
@@ -633,8 +629,7 @@ impl PerpPosition {
             new_size as u64,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
 
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
@@ -733,8 +728,7 @@ impl PerpPosition {
             self.position_size,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             margin,
@@ -869,8 +863,7 @@ impl PerpPosition {
             self.position_size,
             &self.order_side,
             self.synthetic_token,
-        )
-        .unwrap_or_default();
+        );
 
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
@@ -1098,6 +1091,10 @@ fn _get_liquidation_price(
     let d2 = mm_fraction as u128 * entry_price as u128 * position_size as u128 / 100;
 
     if *order_side == OrderSide::Long {
+        if position_size == 0 {
+            return 0;
+        }
+
         let price_delta =
             ((d1 - d2) * 100) / ((100_u128 - mm_fraction as u128) * position_size as u128);
 
@@ -1105,6 +1102,10 @@ fn _get_liquidation_price(
 
         return liquidation_price.unwrap_or(0);
     } else {
+        if position_size == 0 {
+            return u64::MAX;
+        }
+
         let price_delta =
             ((d1 - d2) * 100) / ((100_u128 + mm_fraction as u128) * position_size as u128);
 
@@ -1120,7 +1121,7 @@ fn _get_bankruptcy_price(
     margin: u64,
     order_side: &OrderSide,
     synthetic_token: u64,
-) -> Option<u64> {
+) -> u64 {
     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
         .get(synthetic_token.to_string().as_str())
         .unwrap();
@@ -1135,10 +1136,20 @@ fn _get_bankruptcy_price(
     let multiplier1 = 10_u128.pow(dec_conversion1 as u32);
 
     if *order_side == OrderSide::Long {
-        return entry_price.checked_sub((margin as u128 * multiplier1 / size as u128) as u64);
+        if size == 0 {
+            return 0;
+        }
+
+        return entry_price
+            .checked_sub((margin as u128 * multiplier1 / size as u128) as u64)
+            .unwrap_or(0);
     } else {
+        if size == 0 {
+            return u64::MAX;
+        }
+
         let bp = entry_price + (margin as u128 * multiplier1 / size as u128) as u64;
-        return Some(bp);
+        return bp;
     }
 }
 

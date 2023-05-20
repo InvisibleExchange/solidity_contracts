@@ -226,7 +226,7 @@ impl Engine for EngineService {
 
         // this executes the swaps in parallel
 
-        let l = handles.len();
+        // let l = handles.len();
 
         let retry_messages;
         match await_swap_handles(
@@ -263,13 +263,13 @@ impl Engine for EngineService {
             }
         }
 
-        if l > 0 {
-            println!(
-                "spot swap_handles took: {:?} for {} swaps",
-                now.elapsed(),
-                l
-            );
-        }
+        // if l > 0 {
+        //     println!(
+        //         "spot swap_handles took: {:?} for {} swaps",
+        //         now.elapsed(),
+        //         l
+        //     );
+        // }
 
         store_output_json(&self.swap_output_json, &self.main_storage);
 
@@ -406,7 +406,7 @@ impl Engine for EngineService {
 
         store_output_json(&self.swap_output_json, &self.main_storage);
 
-        // Send a successul reply to the caller
+        // Send a successful reply to the caller
         let reply = OrderResponse {
             successful: true,
             error_message: "".to_string(),

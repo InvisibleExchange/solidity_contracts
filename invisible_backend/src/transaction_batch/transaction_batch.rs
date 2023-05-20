@@ -557,6 +557,10 @@ impl TransactionBatch {
         let mut updated_note_hashes = self.updated_note_hashes.lock();
         if notes_in.len() > notes_out.len() {
             for i in 0..notes_out.len() {
+                // println!(
+                //     "new note out in split: {} {:?} {}",
+                //     notes_in[i].index, notes_out[i].hash, i
+                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -564,11 +568,19 @@ impl TransactionBatch {
             }
 
             for i in notes_out.len()..notes_in.len() {
+                // println!(
+                //     "removing note in in split: {} {:?} {}",
+                //     notes_in[i].index, 0, i
+                // );
                 state_tree.update_leaf_node(&BigUint::zero(), notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, BigUint::zero());
             }
         } else if notes_in.len() == notes_out.len() {
             for i in 0..notes_out.len() {
+                // println!(
+                //     "new note out in split: {} {:?} {}",
+                //     notes_in[i].index, notes_out[i].hash, i
+                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -576,6 +588,10 @@ impl TransactionBatch {
             }
         } else {
             for i in 0..notes_in.len() {
+                // println!(
+                //     "new note out in split: {} {:?} {}",
+                //     notes_in[i].index, notes_out[i].hash, i
+                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -585,6 +601,10 @@ impl TransactionBatch {
             for i in notes_in.len()..notes_out.len() {
                 let zero_idx = state_tree.first_zero_idx();
 
+                // println!(
+                //     "new note out in split: {} {:?} {}",
+                //     zero_idx, notes_out[i].hash, i
+                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, zero_idx);
                 updated_note_hashes.insert(zero_idx, notes_out[i].hash.clone());
 

@@ -121,9 +121,6 @@ pub fn retry_failed_updates(
 
 // NOTES ------------- -------------- ---------------- ----------------- ----------------
 
-// TODO: If we get this error: ERROR: APIError(404, "No document to update: then we don't store it to backup storage
-// TODO: Store failed deletes as well
-
 fn delete_note_at_address(
     session: &ServiceSession,
     backup_storage: &Arc<Mutex<BackupStorage>>,
@@ -137,7 +134,7 @@ fn delete_note_at_address(
     if let Err(e) = r {
         println!("Error deleting position document. ERROR: {:?}", e);
         let s = backup_storage.lock();
-        if let Err(_e) = s.store_position_removal(u64::from_str_radix(idx, 10).unwrap(), address) {}
+        if let Err(_e) = s.store_note_removal(u64::from_str_radix(idx, 10).unwrap(), address) {}
     }
 }
 
@@ -149,7 +146,7 @@ fn store_new_note(
     let obj = FirebaseNoteObject::from_note(note);
 
     let write_path = format!("notes/{}/indexes", note.address.x.to_string().as_str());
-    let _res = documents::write(
+    let res = documents::write(
         session,
         write_path.as_str(),
         Some(note.index.to_string()),
@@ -157,7 +154,7 @@ fn store_new_note(
         documents::WriteOptions::default(),
     );
 
-    if let Err(e) = _res {
+    if let Err(e) = res {
         println!("Error storing note in backup storage. ERROR: {:?}", e);
         let s = backup_storage.lock();
         if let Err(_e) = s.store_note(note) {};
@@ -290,8 +287,6 @@ pub fn start_delete_note_thread(
     address: String,
     idx: String,
 ) -> JoinHandle<()> {
-    // TODO: BACKUP
-
     let s = Arc::clone(&session);
     let backup = Arc::clone(&backup_storage);
 

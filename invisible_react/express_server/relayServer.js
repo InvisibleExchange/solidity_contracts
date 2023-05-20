@@ -39,7 +39,9 @@ let wsClient = new W3CWebSocket(`ws://localhost:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
-  wsClient.send({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE });
+  wsClient.send(
+    JSON.stringify({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE })
+  );
 };
 
 wsClient.onmessage = function (e) {

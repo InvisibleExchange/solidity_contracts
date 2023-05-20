@@ -2,7 +2,6 @@ use num_bigint::{BigInt, BigUint};
 use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::{Map, Value};
-use starknet::{core::types::FieldElement, curve::AffinePoint};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
@@ -698,26 +697,14 @@ pub fn restore_partial_fill_refund_note(
         .as_u64()
         .unwrap();
 
-    let pub_key = sum_pub_keys(&order.get("notes_in").unwrap());
+    let note0 = &order.get("notes_in").unwrap().as_array().unwrap()[0];
 
     return Some(Note::new(
         idx,
-        pub_key,
-        order.get("token_spent").unwrap().as_u64().unwrap(),
-        new_partial_refund_amount,
-        BigUint::from_str(order.get("dest_spent_blinding").unwrap().as_str().unwrap()).unwrap(),
-    ));
-}
-
-fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
-    let notes_in = notes_in_.as_array().unwrap();
-
-    let mut pub_key_sum: AffinePoint = AffinePoint::identity();
-
-    for note in notes_in {
-        let point = AffinePoint {
-            x: FieldElement::from_dec_str(
-                note.get("address")
+        EcPoint::new(
+            &BigUint::from_str(
+                note0
+                    .get("address")
                     .unwrap()
                     .get("x")
                     .unwrap()
@@ -725,8 +712,9 @@ fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
                     .unwrap(),
             )
             .unwrap(),
-            y: FieldElement::from_dec_str(
-                note.get("address")
+            &BigUint::from_str(
+                note0
+                    .get("address")
                     .unwrap()
                     .get("y")
                     .unwrap()
@@ -734,14 +722,42 @@ fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
                     .unwrap(),
             )
             .unwrap(),
-            infinity: false,
-        };
-
-        pub_key_sum = &pub_key_sum + &point;
-    }
-
-    return EcPoint::from(&pub_key_sum);
+        ),
+        order.get("token_spent").unwrap().as_u64().unwrap(),
+        new_partial_refund_amount,
+        BigUint::from_str(note0.get("blinding").unwrap().as_str().unwrap()).unwrap(),
+    ));
 }
+
+// fn sum_pub_keys(notes_in_: &Value) -> EcPoint {
+//     let notes_in = notes_in_.as_array().unwrap();
+//     let mut pub_key_sum: AffinePoint = AffinePoint::identity();
+//     for note in notes_in {
+//         let point = AffinePoint {
+//             x: FieldElement::from_dec_str(
+//                 note.get("address")
+//                     .unwrap()
+//                     .get("x")
+//                     .unwrap()
+//                     .as_str()
+//                     .unwrap(),
+//             )
+//             .unwrap(),
+//             y: FieldElement::from_dec_str(
+//                 note.get("address")
+//                     .unwrap()
+//                     .get("y")
+//                     .unwrap()
+//                     .as_str()
+//                     .unwrap(),
+//             )
+//             .unwrap(),
+//             infinity: false,
+//         };
+//         pub_key_sum = &pub_key_sum + &point;
+//     }
+//     return EcPoint::from(&pub_key_sum);
+// }
 
 // * UPDATE MARGIN RESTORE FUNCTIONS ================================================================================
 

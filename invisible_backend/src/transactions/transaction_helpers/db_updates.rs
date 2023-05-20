@@ -178,24 +178,29 @@ pub fn update_db_after_note_split(
     notes_out: Vec<Note>,
     zero_idxs: &Vec<u64>,
 ) {
-    let mut _handles = Vec::new();
+    let mut delete_notes: Vec<(u64, String)> = Vec::new();
+    let mut add_notes: Vec<Note> = Vec::new();
 
     for note in notes_in {
-        let handle = start_delete_note_thread(
-            session,
-            backup_storage,
-            note.address.x.to_string(),
-            note.index.to_string(),
-        );
-        _handles.push(handle);
+        delete_notes.push((note.index, note.address.x.to_string()))
     }
 
     for (i, mut note) in notes_out.into_iter().enumerate() {
         note.index = zero_idxs[i];
 
-        let handle = start_add_note_thread(note.clone().clone(), session, backup_storage);
-        _handles.push(handle);
+        add_notes.push(note.clone());
     }
+
+    let add_notes = add_notes.iter().collect::<Vec<&Note>>();
+
+    let updater = DbNoteUpdater {
+        session,
+        backup_storage,
+        delete_notes,
+        add_notes,
+    };
+
+    let _handles = updater.update_db();
 }
 
 pub struct DbNoteUpdater<'a> {
