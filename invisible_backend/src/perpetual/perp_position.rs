@@ -722,6 +722,12 @@ impl PerpPosition {
 
         let margin = (self.margin as i64 + margin_change) as u64;
 
+        //     entry_price: u64,
+        // size: u64,
+        // margin: u64,
+        // order_side: &OrderSide,
+        // synthetic_token: u64,
+
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             self.entry_price,
             margin,
@@ -729,6 +735,7 @@ impl PerpPosition {
             &self.order_side,
             self.synthetic_token,
         );
+
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             margin,
@@ -737,6 +744,8 @@ impl PerpPosition {
             self.synthetic_token,
             self.allow_partial_liquidations,
         );
+
+        println!("new_bankruptcy_price: {}", new_bankruptcy_price);
 
         let new_hash: BigUint = _hash_position(
             &self.order_side,
@@ -986,7 +995,7 @@ impl<'de> Deserialize<'de> for PerpPosition {
 
 // * ---------------------------------------------
 
-pub fn _hash_position(
+fn _hash_position(
     order_side: &OrderSide,
     synthetic_token: u64,
     position_size: u64,
@@ -1117,8 +1126,8 @@ fn _get_liquidation_price(
 
 fn _get_bankruptcy_price(
     entry_price: u64,
-    size: u64,
     margin: u64,
+    size: u64,
     order_side: &OrderSide,
     synthetic_token: u64,
 ) -> u64 {

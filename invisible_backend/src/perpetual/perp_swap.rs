@@ -9,10 +9,11 @@ use std::thread::ThreadId;
 use crossbeam::thread;
 
 use super::order_execution::close_order::execute_close_order;
-use super::order_execution::modify_order::{execute_modify_order, verify_position_existence};
+use super::order_execution::modify_order::execute_modify_order;
 use super::order_execution::open_order::{
     check_valid_collateral_token, execute_open_order, get_init_margin,
 };
+use super::order_execution::verify_position_existence;
 use super::perp_helpers::db_updates::update_db_after_perp_swap;
 use super::perp_helpers::perp_rollback::{
     save_close_order_rollback_info, save_open_order_rollback_info, PerpRollbackInfo,

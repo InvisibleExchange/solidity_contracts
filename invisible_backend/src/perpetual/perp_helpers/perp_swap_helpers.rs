@@ -256,6 +256,7 @@ pub fn finalize_updates(
     } else {
         if new_filled_synthetic_amount
             < order.synthetic_amount - DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()]
+            && new_position.is_some()
         {
             // ? Store the partially filled position for the next fill
             let mut partialy_filled_positions = partialy_filled_positions_m.lock();

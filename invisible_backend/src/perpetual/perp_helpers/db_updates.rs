@@ -50,7 +50,7 @@ pub fn update_db_after_perp_swap(
             }
 
             // ? Delete all notes in
-            for n in order_a.open_order_fields.as_ref().unwrap().notes_in[1..].iter() {
+            for n in order_a.open_order_fields.as_ref().unwrap().notes_in.iter() {
                 // let tup = (n.index, n.address.x.to_string());
                 delete_notes.push((n.index, n.address.x.to_string()))
             }
@@ -77,7 +77,7 @@ pub fn update_db_after_perp_swap(
             }
 
             // ? Delete all notes in
-            for n in order_b.open_order_fields.as_ref().unwrap().notes_in[1..].iter() {
+            for n in order_b.open_order_fields.as_ref().unwrap().notes_in.iter() {
                 delete_notes.push((n.index, n.address.x.to_string()))
             }
         } else {

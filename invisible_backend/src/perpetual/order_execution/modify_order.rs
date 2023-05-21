@@ -9,7 +9,6 @@ use crate::{
         DUST_AMOUNT_PER_ASSET,
     },
     transaction_batch::tx_batch_structs::SwapFundingInfo,
-    trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{send_perp_swap_error, PerpSwapExecutionError},
         notes::Note,
@@ -222,58 +221,4 @@ fn modify_position(
     let new_spent_synthetic = spent_synthetic + prev_spent_synthetic;
 
     return Ok((prev_position, position, new_spent_synthetic));
-}
-
-// * ======================================================================================================
-
-pub fn verify_position_existence(
-    perpetual_state_tree__: &Arc<Mutex<SuperficialTree>>,
-    partialy_filled_positions: &Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>,
-    position: &Option<PerpPosition>,
-    order_id: u64,
-) -> Result<(), PerpSwapExecutionError> {
-    let perpetual_state_tree = perpetual_state_tree__.lock();
-
-    let partialy_filled_positions_m = partialy_filled_positions.lock();
-    if let Some((pos_, _)) =
-        partialy_filled_positions_m.get(&position.as_ref().unwrap().position_address.to_string())
-    {
-        // ? Verify the position hash is valid and exists in the state
-        if pos_.hash != pos_.hash_position()
-            || perpetual_state_tree.get_leaf_by_index(pos_.index as u64) != pos_.hash
-        {
-            let pos = position.as_ref().unwrap();
-            return verify_existance(&perpetual_state_tree, &pos, order_id);
-        }
-    } else {
-        let pos = position.as_ref().unwrap();
-        return verify_existance(&perpetual_state_tree, &pos, order_id);
-    }
-
-    Ok(())
-}
-
-fn verify_existance(
-    state_tree: &SuperficialTree,
-    position: &PerpPosition,
-    order_id: u64,
-) -> Result<(), PerpSwapExecutionError> {
-    // ? Verify the position hash is valid and exists in the state
-    if position.hash != position.hash_position() {
-        return Err(send_perp_swap_error(
-            "position hash not valid".to_string(),
-            Some(order_id),
-            None,
-        ));
-    }
-
-    // ? Check that the position being updated exists in the state
-    if state_tree.get_leaf_by_index(position.index as u64) != position.hash {
-        return Err(send_perp_swap_error(
-            "position does not exist in the state".to_string(),
-            Some(order_id),
-            None,
-        ));
-    }
-    return Ok(());
 }

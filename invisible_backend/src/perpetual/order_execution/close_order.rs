@@ -46,18 +46,6 @@ pub fn execute_close_order(
         order.order_id,
     )?;
 
-    // TODO: IS this necessary: If the order was partially filled and the server crashed than we reject the order
-    // if partial_fill_info.is_some()
-    //     && partial_fill_info.as_ref().unwrap().1 == 69
-    //     && partial_fill_info.as_ref().unwrap().2 == 69
-    // {
-    //     return Err(send_perp_swap_error(
-    //         "Order rejected".to_string(),
-    //         Some(order.order_id),
-    //         None,
-    //     ));
-    // }
-
     // ? Get the new total amount filled after this swap
     let new_amount_filled = if partial_fill_info.is_some() {
         partial_fill_info.as_ref().unwrap().1 + spent_synthetic
