@@ -115,6 +115,17 @@ pub fn restore_perp_order_execution(
                     updated_note_hashes_m,
                     perpetual_partial_fill_tracker_m,
                     order.get("order_id").unwrap().as_u64().unwrap(),
+                    transaction
+                        .get(if is_a {
+                            "prev_pfr_note_a"
+                        } else {
+                            "prev_pfr_note_b"
+                        })
+                        .unwrap()
+                        .get("index")
+                        .unwrap()
+                        .as_u64()
+                        .unwrap(),
                     &transaction
                         .get("indexes")
                         .unwrap()
@@ -425,21 +436,25 @@ fn restore_after_perp_swap_first_fill(
     } else {
         BigUint::from_str(refund_note.unwrap().get("hash").unwrap().as_str().unwrap()).unwrap()
     };
+
+    
     tree.update_leaf_node(&refund_note_hash, refund_idx);
     updated_note_hashes.insert(refund_idx, refund_note_hash);
 
     if !new_pfr_hash.unwrap().is_null() {
         //
+
         let idx: u64 = new_pfr_idx.unwrap().as_u64().unwrap();
         let hash = BigUint::from_str(new_pfr_hash.unwrap().as_str().unwrap()).unwrap();
 
+        
         tree.update_leaf_node(&hash, idx);
         updated_note_hashes.insert(idx, hash);
 
-        // Set this so that the partiall fill fails in case it tries to fill again (to pervent unexpected behaviour)
-        let mut pft = perpetual_partial_fill_tracker_m.lock();
-        pft.insert(order_id, (None, 69, 69));
-        drop(pft);
+        // Set this so that the partial fill fails in case it tries to fill again (to prevent unexpected behavior)
+        // let mut pft = perpetual_partial_fill_tracker_m.lock();
+        // pft.insert(order_id, (None, 69, 69));
+        // drop(pft);
 
         //
     } else {
@@ -471,6 +486,7 @@ fn restore_after_perp_swap_later_fills(
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
     order_id: u64,
+    prev_pfr_idx: u64,
     new_pfr_idx: &Option<&Value>,
     new_pfr_hash: &Option<&Value>,
 ) {
@@ -481,14 +497,18 @@ fn restore_after_perp_swap_later_fills(
         let idx: u64 = new_pfr_idx.unwrap().as_u64().unwrap();
         let hash = BigUint::from_str(new_pfr_hash.unwrap().as_str().unwrap()).unwrap();
 
+        
         tree.update_leaf_node(&hash, idx);
         updated_note_hashes.insert(idx, hash);
 
-        // Set this so that the partiall fill fails in case it tries to fill again (to pervent unexpected behaviour)
+        // Set this so that the partial fill fails in case it tries to fill again (to prevent unexpected behavior)
         let mut pft = perpetual_partial_fill_tracker_m.lock();
         pft.insert(order_id, (None, 69, 69));
         drop(pft);
     } else {
+        tree.update_leaf_node(&BigUint::zero(), prev_pfr_idx);
+        updated_note_hashes.insert(prev_pfr_idx, BigUint::zero());
+
         let mut pft = perpetual_partial_fill_tracker_m.lock();
         pft.remove(&order_id);
         drop(pft);
@@ -849,7 +869,6 @@ pub fn restore_margin_update(
 
         drop(tree);
         drop(updated_note_hashes);
-
         perp_tree.update_leaf_node(&new_position_hash, pos_index);
         updated_position_hashes.insert(pos_index, new_position_hash);
     }
@@ -956,6 +975,7 @@ pub fn restore_note_split(
             let note_out_hash =
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
+            
             state_tree.update_leaf_node(&note_out_hash, idx);
             updated_note_hashes.insert(idx, note_out_hash);
         }
@@ -971,6 +991,7 @@ pub fn restore_note_split(
             let note_out_hash =
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
+            
             state_tree.update_leaf_node(&note_out_hash, idx);
             updated_note_hashes.insert(idx, note_out_hash);
         }
@@ -980,6 +1001,7 @@ pub fn restore_note_split(
             let note_out_hash =
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
+          
             state_tree.update_leaf_node(&note_out_hash, idx);
             updated_note_hashes.insert(idx, note_out_hash);
         }
@@ -989,6 +1011,7 @@ pub fn restore_note_split(
             let note_out_hash =
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
+            
             state_tree.update_leaf_node(&note_out_hash, idx);
             updated_note_hashes.insert(idx, note_out_hash);
         }

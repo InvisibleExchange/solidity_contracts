@@ -113,6 +113,11 @@ pub fn update_state_after_swap_later_fills(
 
         tree.update_leaf_node(&pfr_note.hash, pfr_idx);
         updated_note_hashes.insert(pfr_idx, pfr_note.hash.clone());
+    } else {
+        let pfr_idx = prev_partial_fill_refund_note.index;
+
+        tree.update_leaf_node(&BigUint::zero(), pfr_idx);
+        updated_note_hashes.insert(pfr_idx, BigUint::zero());
     }
 
     drop(tree);

@@ -1533,6 +1533,41 @@ impl Engine for EngineService {
         drop(state_tree);
         drop(perp_state_tree);
 
+        let backup_storage = self.backup_storage.lock();
+        let (failed_position_additions, failed_position_deletions) =
+            backup_storage.read_positions();
+        println!("Failed positions: {:?}", failed_position_additions);
+        let notes = backup_storage.read_notes();
+        println!("Failed notes: {:?}", notes);
+        drop(backup_storage);
+
+        let perp_state = self.perp_state_tree.lock();
+        for position in failed_position_additions {
+            let leaf_hash = perp_state.get_leaf_by_index(position.index as u64);
+
+            if position.hash == leaf_hash {
+                if position.hash == position.hash_position() {
+
+                    // TODO
+
+                }
+            }
+        }
+
+        //   ([PerpPosition { order_side: Short,
+        //         synthetic_token: 54321, collateral_token: 55555, position_size: 0, margin: 30110072246, entry_price: 1855532309,
+        //         liquidation_price: 18446744073709551615, bankruptcy_price: 18446744073709551615, allow_partial_liquidations: true,
+        //         position_address: 1684502386098572560865500250041581148646578677955444760400258625865572888023, last_funding_idx: 0,
+        //         hash: 2868264735875796266919601002856514620997277726617493209879409462261753175252, index: 0 },
+
+        //     PerpPosition { order_side: Short,
+        //         synthetic_token: 54321, collateral_token: 55555, position_size: 4414317828, margin: 547105218, entry_price: 1853285560,
+        //          liquidation_price: 1901177261, bankruptcy_price: 1977224351, allow_partial_liquidations: true,
+        //          position_address: 2121670940502404186530417440304308165691065311214689787960451678151829815993,
+        //         last_funding_idx: 0, hash: 1332218180404759747148743056133220132251996904295899093481127078228670501757, index: 1 }],
+
+        // 4414317828
+
         let reply = StateInfoRes {
             state_tree: spot_tree_leaves,
             perpetual_state_tree: perp_tree_leaves,

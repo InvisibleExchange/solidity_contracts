@@ -48,18 +48,6 @@ pub fn execute_modify_order(
         order.order_id,
     )?;
 
-    // TODO: IS this necessary: If the order was partially filled and the server crashed than we reject the order
-    // if partial_fill_info.is_some()
-    //     && partial_fill_info.as_ref().unwrap().1 == 69
-    //     && partial_fill_info.as_ref().unwrap().2 == 69
-    // {
-    //     return Err(send_perp_swap_error(
-    //         "Order rejected".to_string(),
-    //         Some(order.order_id),
-    //         None,
-    //     ));
-    // }
-
     // ? Get the new total amount filled after this swap
     let new_amount_filled = if partial_fill_info.is_some() {
         partial_fill_info.as_ref().unwrap().1 + spent_synthetic
@@ -187,7 +175,10 @@ fn modify_position(
         );
 
         if spent_synthetic
-            >= position.position_size - DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()]
+            >= position
+                .position_size
+                .checked_sub(DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()])
+                .unwrap_or(0)
         {
             // & Flipping the position side
             position.flip_position_side(
@@ -201,6 +192,12 @@ fn modify_position(
 
             // ? Check that leverage is valid relative to the notional position size after increasing size
             if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
+                println!(
+                    "Leverage would be too high {} > {}",
+                    get_max_leverage(order.synthetic_token, order.synthetic_amount),
+                    leverage
+                );
+
                 return Err(send_perp_swap_error(
                     "Leverage would be too high".to_string(),
                     Some(order.order_id),

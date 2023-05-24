@@ -1,3 +1,4 @@
+use core::num;
 use std::{
     sync::Arc,
     thread::{spawn, JoinHandle},
@@ -5,6 +6,7 @@ use std::{
 
 use firestore_db_and_auth::{
     documents::{self},
+    errors::FirebaseError,
     Credentials, ServiceSession,
 };
 use num_bigint::BigUint;
@@ -15,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     perpetual::perp_position::PerpPosition,
     transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
+    trees::superficial_tree::SuperficialTree,
     utils::notes::Note,
 };
 
@@ -67,46 +70,58 @@ pub fn create_session() -> ServiceSession {
 }
 
 pub fn retry_failed_updates(
+    state_tree: &Arc<Mutex<SuperficialTree>>,
+    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let s = backup_storage.lock();
+    let s: parking_lot::lock_api::MutexGuard<parking_lot::RawMutex, BackupStorage> =
+        backup_storage.lock();
     let notes_info = s.read_notes();
     let positions_info = s.read_positions();
     let spot_fills = s.read_spot_fills();
     let perp_fills = s.read_perp_fills();
 
     s.clear_db().unwrap();
+    drop(s);
 
     let sess = session.lock();
 
+    let state_tree_m = state_tree.lock();
     let notes = notes_info.0;
     for note in notes {
-        store_new_note(&sess, backup_storage, &note);
+        if note.hash == state_tree_m.get_leaf_by_index(note.index) {
+            store_new_note(&sess, backup_storage, &note);
+        }
     }
-    let removable_info = notes_info.1;
-    for info in removable_info {
-        delete_note_at_address(
-            &sess,
-            backup_storage,
-            &info.1.to_string(),
-            &info.0.to_string(),
-        );
-    }
+    // TODO: What to do with this if it happens?
+    // let removable_info = notes_info.1;
+    // for (idx, address) in removable_info {
+    //     delete_note_at_address(&sess, backup_storage, &address, &idx.to_string());
+    // }
+    drop(state_tree_m);
 
+    // ? ADD AND REMOVED POSITIONS TO/FROM THE DATABASE
+    let perp_state_tree_m = perp_state_tree.lock();
     let positions = positions_info.0;
-    for position in positions {
-        store_new_position(&sess, backup_storage, &position);
+    for mut position in positions {
+        if position.hash == perp_state_tree_m.get_leaf_by_index(position.index as u64) {
+            if position.hash == position.hash_position() {
+                store_new_position(&sess, backup_storage, &position);
+            }
+        }
     }
-    let removable_info = positions_info.1;
-    for info in removable_info {
-        delete_position_at_address(
-            &sess,
-            backup_storage,
-            &info.1.to_string(),
-            &info.0.to_string(),
-        );
-    }
+    drop(perp_state_tree_m);
+    // TODO: What to do with this if it happens?
+    // let removable_info = positions_info.1;
+    // for info in removable_info {
+    // delete_position_at_address(
+    //     &sess,
+    //     backup_storage,
+    //     &info.1.to_string(),
+    //     &info.0.to_string(),
+    // );
+    // }
 
     for fill in spot_fills {
         store_new_spot_fill(&sess, backup_storage, &fill);
@@ -132,7 +147,14 @@ fn delete_note_at_address(
     let delete_path = format!("notes/{}/indexes/{}", address, idx);
     let r = documents::delete(session, delete_path.as_str(), true);
     if let Err(e) = r {
-        println!("Error deleting position document. ERROR: {:?}", e);
+        if let FirebaseError::APIError(numeric_code, string_code, _context) = e {
+            if string_code.starts_with("No document to update") && numeric_code == 404 {
+                return;
+            }
+        } else {
+            println!("Error deleting note from backup storage. ERROR: {:?}", e);
+        }
+
         let s = backup_storage.lock();
         if let Err(_e) = s.store_note_removal(u64::from_str_radix(idx, 10).unwrap(), address) {}
     }
@@ -175,7 +197,14 @@ fn delete_position_at_address(
     let delete_path = format!("positions/{}/indexes/{}", address, idx);
     let r = documents::delete(session, delete_path.as_str(), true);
     if let Err(e) = r {
-        println!("Error deleting position document. ERROR: {:?}", e);
+        if let FirebaseError::APIError(numeric_code, string_code, _context) = e {
+            if string_code.starts_with("No document to update") && numeric_code == 404 {
+                return;
+            }
+        } else {
+            println!("Error deleting note from backup storage. ERROR: {:?}", e);
+        }
+
         let s = backup_storage.lock();
         if let Err(_e) = s.store_position_removal(u64::from_str_radix(idx, 10).unwrap(), address) {}
     }
@@ -191,6 +220,16 @@ fn store_new_position(
         position.position_address.to_string(),
     );
 
+    // bankruptcy_price
+    // 0
+    // liquidation_price
+    // 0
+
+    // { order_side: Short, synthetic_token: 54321, collateral_token: 55555, position_size: 0, margin: 30110072246, entry_price: 1855532309, liquidation_price: 18446744073709551615,
+    //      bankruptcy_price: 18446744073709551615, allow_partial_liquidations: true,
+    //  position_address: 1684502386098572560865500250041581148646578677955444760400258625865572888023,
+    //  last_funding_idx: 0, hash: 2868264735875796266919601002856514620997277726617493209879409462261753175252, index: 0 }
+
     let _res = documents::write(
         session,
         write_path.as_str(),
@@ -200,7 +239,7 @@ fn store_new_position(
     );
 
     if let Err(e) = _res {
-        println!("Error storing position in backup storage. ERROR: {:?}", e);
+        println!("Error storing position to database. ERROR: {:?}", e);
         let s = backup_storage.lock();
         if let Err(_e) = s.store_position(position) {};
         drop(s);

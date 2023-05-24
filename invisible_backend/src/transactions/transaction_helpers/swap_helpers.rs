@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
 use crate::{
-    perpetual::{DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
+    perpetual::{DECIMALS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
@@ -24,7 +24,7 @@ use error_stack::Result;
 /// # Arguments
 /// spend_amount_left - the amount left to spend at the beginning of the swap
 /// order - the order that is being filled
-/// pub_key - the sum of input public keys for the order (used for partiall fill refunds)
+/// pub_key - the sum of input public keys for the order (used for partial fill refunds)
 /// spent_amount_x - the amount of token x being spent in the swap
 /// idx - the index where the new pfr note will be placed the tree
 pub fn refund_partial_fill(
@@ -315,29 +315,22 @@ pub fn consistency_checks(
         ));
     }
 
-    let dust_mul_amount = DUST_AMOUNT_PER_ASSET[order_a.token_spent.to_string().as_str()] as u128
-        * DUST_AMOUNT_PER_ASSET[order_a.token_received.to_string().as_str()] as u128;
+    let dec_sum: u8 = DECIMALS_PER_ASSET[order_a.token_spent.to_string().as_str()]
+        + DECIMALS_PER_ASSET[order_b.token_spent.to_string().as_str()];
+    // ? Verify consistency of amounts swapped
 
-    // ? Verify consistency of amounts swaped
-    if spent_amount_a as u128 * order_a.amount_received as u128
-        > spent_amount_b as u128 * order_a.amount_spent as u128 + dust_mul_amount
-        || spent_amount_b as u128 * order_b.amount_received as u128
-            > spent_amount_a as u128 * order_b.amount_spent as u128 + dust_mul_amount
-    {
+    // ? Check the price is consistent to 0.01% (1/10000)
+    let multiplier = 10u128.pow(dec_sum as u32 - 4);
+    let a1 = spent_amount_a as u128 * order_a.amount_received as u128;
+    let a2 = spent_amount_b as u128 * order_a.amount_spent as u128;
+    let b1 = spent_amount_b as u128 * order_b.amount_received as u128;
+    let b2 = spent_amount_a as u128 * order_b.amount_spent as u128;
+
+    if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
         return Err(send_swap_error(
             "Amount swapped ratios are inconsistent".to_string(),
             None,
-            Some(format!(
-                "{} * {} > {} * {}  or  {} * {} > {} * {}",
-                spent_amount_a,
-                order_a.amount_received,
-                spent_amount_b,
-                order_a.amount_spent,
-                spent_amount_b,
-                order_b.amount_received,
-                spent_amount_a,
-                order_b.amount_spent
-            )),
+            None,
         ));
     }
 

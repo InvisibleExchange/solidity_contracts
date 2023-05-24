@@ -1,4 +1,6 @@
-use crate::perpetual::{PositionEffectType, TOKENS, VALID_COLLATERAL_TOKENS};
+use crate::perpetual::{
+    PositionEffectType, DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
+};
 use crate::utils::crypto_utils::Signature;
 
 use super::{domain::Order, orders::OrderRequest};
@@ -122,11 +124,26 @@ impl OrderRequestValidator {
                 if note_sum < limit_order.amount_spent || err {
                     return Err("Invalid notes");
                 }
+
+                if limit_order.amount_spent
+                    < DUST_AMOUNT_PER_ASSET[&limit_order.token_spent.to_string()]
+                    || limit_order.amount_received
+                        < DUST_AMOUNT_PER_ASSET[&limit_order.token_received.to_string()]
+                {
+                    return Err("Order amount is too small");
+                }
             }
             Order::Perp(perp_order) => {
                 if !TOKENS.contains(&perp_order.synthetic_token) {
                     return Err("Synthetic token is invalid");
                 };
+
+                if perp_order.synthetic_amount
+                    < DUST_AMOUNT_PER_ASSET[&perp_order.synthetic_token.to_string()]
+                {
+                    return Err("Order amount is too small");
+                }
+
                 match perp_order.position_effect_type {
                     PositionEffectType::Open => {
                         if !VALID_COLLATERAL_TOKENS.contains(

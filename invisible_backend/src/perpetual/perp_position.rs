@@ -722,12 +722,6 @@ impl PerpPosition {
 
         let margin = (self.margin as i64 + margin_change) as u64;
 
-        //     entry_price: u64,
-        // size: u64,
-        // margin: u64,
-        // order_side: &OrderSide,
-        // synthetic_token: u64,
-
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             self.entry_price,
             margin,
@@ -744,8 +738,6 @@ impl PerpPosition {
             self.synthetic_token,
             self.allow_partial_liquidations,
         );
-
-        println!("new_bankruptcy_price: {}", new_bankruptcy_price);
 
         let new_hash: BigUint = _hash_position(
             &self.order_side,
@@ -1112,7 +1104,7 @@ fn _get_liquidation_price(
         return liquidation_price.unwrap_or(0);
     } else {
         if position_size == 0 {
-            return u64::MAX;
+            return 1_000_000_000 * 10_u64.pow(*synthetic_price_decimals as u32);
         }
 
         let price_delta =
@@ -1154,7 +1146,7 @@ fn _get_bankruptcy_price(
             .unwrap_or(0);
     } else {
         if size == 0 {
-            return u64::MAX;
+            return 1_000_000_000 * 10_u64.pow(*synthetic_price_decimals as u32);
         }
 
         let bp = entry_price + (margin as u128 * multiplier1 / size as u128) as u64;

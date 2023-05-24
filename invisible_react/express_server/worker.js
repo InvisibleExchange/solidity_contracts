@@ -6,8 +6,6 @@ const protoLoader = require("@grpc/proto-loader");
 const { initDb, storeSpotOrder, storePerpOrder } = require("./helpers");
 
 const path = require("path");
-
-// Create a path to a different location relative to the current directory
 const protoPath = path.join(
   __dirname,
   "../../invisible_backend/proto",

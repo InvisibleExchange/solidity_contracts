@@ -30,7 +30,10 @@ use crate::{
         VALID_COLLATERAL_TOKENS,
     },
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
-    transactions::transaction_helpers::db_updates::update_db_after_note_split,
+    transactions::transaction_helpers::{
+        db_updates::{update_db_after_note_split, DbNoteUpdater},
+        rollbacks::{rollback_deposit_updates, rollback_swap_updates, rollback_withdrawal_updates},
+    },
     trees::TreeStateType,
     utils::firestore::{
         start_add_note_thread, start_add_position_thread, start_delete_note_thread,
@@ -51,12 +54,7 @@ use crate::utils::{
     notes::Note,
 };
 
-use crate::transactions::{
-    swap::SwapResponse,
-    transaction_helpers::rollbacks::{
-        rollback_deposit_updates, rollback_swap_updates, rollback_withdrawal_updates, RollbackInfo,
-    },
-};
+use crate::transactions::{swap::SwapResponse, transaction_helpers::rollbacks::RollbackInfo};
 
 use super::{
     super::server::{
@@ -461,49 +459,51 @@ impl TransactionBatch {
         let thread_id = rollback_info_message.0;
         let rollback_message = rollback_info_message.1;
 
-        if rollback_message.tx_type == "deposit" {
-            // ? rollback the deposit execution state updates
+        println!("Rolling back transaction: {:?}", rollback_message.tx_type);
 
-            let rollback_info = self.rollback_safeguard.lock().remove(&thread_id).unwrap();
+        // if rollback_message.tx_type == "deposit" {
+        //     // ? rollback the deposit execution state updates
 
-            rollback_deposit_updates(&self.state_tree, &self.updated_note_hashes, rollback_info);
-        } else if rollback_message.tx_type == "swap" {
-            // ? rollback the swap execution state updates
+        //     let rollback_info = self.rollback_safeguard.lock().remove(&thread_id).unwrap();
 
-            let rollback_info = self.rollback_safeguard.lock().remove(&thread_id).unwrap();
+        //     rollback_deposit_updates(&self.state_tree, &self.updated_note_hashes, rollback_info);
+        // } else if rollback_message.tx_type == "swap" {
+        //     // ? rollback the swap execution state updates
 
-            rollback_swap_updates(
-                &self.state_tree,
-                &self.updated_note_hashes,
-                rollback_message,
-                rollback_info,
-            );
-        } else if rollback_message.tx_type == "withdrawal" {
-            // ? rollback the withdrawal execution state updates
+        //     let rollback_info = self.rollback_safeguard.lock().remove(&thread_id).unwrap();
 
-            rollback_withdrawal_updates(
-                &self.state_tree,
-                &self.updated_note_hashes,
-                rollback_message,
-            );
-        } else if rollback_message.tx_type == "perp_swap" {
-            // ? rollback the perp swap execution state updates
+        //     rollback_swap_updates(
+        //         &self.state_tree,
+        //         &self.updated_note_hashes,
+        //         rollback_message,
+        //         rollback_info,
+        //     );
+        // } else if rollback_message.tx_type == "withdrawal" {
+        //     // ? rollback the withdrawal execution state updates
 
-            let rollback_info = self
-                .perp_rollback_safeguard
-                .lock()
-                .remove(&thread_id)
-                .unwrap();
+        //     rollback_withdrawal_updates(
+        //         &self.state_tree,
+        //         &self.updated_note_hashes,
+        //         rollback_message,
+        //     );
+        // } else if rollback_message.tx_type == "perp_swap" {
+        //     // ? rollback the perp swap execution state updates
 
-            rollback_perp_swap(
-                &self.state_tree,
-                &self.updated_note_hashes,
-                &self.perpetual_state_tree,
-                &self.perpetual_updated_position_hashes,
-                rollback_message,
-                rollback_info,
-            );
-        }
+        //     let rollback_info = self
+        //         .perp_rollback_safeguard
+        //         .lock()
+        //         .remove(&thread_id)
+        //         .unwrap();
+
+        //     rollback_perp_swap(
+        //         &self.state_tree,
+        //         &self.updated_note_hashes,
+        //         &self.perpetual_state_tree,
+        //         &self.perpetual_updated_position_hashes,
+        //         rollback_message,
+        //         rollback_info,
+        //     );
+        // }
     }
 
     // * =================================================================
@@ -557,10 +557,6 @@ impl TransactionBatch {
         let mut updated_note_hashes = self.updated_note_hashes.lock();
         if notes_in.len() > notes_out.len() {
             for i in 0..notes_out.len() {
-                // println!(
-                //     "new note out in split: {} {:?} {}",
-                //     notes_in[i].index, notes_out[i].hash, i
-                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -568,19 +564,11 @@ impl TransactionBatch {
             }
 
             for i in notes_out.len()..notes_in.len() {
-                // println!(
-                //     "removing note in in split: {} {:?} {}",
-                //     notes_in[i].index, 0, i
-                // );
                 state_tree.update_leaf_node(&BigUint::zero(), notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, BigUint::zero());
             }
         } else if notes_in.len() == notes_out.len() {
             for i in 0..notes_out.len() {
-                // println!(
-                //     "new note out in split: {} {:?} {}",
-                //     notes_in[i].index, notes_out[i].hash, i
-                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -588,10 +576,6 @@ impl TransactionBatch {
             }
         } else {
             for i in 0..notes_in.len() {
-                // println!(
-                //     "new note out in split: {} {:?} {}",
-                //     notes_in[i].index, notes_out[i].hash, i
-                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
                 updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
 
@@ -601,10 +585,6 @@ impl TransactionBatch {
             for i in notes_in.len()..notes_out.len() {
                 let zero_idx = state_tree.first_zero_idx();
 
-                // println!(
-                //     "new note out in split: {} {:?} {}",
-                //     zero_idx, notes_out[i].hash, i
-                // );
                 state_tree.update_leaf_node(&notes_out[i].hash, zero_idx);
                 updated_note_hashes.insert(zero_idx, notes_out[i].hash.clone());
 
@@ -665,6 +645,11 @@ impl TransactionBatch {
 
         // ? Check that leverage is valid relative to the notional position size after increasing size
         if get_max_leverage(position.synthetic_token, position.position_size) < leverage {
+            println!(
+                "Leverage would be too high {} > {}",
+                leverage,
+                get_max_leverage(position.synthetic_token, position.position_size),
+            );
             return Err("Leverage would be too high".to_string());
         }
 
@@ -712,35 +697,26 @@ impl TransactionBatch {
                 &self.backup_storage,
             );
 
-            for note in margin_change.notes_in.as_ref().unwrap().iter().skip(1) {
-                let _handle = start_delete_note_thread(
-                    &self.firebase_session,
-                    &self.backup_storage,
-                    note.address.x.to_string(),
-                    note.index.to_string(),
-                );
-            }
-
+            let delete_notes = margin_change
+                .notes_in
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|n| (n.index, n.address.x.to_string()))
+                .collect::<Vec<(u64, String)>>();
+            let mut add_notes = vec![];
             if margin_change.refund_note.is_some() {
-                let _handle = start_add_note_thread(
-                    margin_change.refund_note.as_ref().unwrap().clone(),
-                    &self.firebase_session,
-                    &self.backup_storage,
-                );
-
-                // ? If the index and address of the first note in the notes_in array is the same as the refund note then we don't need to delete the note becasue it will be overwritten anyway
-                let n0 = &margin_change.notes_in.as_ref().unwrap()[0];
-                if n0.address.x != margin_change.refund_note.as_ref().unwrap().address.x
-                    && n0.index != margin_change.refund_note.as_ref().unwrap().index
-                {
-                    let _handle = start_delete_note_thread(
-                        &self.firebase_session,
-                        &self.backup_storage,
-                        n0.address.x.to_string(),
-                        n0.index.to_string(),
-                    );
-                }
+                add_notes.push(margin_change.refund_note.as_ref().unwrap());
             }
+
+            let updater = DbNoteUpdater {
+                session: &self.firebase_session,
+                backup_storage: &self.backup_storage,
+                delete_notes,
+                add_notes,
+            };
+
+            let _handles = updater.update_db();
         } else {
             let mut tree = self.state_tree.lock();
 
@@ -928,7 +904,7 @@ impl TransactionBatch {
 
         main_storage.clear_transaction_data().unwrap();
 
-        println!("Transaction batch finalized sucessfully!");
+        println!("Transaction batch finalized successfully!");
 
         drop(batch_init_tree);
         drop(state_tree);
@@ -1015,6 +991,7 @@ impl TransactionBatch {
                     self.running_tx_count += 1;
                 }
                 "perpetual_swap" => {
+
                     // * Order a ------------------------
                     restore_perp_order_execution(
                         &self.state_tree,

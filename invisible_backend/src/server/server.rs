@@ -332,6 +332,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &session,
         &ws_conn_mutex,
         &privileged_ws_connections,
+        &backup_storage,
+        &state_tree,
+        &perp_state_tree,
     )
     .await;
 

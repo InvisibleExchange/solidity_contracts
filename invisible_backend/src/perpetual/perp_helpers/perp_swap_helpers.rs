@@ -8,9 +8,10 @@ use num_bigint::BigUint;
 
 use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{
-    OrderSide, PositionEffectType, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET,
-    LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, TOKENS, VALID_COLLATERAL_TOKENS,
+    OrderSide, PositionEffectType, COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET,
+    DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MAX_LEVERAGE, TOKENS,
 };
+use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
 use crate::utils::notes::Note;
 
@@ -55,9 +56,9 @@ pub fn get_max_leverage(token: u64, amount: u64) -> u64 {
     let max_leverage: f64;
 
     if decimal_amount < *min_bound as f64 {
-        max_leverage = 20.0;
+        max_leverage = MAX_LEVERAGE;
     } else if decimal_amount < *max_bound as f64 {
-        max_leverage = 20.0 * (*min_bound as f64 / decimal_amount);
+        max_leverage = MAX_LEVERAGE * (*min_bound as f64 / decimal_amount);
     } else {
         max_leverage = 1.0;
     }
@@ -68,10 +69,10 @@ pub fn get_max_leverage(token: u64, amount: u64) -> u64 {
 // * ==============================================================================
 // * CONSISTENCY CHECKS * //
 
-/// Ckecks the tokens of all notes are the collateral token being spent \
+/// Checks the tokens of all notes are the collateral token being spent \
 /// and that the sum of inputs is at least equal to the initial margin + refund amount
 pub fn _check_note_sums(order: &PerpOrder) -> Result<(), PerpSwapExecutionError> {
-    // ? Sum all the notes and check if they all have the same colleteral token
+    // ? Sum all the notes and check if they all have the same collateral token
 
     let open_order_fields = order.open_order_fields.as_ref().unwrap();
 
@@ -113,6 +114,7 @@ pub fn _check_note_sums(order: &PerpOrder) -> Result<(), PerpSwapExecutionError>
 
 /// Checks that the partial refund info is consistent with the order
 pub fn _check_prev_fill_consistencies(
+    state_tree: &Arc<Mutex<SuperficialTree>>,
     partial_refund_info: &Option<(Option<Note>, u64, u64)>,
     order: &PerpOrder,
     initial_margin: u64,
@@ -160,6 +162,16 @@ pub fn _check_prev_fill_consistencies(
         return Err(send_perp_swap_error(
             "pfr note address invalid".to_string(),
             Some(order.order_id),
+            None,
+        ));
+    }
+
+    let state_tree = state_tree.lock();
+    let leaf_hash = state_tree.get_leaf_by_index(partial_refund_note.index);
+    if leaf_hash != partial_refund_note.hash {
+        return Err(send_perp_swap_error(
+            "prev partial refund note used in swap does not exist in the state".to_string(),
+            None,
             None,
         ));
     }
@@ -413,19 +425,22 @@ pub fn consistency_checks(
         }
     }
 
-    let dust_mul_amount = DUST_AMOUNT_PER_ASSET[order_a.synthetic_token.to_string().as_str()]
-        as u128
-        * DUST_AMOUNT_PER_ASSET[VALID_COLLATERAL_TOKENS[0].to_string().as_str()] as u128;
-
+    let dec_sum: u8 =
+        DECIMALS_PER_ASSET[&order_a.synthetic_token.to_string()] + COLLATERAL_TOKEN_DECIMALS;
     // & If the order is short than more collateral and less synthetic is good (higher price)
     // & If the order is long than more synthetic and less collateral is good (lower price)
-    // ? Verify consistency of amounts swaped
+    // ? Verify consistency of amounts swapped
     if order_a.order_side == OrderSide::Long {
-        if spent_collateral as u128 * order_a.synthetic_amount as u128
-            > spent_synthetic as u128 * order_a.collateral_amount as u128 + dust_mul_amount
-            || (spent_synthetic as u128 * order_b.collateral_amount as u128)
-                > (spent_collateral as u128 * order_b.synthetic_amount as u128 + dust_mul_amount)
-        {
+        // ? Check the price is consistent to 0.01% (1/10000)
+        let multiplier = 10u128.pow(dec_sum as u32 - 4);
+
+        let a1 = spent_collateral as u128 * order_a.synthetic_amount as u128;
+        let a2 = spent_synthetic as u128 * order_a.collateral_amount as u128;
+
+        let b1 = spent_synthetic as u128 * order_b.collateral_amount as u128;
+        let b2 = spent_collateral as u128 * order_b.synthetic_amount as u128;
+
+        if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
             return Err(send_perp_swap_error(
                 "Amount swapped ratios are inconsistent".to_string(),
                 None,
@@ -433,11 +448,16 @@ pub fn consistency_checks(
             ));
         }
     } else {
-        if spent_collateral as u128 * order_b.synthetic_amount as u128
-            > spent_synthetic as u128 * order_b.collateral_amount as u128
-            || (spent_synthetic as u128 * order_a.collateral_amount as u128)
-                > (spent_collateral as u128 * order_a.synthetic_amount as u128)
-        {
+        // ? Check the price is consistent to 0.01% (1/10000)
+        let multiplier = 10u128.pow(dec_sum as u32 - 4);
+
+        let b1 = spent_collateral as u128 * order_b.synthetic_amount as u128;
+        let b2 = spent_synthetic as u128 * order_b.collateral_amount as u128;
+
+        let a1 = spent_synthetic as u128 * order_a.collateral_amount as u128;
+        let a2 = spent_collateral as u128 * order_a.synthetic_amount as u128;
+
+        if b1 / multiplier > b2 / multiplier || a1 / multiplier > a2 / multiplier {
             return Err(send_perp_swap_error(
                 "Amount swapped ratios are inconsistent".to_string(),
                 None,

@@ -63,15 +63,6 @@ pub fn rollback_perp_swap(
                     rollback_message.clone().notes_in_b.1.unwrap()
                 };
                 if notes_in.len() < 2 && rollback_info_a.new_pfr_note_idx.is_some() {
-                    // ?  write a zero note at the pfr_index
-                    // let (proof, proof_pos) =
-                    //     tree.get_proof(rollback_info_a.new_pfr_note_idx.unwrap());
-                    // tree.update_node(
-                    //     &BigUint::zero(),
-                    //     rollback_info_a.new_pfr_note_idx.unwrap(),
-                    //     &proof,
-                    // );
-
                     tree.update_leaf_node(
                         &BigUint::zero(),
                         rollback_info_a.new_pfr_note_idx.unwrap(),
@@ -83,33 +74,23 @@ pub fn rollback_perp_swap(
                 // ?  Add back all other notes
                 for note in notes_in.iter() {
                     // ?  Add back the note
-                    // let (proof, proof_pos) = tree.get_proof(note.index);
-                    // tree.update_node(&note.hash, note.index, &proof);
-
                     tree.update_leaf_node(&note.hash, note.index);
                     updated_note_hashes.insert(note.index, note.hash.clone());
                 }
 
                 // ?  write a zero position at the new position idx
-                // let (proof, proof_pos) = perp_tree.get_proof(rollback_info.new_position_idx_a);
-                // perp_tree.update_node(&BigUint::zero(), rollback_info.new_position_idx_a, &proof);
-
                 tree.update_leaf_node(&BigUint::zero(), rollback_info.new_position_idx_a);
                 perp_updated_position_hashes
                     .insert(rollback_info.new_position_idx_a, BigUint::zero());
             } else {
                 // ? Add back the pfr note
                 let prev_pfr_note = rollback_info_a.prev_pfr_note.unwrap();
-                // let (proof, proof_pos) = tree.get_proof(prev_pfr_note.index);
-                // tree.update_node(&prev_pfr_note.hash, prev_pfr_note.index, &proof);
 
                 tree.update_leaf_node(&prev_pfr_note.hash, prev_pfr_note.index);
                 updated_note_hashes.insert(prev_pfr_note.index, prev_pfr_note.hash);
 
                 // ? Add back the prev_position
                 let prev_position = rollback_info.prev_position_a.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);
@@ -118,13 +99,6 @@ pub fn rollback_perp_swap(
             && rollback_info.collateral_note_idx_a.is_some()
         {
             // ? write a zero leaf at the collateral_return note index
-            // let (proof, proof_pos) = tree.get_proof(rollback_info.collateral_note_idx_a.unwrap());
-            // tree.update_node(
-            //     &BigUint::zero(),
-            //     rollback_info.collateral_note_idx_a.unwrap(),
-            //     &proof,
-            // );
-
             tree.update_leaf_node(
                 &BigUint::zero(),
                 rollback_info.collateral_note_idx_a.unwrap(),
@@ -137,8 +111,6 @@ pub fn rollback_perp_swap(
             // ? write back the prev position if is_some()
             if rollback_info.prev_position_a.is_some() {
                 let prev_position = rollback_info.prev_position_a.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);
@@ -147,8 +119,6 @@ pub fn rollback_perp_swap(
             // ? write back the prev position if is_some()
             if rollback_info.prev_position_a.is_some() {
                 let prev_position = rollback_info.prev_position_a.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);
@@ -174,13 +144,6 @@ pub fn rollback_perp_swap(
                 };
                 if notes_in.len() < 2 && rollback_info_b.new_pfr_note_idx.is_some() {
                     // ?  write a zero note at the pfr_index
-                    // let (proof, proof_pos) =
-                    //     tree.get_proof(rollback_info_b.new_pfr_note_idx.unwrap());
-                    // tree.update_node(
-                    //     &BigUint::zero(),
-                    //     rollback_info_b.new_pfr_note_idx.unwrap(),
-                    //     &proof,
-                    // );
 
                     tree.update_leaf_node(
                         &BigUint::zero(),
@@ -193,16 +156,12 @@ pub fn rollback_perp_swap(
                 // ?  Add back all other notes
                 for note in notes_in.iter() {
                     // ?  Add back the note
-                    // let (proof, proof_pos) = tree.get_proof(note.index);
-                    // tree.update_node(&note.hash, note.index, &proof);
 
                     tree.update_leaf_node(&note.hash, note.index);
                     updated_note_hashes.insert(note.index, note.hash.clone());
                 }
 
                 // ?  write a zero position at the new position idx
-                // let (proof, proof_pos) = perp_tree.get_proof(rollback_info.new_position_idx_b);
-                // perp_tree.update_node(&BigUint::zero(), rollback_info.new_position_idx_b, &proof);
 
                 perp_tree.update_leaf_node(&BigUint::zero(), rollback_info.new_position_idx_b);
                 perp_updated_position_hashes
@@ -210,16 +169,12 @@ pub fn rollback_perp_swap(
             } else {
                 // ? Add back the pfr note
                 let prev_pfr_note = rollback_info_b.prev_pfr_note.unwrap();
-                // let (proof, proof_pos) = tree.get_proof(prev_pfr_note.index);
-                // tree.update_node(&prev_pfr_note.hash, prev_pfr_note.index, &proof);
 
                 tree.update_leaf_node(&prev_pfr_note.hash, prev_pfr_note.index);
                 updated_note_hashes.insert(prev_pfr_note.index, prev_pfr_note.hash);
 
                 // ? Add back the prev_position
                 let prev_position = rollback_info.prev_position_b.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);
@@ -228,12 +183,6 @@ pub fn rollback_perp_swap(
             && rollback_info.collateral_note_idx_b.is_some()
         {
             // ? write a zero leaf at the collateral_return note index
-            // let (proof, proof_pos) = tree.get_proof(rollback_info.collateral_note_idx_b.unwrap());
-            // tree.update_node(
-            //     &BigUint::zero(),
-            //     rollback_info.collateral_note_idx_b.unwrap(),
-            //     &proof,
-            // );
 
             tree.update_leaf_node(
                 &BigUint::zero(),
@@ -247,8 +196,6 @@ pub fn rollback_perp_swap(
             // ? write back the prev position if is_some()
             if rollback_info.prev_position_b.is_some() {
                 let prev_position = rollback_info.prev_position_b.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);
@@ -257,8 +204,6 @@ pub fn rollback_perp_swap(
             // ? write back the prev position if is_some()
             if rollback_info.prev_position_b.is_some() {
                 let prev_position = rollback_info.prev_position_b.unwrap();
-                // let (proof, proof_pos) = perp_tree.get_proof(prev_position.index as u64);
-                // perp_tree.update_node(&prev_position.hash, prev_position.index as u64, &proof);
 
                 perp_tree.update_leaf_node(&prev_position.hash, prev_position.index as u64);
                 perp_updated_position_hashes.insert(prev_position.index as u64, prev_position.hash);

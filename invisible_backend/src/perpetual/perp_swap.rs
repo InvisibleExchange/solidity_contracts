@@ -703,7 +703,7 @@ impl PerpSwap {
                 .or_else(|_| {
                     // ? Un unknown error occured executing order a thread
                     Err(send_perp_swap_error(
-                        "Unknow Error Occured".to_string(),
+                        "Unknown Error Occurred".to_string(),
                         None,
                         None,
                     ))
@@ -719,7 +719,7 @@ impl PerpSwap {
                 .or_else(|_| {
                     // ? Un unknown error occured executing order b thread
                     Err(send_perp_swap_error(
-                        "Unknow Error Occured".to_string(),
+                        "Unknown Error Occurred".to_string(),
                         None,
                         None,
                     ))
@@ -739,7 +739,7 @@ impl PerpSwap {
             );
 
             Err(send_perp_swap_error(
-                "Unknow Error Occured".to_string(),
+                "Unknown Error Occurred".to_string(),
                 None,
                 Some(format!("error occured executing perp swap:  {:?}", e)),
             ))

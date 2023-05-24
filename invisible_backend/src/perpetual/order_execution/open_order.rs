@@ -83,7 +83,8 @@ pub fn execute_open_order(
 
         prev_pfr_note = None;
     } else {
-        let pfr_note = _check_prev_fill_consistencies(&partial_fill_info, order, init_margin)?;
+        let pfr_note =
+            _check_prev_fill_consistencies(&state_tree_m, &partial_fill_info, order, init_margin)?;
         prev_pfr_note = Some(pfr_note);
     }
 

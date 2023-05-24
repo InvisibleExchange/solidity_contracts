@@ -7,7 +7,10 @@ use sled::{Config, Result};
 use crate::{
     perpetual::perp_position::PerpPosition,
     transaction_batch::tx_batch_structs::OracleUpdate,
-    transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
+    transactions::transaction_helpers::{
+        rollbacks::RollbackInfo,
+        transaction_output::{FillInfo, PerpFillInfo},
+    },
 };
 
 use super::notes::Note;
@@ -69,10 +72,10 @@ impl MainStorage {
             .unwrap();
     }
 
-    /// Reads all the microbatches from disk and returns them as a vector of json maps.
+    /// Reads all the micro-batches from disk and returns them as a vector of json maps.
     ///
     /// # Arguments
-    /// * count - the number of microbatches that were executed this batch
+    /// * count - the number of micro-batches that were executed this batch
     ///
     pub fn read_storage(&self) -> Vec<serde_json::Map<String, Value>> {
         let mut json_result = Vec::new();
@@ -258,6 +261,7 @@ pub struct BackupStorage {
     removable_positions_db: sled::Db, // For failed removable positions updates
     fills_db: sled::Db,               // For failed spot fills updates
     perp_fills_db: sled::Db,          // For failed perp fills updates
+    rollback_db: sled::Db,            // For rollback transactions
 }
 
 impl BackupStorage {
@@ -280,6 +284,9 @@ impl BackupStorage {
         let config = Config::new().path("./storage/backups/perp_fills");
         let perp_fills_db = config.open().unwrap();
 
+        let config = Config::new().path("./storage/rollback_info");
+        let rollback_db = config.open().unwrap();
+
         BackupStorage {
             note_db,
             removable_notes_db,
@@ -287,6 +294,7 @@ impl BackupStorage {
             removable_positions_db,
             fills_db,
             perp_fills_db,
+            rollback_db,
         }
     }
 
@@ -412,6 +420,21 @@ impl BackupStorage {
 
         fills
     }
+
+    // TODO:
+    pub fn store_spot_rollback(&self, thread_id: u64, rollback: &RollbackInfo) -> Result<()> {
+        // for x in self.fills_db.iter() {}
+
+        // self.rollback_db.insert(key, fill)?;
+
+        Ok(())
+    }
+
+    // pub struct RollbackInfo {
+    //     pub zero_idxs: Option<Vec<u64>>,
+    //     pub swap_rollback_info_a: Option<OrderRollbackInfo>,
+    //     pub swap_rollback_info_b: Option<OrderRollbackInfo>,
+    // }
 
     pub fn clear_db(&self) -> Result<()> {
         self.note_db.clear()?;

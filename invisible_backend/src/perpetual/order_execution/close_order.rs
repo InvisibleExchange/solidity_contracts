@@ -141,7 +141,7 @@ fn close_position(
 
     // ? If order_side == Long and position_modification_type == Close then it should be a Short position
     if position.order_side == order.order_side {
-        return Err(send_perp_swap_error("position should have oposite order_side than order when position_modification_type == Close".to_string(), 
+        return Err(send_perp_swap_error("position should have opposite order_side than order when position_modification_type == Close".to_string(), 
             Some(order.order_id),
             None,
         ));
