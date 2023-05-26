@@ -192,22 +192,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .change_position_margin(grpc_message.change_margin_message.unwrap());
 
                     let success: bool;
-                    let margin_change_response: Option<MarginChangeResponse>;
-                    if let Ok((new_idxs, position)) = result {
-                        success = true;
+                    let margin_change_response: Option<(Option<MarginChangeResponse>, String)>;
 
-                        margin_change_response = Some(MarginChangeResponse {
-                            new_note_idx: new_idxs,
-                            position_address: position.position_address.to_string(),
-                            position_idx: position.index as u64,
-                            order_side: position.order_side,
-                            synthetic_token: position.synthetic_token,
-                            liquidation_price: position.liquidation_price,
-                        });
-                    } else {
-                        success = false;
-                        margin_change_response = None;
+                    match result {
+                        Ok((new_idxs, position)) => {
+                            success = true;
+
+                            margin_change_response = Some((
+                                Some(MarginChangeResponse {
+                                    new_note_idx: new_idxs,
+                                    position_address: position.position_address.to_string(),
+                                    position_idx: position.index as u64,
+                                    order_side: position.order_side,
+                                    synthetic_token: position.synthetic_token,
+                                    liquidation_price: position.liquidation_price,
+                                }),
+                                "".to_string(),
+                            ));
+                        }
+                        Err(e) => {
+                            success = false;
+                            margin_change_response = Some((None, e));
+                        }
                     }
+
+                    println!("Margin change response: {:?}", success);
 
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,

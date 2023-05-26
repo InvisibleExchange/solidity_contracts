@@ -562,7 +562,7 @@ pub struct GrpcTxResponse {
     pub perp_tx_handle: Option<JoinHandle<Result<PerpSwapResponse, PerpSwapExecutionError>>>,
     pub liquidation_tx_handle:
         Option<JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>>>,
-    pub margin_change_response: Option<MarginChangeResponse>, //
+    pub margin_change_response: Option<(Option<MarginChangeResponse>, String)>, //
     pub new_idxs: Option<std::result::Result<Vec<u64>, String>>, // For deposit orders
     pub successful: bool,
 }

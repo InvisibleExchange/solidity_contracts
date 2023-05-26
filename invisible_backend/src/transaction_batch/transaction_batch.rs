@@ -637,7 +637,9 @@ impl TransactionBatch {
         let mut position = margin_change.position.clone();
         verify_position_existence(&position, &self.perpetual_state_tree)?;
 
+        // println!("=================\nmargin before: {:?}", position.margin);
         position.modify_margin(margin_change.margin_change)?;
+        // println!("margin after: {:?}", position.margin);
 
         let leverage = position
             .get_current_leverage(current_index_price)
@@ -653,6 +655,10 @@ impl TransactionBatch {
             return Err("Leverage would be too high".to_string());
         }
 
+        // println!(
+        //     "state before: {:?}",
+        //     self.perpetual_state_tree.lock().leaf_nodes
+        // );
         let mut z_index: u64 = 0;
         let mut valid: bool = true;
         if margin_change.margin_change >= 0 {
@@ -765,6 +771,11 @@ impl TransactionBatch {
 
             z_index = index;
         }
+
+        // println!(
+        //     "state after: {:?}",
+        //     self.perpetual_state_tree.lock().leaf_nodes
+        // );
 
         // ----------------------------------------------
 
@@ -926,6 +937,8 @@ impl TransactionBatch {
     // * RESTORE STATE
 
     pub fn restore_state(&mut self, transactions: Vec<Map<String, Value>>) {
+        println!("Restoring state from {:?} transactions", transactions);
+
         for transaction in transactions {
             let transaction_type = transaction
                 .get("transaction_type")
@@ -991,7 +1004,6 @@ impl TransactionBatch {
                     self.running_tx_count += 1;
                 }
                 "perpetual_swap" => {
-
                     // * Order a ------------------------
                     restore_perp_order_execution(
                         &self.state_tree,

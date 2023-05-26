@@ -1398,32 +1398,41 @@ impl Engine for EngineService {
 
         if let Ok(grpc_res) = handle.await {
             match grpc_res.margin_change_response {
-                Some(margin_change_response) => {
-                    store_output_json(&self.swap_output_json, &self.main_storage);
+                Some((margin_change_response_, err_msg)) => {
+                    let reply: MarginChangeRes;
+                    if let Some(margin_change_response) = margin_change_response_ {
+                        store_output_json(&self.swap_output_json, &self.main_storage);
 
-                    let pos = Some((
-                        margin_change_response.position_address,
-                        margin_change_response.position_idx,
-                        margin_change_response.synthetic_token,
-                        margin_change_response.order_side == OrderSide::Long,
-                        margin_change_response.liquidation_price,
-                    ));
-                    let msg = json!({
-                        "message_id": "NEW_POSITIONS",
-                        "position1":  pos,
-                        "position2":  null
-                    });
-                    let msg = Message::Text(msg.to_string());
+                        let pos = Some((
+                            margin_change_response.position_address,
+                            margin_change_response.position_idx,
+                            margin_change_response.synthetic_token,
+                            margin_change_response.order_side == OrderSide::Long,
+                            margin_change_response.liquidation_price,
+                        ));
+                        let msg = json!({
+                            "message_id": "NEW_POSITIONS",
+                            "position1":  pos,
+                            "position2":  null
+                        });
+                        let msg = Message::Text(msg.to_string());
 
-                    if let Err(_) = send_to_relay_server(&self.ws_connections, msg).await {
-                        println!("Error sending perp swap fill update message")
-                    };
+                        if let Err(_) = send_to_relay_server(&self.ws_connections, msg).await {
+                            println!("Error sending perp swap fill update message")
+                        };
 
-                    let reply = MarginChangeRes {
-                        successful: true,
-                        error_message: "".to_string(),
-                        return_collateral_index: margin_change_response.new_note_idx,
-                    };
+                        reply = MarginChangeRes {
+                            successful: true,
+                            error_message: "".to_string(),
+                            return_collateral_index: margin_change_response.new_note_idx,
+                        };
+                    } else {
+                        reply = MarginChangeRes {
+                            successful: false,
+                            error_message: err_msg,
+                            return_collateral_index: 0,
+                        };
+                    }
 
                     return Ok(Response::new(reply));
                 }
@@ -1549,7 +1558,6 @@ impl Engine for EngineService {
                 if position.hash == position.hash_position() {
 
                     // TODO
-
                 }
             }
         }

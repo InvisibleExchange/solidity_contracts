@@ -1,0 +1,997 @@
+[
+    {
+        "transaction_type": String("deposit"),
+        "deposit": Object {
+            "deposit_id": Number(2),
+            "deposit_token": Number(55555),
+            "deposit_amount": Number(3000000000),
+            "stark_key": String("2867375896603909758698897399826006359017391870879306959924665701840090254308"),
+            "notes": Array [Object {
+                    "index": Number(0),
+                    "address": Object {
+                        "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                        "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(3000000000),
+                    "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                    "hash": String("7866167330911545921116487578239565924245576580604618180606957666882309298")
+                }
+            ],
+            "signature": Array [String("2115595911191251076789919910190742691601305870640888534978096625739209388697"), String("2144888036521965697144122830591452985978247057350332274071927831402384884107")
+            ]
+        }
+    },
+    {
+        "transaction_type": String("note_split"),
+        "note_split": Object {
+            "token": Number(55555),
+            "notes_in": Array [Object {
+                    "index": Number(0),
+                    "address": Object {
+                        "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                        "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(3000000000),
+                    "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                    "hash": String("7866167330911545921116487578239565924245576580604618180606957666882309298")
+                }
+            ],
+            "notes_out": Array [Object {
+                    "index": Number(0),
+                    "address": Object {
+                        "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                        "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(594333300),
+                    "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                    "hash": String("3424944836269925173655936781361277919682393646844782870070633858388568386376")
+                }, Object {
+                    "index": Number(0),
+                    "address": Object {
+                        "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                        "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(2405666700),
+                    "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                    "hash": String("1107068045059074991644040310360436952079793631492387467876356317659366334237")
+                }
+            ],
+            "zero_idxs": Array [Number(0), Number(1)
+            ]
+        }
+    },
+    {
+        "transaction_type": String("deposit"),
+        "deposit": Object {
+            "deposit_id": Number(234),
+            "deposit_token": Number(55555),
+            "deposit_amount": Number(30000000000),
+            "stark_key": String("745267434613388122426057573343873726982989808077774931894150612150250129739"),
+            "notes": Array [Object {
+                    "index": Number(2),
+                    "address": Object {
+                        "x": String("3603523822862985385489814729276731479624340734252720259242862569397485528146"),
+                        "y": String("37820942841012661568565562685571999386776804505342305758460860425438223807")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(30000000000),
+                    "blinding": String("3397310009758773128337172235277326520550250940913365439319101420997485214594"),
+                    "hash": String("1122263118406664730249705814089555875146423767959253511752050846091323036464")
+                }
+            ],
+            "signature": Array [String("2584501960368608220137646407377736611282210534078835590078724000344864458281"), String("447079645090078305910161933691274166771576800682347942853531179820640835550")
+            ]
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("1106352592809173731736779414649347716663150702161139455922582817810939923469"), String("3576862901097064878569685025722952670072828216195966098211934683752101982156")
+            ],
+            "signature_b": Array [String("2457345986375418709236404518442063028547767049743132354349824912900363410203"), String("944640929107805662413080237973573131785786749514177174228066305909059650377")
+            ],
+            "spent_collateral": Number(49032),
+            "spent_synthetic": Number(27500),
+            "fee_taken_a": Number(24),
+            "fee_taken_b": Number(0)
+        },
+        "order_a": Object {
+            "order_id": Number(131094),
+            "expiration_timestamp": Number(1685013001),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Open"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(27500),
+            "collateral_amount": Number(49640),
+            "fee_limit": Number(34),
+            "open_order_fields": Object {
+                "initial_margin": Number(30000000000),
+                "collateral_token": Number(55555),
+                "notes_in": Array [Object {
+                        "index": Number(2),
+                        "address": Object {
+                            "x": String("3603523822862985385489814729276731479624340734252720259242862569397485528146"),
+                            "y": String("37820942841012661568565562685571999386776804505342305758460860425438223807")
+                        },
+                        "token": Number(55555),
+                        "amount": Number(30000000000),
+                        "blinding": String("3397310009758773128337172235277326520550250940913365439319101420997485214594"),
+                        "hash": String("1122263118406664730249705814089555875146423767959253511752050846091323036464")
+                    }
+                ],
+                "refund_note": Null,
+                "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+                "allow_partial_liquidations": String("true")
+            },
+            "close_order_fields": Null,
+            "hash": String("2235305463582494962448472068090825892828962344815994145037380110501003116698")
+        },
+        "order_b": Object {
+            "order_id": Number(65558),
+            "expiration_timestamp": Number(1688612953),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Open"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(1000000000),
+            "collateral_amount": Number(1783000000),
+            "fee_limit": Number(1248100),
+            "open_order_fields": Object {
+                "initial_margin": Number(594333300),
+                "collateral_token": Number(55555),
+                "notes_in": Array [Object {
+                        "index": Number(0),
+                        "address": Object {
+                            "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                            "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                        },
+                        "token": Number(55555),
+                        "amount": Number(594333300),
+                        "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                        "hash": String("3424944836269925173655936781361277919682393646844782870070633858388568386376")
+                    }
+                ],
+                "refund_note": Null,
+                "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+                "allow_partial_liquidations": String("true")
+            },
+            "close_order_fields": Null,
+            "hash": String("1803894483234623670775319157701976009015084202017735179161422149116691487284")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": String("465542904825197637533013436188684833824388957046365978548978554406332137120"),
+        "prev_position_a": Null,
+        "prev_position_b": Null,
+        "new_position_hash_a": String("3394835667512580550907237285418943371380969074850047644490801525760422637375"),
+        "new_position_hash_b": String("3465298451919943684706771094559445145393563962702565801644216098592186715884"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(3),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("2404337944087219167636728246097414247288927455397618441577455501225635114189"), String("3162300784380238727639072456200125784170371031168726070606866731571003282104")
+            ],
+            "signature_b": Array [String("2457345986375418709236404518442063028547767049743132354349824912900363410203"), String("944640929107805662413080237973573131785786749514177174228066305909059650377")
+            ],
+            "spent_collateral": Number(1782950967),
+            "spent_synthetic": Number(999972500),
+            "fee_taken_a": Number(891475),
+            "fee_taken_b": Number(0)
+        },
+        "order_a": Object {
+            "order_id": Number(196630),
+            "expiration_timestamp": Number(1685013001),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392892725),
+            "collateral_amount": Number(14992487702),
+            "fee_limit": Number(10494741),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("1800812982738296503410489869230347997217461480325132195283130216840298213082")
+        },
+        "order_b": Object {
+            "order_id": Number(65558),
+            "expiration_timestamp": Number(1688612953),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Open"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(1000000000),
+            "collateral_amount": Number(1783000000),
+            "fee_limit": Number(1248100),
+            "open_order_fields": Object {
+                "initial_margin": Number(594333300),
+                "collateral_token": Number(55555),
+                "notes_in": Array [Object {
+                        "index": Number(0),
+                        "address": Object {
+                            "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                            "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                        },
+                        "token": Number(55555),
+                        "amount": Number(594333300),
+                        "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                        "hash": String("3424944836269925173655936781361277919682393646844782870070633858388568386376")
+                    }
+                ],
+                "refund_note": Null,
+                "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+                "allow_partial_liquidations": String("true")
+            },
+            "close_order_fields": Null,
+            "hash": String("1803894483234623670775319157701976009015084202017735179161422149116691487284")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Object {
+            "index": Number(3),
+            "address": Object {
+                "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+            },
+            "token": Number(55555),
+            "amount": Number(594316956),
+            "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+            "hash": String("465542904825197637533013436188684833824388957046365978548978554406332137120")
+        },
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(27500),
+            "margin": Number(29999999976),
+            "entry_price": Number(1090909090),
+            "liquidation_price": Number(0),
+            "bankruptcy_price": Number(0),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("3394835667512580550907237285418943371380969074850047644490801525760422637375"),
+            "index": Number(1)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(27500),
+            "margin": Number(16344),
+            "entry_price": Number(1782981818),
+            "liquidation_price": Number(2308067078),
+            "bankruptcy_price": Number(2377309090),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("3465298451919943684706771094559445145393563962702565801644216098592186715884"),
+            "index": Number(0)
+        },
+        "new_position_hash_a": String("854176726471863918079854741771545580598270405160700238240137876077609599873"),
+        "new_position_hash_b": String("873754488212285811217996432337147300083211541406110705987902010816241238954"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(false),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("2725432487128383070528626805200487498361153859483001495822407126410126929315"), String("1239570827012077890257550555991420590866775394238077902001543414263335194344")
+            ],
+            "signature_b": Array [String("1105934210230796843261617211537378044313974643491876859394724317506602403370"), String("839989412304809423040134235690372819190165108865670238974921978215511476496")
+            ],
+            "spent_collateral": Number(7063655156),
+            "spent_synthetic": Number(3954900000),
+            "fee_taken_a": Number(0),
+            "fee_taken_b": Number(3531827)
+        },
+        "order_a": Object {
+            "order_id": Number(196630),
+            "expiration_timestamp": Number(1685013016),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392892725),
+            "collateral_amount": Number(14990138867),
+            "fee_limit": Number(10494741),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2645219849857954497362880262433696422764824229588594351134689689718602887912")
+        },
+        "order_b": Object {
+            "order_id": Number(720918),
+            "expiration_timestamp": Number(1688613007),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(3954900000),
+            "collateral_amount": Number(6714862559),
+            "fee_limit": Number(4700403),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("1418719442158724509470583682905887117216545690404822558550457862585831049100")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(1000000000),
+            "margin": Number(29999108501),
+            "entry_price": Number(1782980966),
+            "liquidation_price": Number(0),
+            "bankruptcy_price": Number(0),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("854176726471863918079854741771545580598270405160700238240137876077609599873"),
+            "index": Number(1)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(1000000000),
+            "margin": Number(594333299),
+            "entry_price": Number(1782999896),
+            "liquidation_price": Number(2285897302),
+            "bankruptcy_price": Number(2377333195),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("873754488212285811217996432337147300083211541406110705987902010816241238954"),
+            "index": Number(0)
+        },
+        "new_position_hash_a": String("1535479611274675621961512778817436884457901315392755943938444850073557928848"),
+        "new_position_hash_b": String("1681468250568376399847351012854697665612592713266868608518570751048836479827"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("margin_change"),
+        "margin_change": Object {
+            "margin_change": Number(505670000),
+            "notes_in": Array [Object {
+                    "index": Number(1),
+                    "address": Object {
+                        "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                        "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                    },
+                    "token": Number(55555),
+                    "amount": Number(2405666700),
+                    "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                    "hash": String("1107068045059074991644040310360436952079793631492387467876356317659366334237")
+                }
+            ],
+            "refund_note": Object {
+                "index": Number(1),
+                "address": Object {
+                    "x": String("2167806976023379037743227581012185307927088443718980581781955415098114167487"),
+                    "y": String("1851107034839812504614807782653937481217437030299299155588542309373088403884")
+                },
+                "token": Number(55555),
+                "amount": Number(1899996700),
+                "blinding": String("2036805812199495619068945743563325017460845252888592513857467329166197592082"),
+                "hash": String("1471018821058962152022912932352915217524511036185202861040352843986555455757")
+            },
+            "close_order_fields": Null,
+            "position": Object {
+                "order_side": String("Short"),
+                "synthetic_token": Number(54321),
+                "collateral_token": Number(55555),
+                "position_size": Number(4954900000),
+                "margin": Number(590801472),
+                "entry_price": Number(1785435639),
+                "liquidation_price": Number(1831414846),
+                "bankruptcy_price": Number(1904671440),
+                "allow_partial_liquidations": Bool(true),
+                "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+                "last_funding_idx": Number(0),
+                "hash": String("1681468250568376399847351012854697665612592713266868608518570751048836479827"),
+                "index": Number(0)
+            },
+            "signature": Array [String("1679854832873902483612088545188976290247872775143182332083674873417391305245"), String("1067949166654922249833476093274933222439685461590290341852492571318931374203")
+            ]
+        },
+        "new_position_hash": String("1147169759445377723904577555939024253276151340635707855028773315770923362880"),
+        "zero_idx": Number(0)
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("1203500347221330283881835566925723621905792603578432251200611992801647049670"), String("2369424436715509365494794489177865558560703784940526044937885257641207868894")
+            ],
+            "signature_b": Array [String("2675876964078516987246958455920421236245630402426059297777726629187054857632"), String("2345630693776644562458603428415183245730568174649750628348168696268047370536")
+            ],
+            "spent_collateral": Number(13793243008),
+            "spent_synthetic": Number(7715600000),
+            "fee_taken_a": Number(6896621),
+            "fee_taken_b": Number(0)
+        },
+        "order_a": Object {
+            "order_id": Number(786454),
+            "expiration_timestamp": Number(1688613040),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(7715600000),
+            "collateral_amount": Number(14478948363),
+            "fee_limit": Number(10135263),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2145904855519406648026626176411722584853691732339770238989737124083627740491")
+        },
+        "order_b": Object {
+            "order_id": Number(458774),
+            "expiration_timestamp": Number(1685013046),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392899600),
+            "collateral_amount": Number(15004057174),
+            "fee_limit": Number(10505249),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2868979144926094761261963374866092042557625430158310349429230051554837470510")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(4954900000),
+            "margin": Number(1096471472),
+            "entry_price": Number(1785435639),
+            "liquidation_price": Number(1929544204),
+            "bankruptcy_price": Number(2006725972),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("1147169759445377723904577555939024253276151340635707855028773315770923362880"),
+            "index": Number(0)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(4954900000),
+            "margin": Number(29999108501),
+            "entry_price": Number(1785431818),
+            "liquidation_price": Number(0),
+            "bankruptcy_price": Number(0),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("1535479611274675621961512778817436884457901315392755943938444850073557928848"),
+            "index": Number(1)
+        },
+        "new_position_hash_a": String("1022425956067576676677668474140639882609003590480212175181073092005237065414"),
+        "new_position_hash_b": String("3486864945221102798718543593817967676246314202106172583950367850907170503049"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("123915741918360489005247865443948805803520113040185297039142884060584248626"), String("2708965614683364107798548427680565486863036568670248917595224378735995104379")
+            ],
+            "signature_b": Array [String("1601197902766254303043397631553746577279128795935470640128382737930067522357"), String("1077189508737706605692245062131386723992435745578550514714394378994913506295")
+            ],
+            "spent_collateral": Number(3345799037),
+            "spent_synthetic": Number(1871400400),
+            "fee_taken_a": Number(1672899),
+            "fee_taken_b": Number(0)
+        },
+        "order_a": Object {
+            "order_id": Number(851990),
+            "expiration_timestamp": Number(1688613048),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(2548700000),
+            "collateral_amount": Number(4782841994),
+            "fee_limit": Number(3347989),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2408930346663112260820316757670703057768194312348916577957048861755875622658")
+        },
+        "order_b": Object {
+            "order_id": Number(524310),
+            "expiration_timestamp": Number(1685013056),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392899600),
+            "collateral_amount": Number(15005316545),
+            "fee_limit": Number(10506131),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("254164121561784902899058068119287705893197055270529489237944061396182595063")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(2760700000),
+            "margin": Number(1078313503),
+            "entry_price": Number(1787708409),
+            "liquidation_price": Number(1455327266),
+            "bankruptcy_price": Number(1397114175),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("1022425956067576676677668474140639882609003590480212175181073092005237065414"),
+            "index": Number(0)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(2760700000),
+            "margin": Number(30010388781),
+            "entry_price": Number(1787708409),
+            "liquidation_price": Number(12171423700),
+            "bankruptcy_price": Number(12658280648),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("3486864945221102798718543593817967676246314202106172583950367850907170503049"),
+            "index": Number(1)
+        },
+        "new_position_hash_a": String("2385953464295725837573812240646681063485350673642801165542357774932206947398"),
+        "new_position_hash_b": String("1181370690569757510963283875682551649994746916898850523528859523718175968550"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("123915741918360489005247865443948805803520113040185297039142884060584248626"), String("2708965614683364107798548427680565486863036568670248917595224378735995104379")
+            ],
+            "signature_b": Array [String("2006365238113279366190889602529950496540462597926528650079349886300713864430"), String("3322959782608101807978426687556077132989785210843093122580789722011284352902")
+            ],
+            "spent_collateral": Number(1210814191),
+            "spent_synthetic": Number(677299600),
+            "fee_taken_a": Number(605407),
+            "fee_taken_b": Number(0)
+        },
+        "order_a": Object {
+            "order_id": Number(851990),
+            "expiration_timestamp": Number(1688613048),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(2548700000),
+            "collateral_amount": Number(4782841994),
+            "fee_limit": Number(3347989),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2408930346663112260820316757670703057768194312348916577957048861755875622658")
+        },
+        "order_b": Object {
+            "order_id": Number(458774),
+            "expiration_timestamp": Number(1685013056),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392899600),
+            "collateral_amount": Number(15004057174),
+            "fee_limit": Number(10505249),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2071928144936679382107566633742958543946984455891989669562438646372271494594")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(4632100400),
+            "margin": Number(1076640604),
+            "entry_price": Number(1787769030),
+            "liquidation_price": Number(1620144484),
+            "bankruptcy_price": Number(1555338705),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("2385953464295725837573812240646681063485350673642801165542357774932206947398"),
+            "index": Number(0)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(4632100400),
+            "margin": Number(30010388781),
+            "entry_price": Number(1787769030),
+            "liquidation_price": Number(7948610929),
+            "bankruptcy_price": Number(8266555366),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("1181370690569757510963283875682551649994746916898850523528859523718175968550"),
+            "index": Number(1)
+        },
+        "new_position_hash_a": String("1270532079204173586240380711358492941594528192743225992633124371979654028469"),
+        "new_position_hash_b": String("2989817489225371848812265623329475577637594249501679313111469451008389402429"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": Null,
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("margin_change"),
+        "margin_change": Object {
+            "margin_change": Number(-100000000),
+            "notes_in": Null,
+            "refund_note": Null,
+            "close_order_fields": Object {
+                "dest_received_address": Object {
+                    "x": String("874591798662083158581817301727032534879044087294202261765589235587052644138"),
+                    "y": String("1497362823072992403921496927997261041367955572361861984905803000153298147574")
+                },
+                "dest_received_blinding": String("2173539268229343854453166144512656227889957958274669591831624416283706020720")
+            },
+            "position": Object {
+                "order_side": String("Long"),
+                "synthetic_token": Number(54321),
+                "collateral_token": Number(55555),
+                "position_size": Number(5309400000),
+                "margin": Number(1076035197),
+                "entry_price": Number(1787761296),
+                "liquidation_price": Number(1651140868),
+                "bankruptcy_price": Number(1585095233),
+                "allow_partial_liquidations": Bool(true),
+                "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+                "last_funding_idx": Number(0),
+                "hash": String("1270532079204173586240380711358492941594528192743225992633124371979654028469"),
+                "index": Number(0)
+            },
+            "signature": Array [String("2864435511199259745392009794447139844012692989344247516311820031665711664832"), String("3325450550337463453112722046911053596309966399850745632601864709116959445346")
+            ]
+        },
+        "new_position_hash": String("2040822284522559580587874533074354153497912944952470219229618354764315933785"),
+        "zero_idx": Number(3)
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("340391697986091593664940099351051515595869960315876350074524148135746226295"), String("1179388160363308450638086055678187895645726238637636536200383620673166718673")
+            ],
+            "signature_b": Array [String("185653689180926297744087378574588751308160559306251179883799777492133730822"), String("2013251408017109755345495807289710249828139490587402644879423032448572442454")
+            ],
+            "spent_collateral": Number(3341856724),
+            "spent_synthetic": Number(1871379775),
+            "fee_taken_a": Number(0),
+            "fee_taken_b": Number(1670928)
+        },
+        "order_a": Object {
+            "order_id": Number(262166),
+            "expiration_timestamp": Number(1685013081),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392892725),
+            "collateral_amount": Number(14987788966),
+            "fee_limit": Number(10493860),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("2465461386088519405343316659882181836369974220361020140397818910450620248607")
+        },
+        "order_b": Object {
+            "order_id": Number(983062),
+            "expiration_timestamp": Number(1685613073),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Close"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(5309400000),
+            "collateral_amount": Number(9202308094),
+            "fee_limit": Number(6441615),
+            "open_order_fields": Null,
+            "close_order_fields": Object {
+                "dest_received_address": Object {
+                    "x": String("842904029949776790263676854701388548296285443360524823990697931000616696220"),
+                    "y": String("2624106293263638257250921105061815935255996923270580353893362502207538451672")
+                },
+                "dest_received_blinding": String("414747363350209797772260280805687202919112047633927417756269162685932879453")
+            },
+            "hash": String("2898083802649450181809527434279578004439339170007523521914229824684104852778")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(5309400000),
+            "margin": Number(30010388781),
+            "entry_price": Number(1787761296),
+            "liquidation_price": Number(7153917255),
+            "bankruptcy_price": Number(7440073945),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("2989817489225371848812265623329475577637594249501679313111469451008389402429"),
+            "index": Number(1)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(5309400000),
+            "margin": Number(1076035197),
+            "entry_price": Number(1787761296),
+            "liquidation_price": Number(1651140868),
+            "bankruptcy_price": Number(1585095233),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("1270532079204173586240380711358492941594528192743225992633124371979654028469"),
+            "index": Number(0)
+        },
+        "new_position_hash_a": String("1225769394012159702274420944782764317231420634592161411567635411240838891352"),
+        "new_position_hash_b": String("2984521688243146377921368616231933841896935712523090263332848744701591026115"),
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": String("1886143345822807587980114929703636070286424653034986475354735674962867894445"),
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    },
+    {
+        "transaction_type": String("perpetual_swap"),
+        "swap_data": Object {
+            "signature_a": Array [String("1048186524501689409760474869189496992128593043010593194902331812983069507985"), String("1349055374012354893394473177233632445388013195875783133134567390719809323311")
+            ],
+            "signature_b": Array [String("185653689180926297744087378574588751308160559306251179883799777492133730822"), String("2013251408017109755345495807289710249828139490587402644879423032448572442454")
+            ],
+            "spent_collateral": Number(6140034546),
+            "spent_synthetic": Number(3438020225),
+            "fee_taken_a": Number(0),
+            "fee_taken_b": Number(3070017)
+        },
+        "order_a": Object {
+            "order_id": Number(196630),
+            "expiration_timestamp": Number(1685013081),
+            "pos_addr": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "position_effect_type": String("Modify"),
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(8392892725),
+            "collateral_amount": Number(14989048336),
+            "fee_limit": Number(10494741),
+            "open_order_fields": Null,
+            "close_order_fields": Null,
+            "hash": String("118435964451142795415876883606647327742290610558499316938910975483035898240")
+        },
+        "order_b": Object {
+            "order_id": Number(983062),
+            "expiration_timestamp": Number(1685613073),
+            "pos_addr": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "position_effect_type": String("Close"),
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "synthetic_amount": Number(5309400000),
+            "collateral_amount": Number(9202308094),
+            "fee_limit": Number(6441615),
+            "open_order_fields": Null,
+            "close_order_fields": Object {
+                "dest_received_address": Object {
+                    "x": String("842904029949776790263676854701388548296285443360524823990697931000616696220"),
+                    "y": String("2624106293263638257250921105061815935255996923270580353893362502207538451672")
+                },
+                "dest_received_blinding": String("414747363350209797772260280805687202919112047633927417756269162685932879453")
+            },
+            "hash": String("2898083802649450181809527434279578004439339170007523521914229824684104852778")
+        },
+        "prev_pfr_note_a": Null,
+        "prev_pfr_note_b": Null,
+        "new_pfr_note_hash_a": Null,
+        "new_pfr_note_hash_b": Null,
+        "prev_position_a": Object {
+            "order_side": String("Short"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(3438020225),
+            "margin": Number(30014112390),
+            "entry_price": Number(1787761296),
+            "liquidation_price": Number(10113286783),
+            "bankruptcy_price": Number(10517818254),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("1684502386098572560865500250041581148646578677955444760400258625865572888023"),
+            "last_funding_idx": Number(0),
+            "hash": String("1225769394012159702274420944782764317231420634592161411567635411240838891352"),
+            "index": Number(1)
+        },
+        "prev_position_b": Object {
+            "order_side": String("Long"),
+            "synthetic_token": Number(54321),
+            "collateral_token": Number(55555),
+            "position_size": Number(3438020225),
+            "margin": Number(696770025),
+            "entry_price": Number(1787761296),
+            "liquidation_price": Number(1651140868),
+            "bankruptcy_price": Number(1585095233),
+            "allow_partial_liquidations": Bool(true),
+            "position_address": String("3514384773872138362340130060212048101664838743785740788735942102124525782443"),
+            "last_funding_idx": Number(0),
+            "hash": String("2984521688243146377921368616231933841896935712523090263332848744701591026115"),
+            "index": Number(0)
+        },
+        "new_position_hash_a": String("595234746934481875851021442024549085426759118271748389686496311301894265643"),
+        "new_position_hash_b": Null,
+        "return_collateral_hash_a": Null,
+        "return_collateral_hash_b": String("1629000212122333300781653742915036294019342940039640341294689270800028188437"),
+        "is_first_fill_a": Bool(true),
+        "is_first_fill_b": Bool(true),
+        "indexes": Object {
+            "order_a": Object {
+                "position_idx": Number(1),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(0),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            },
+            "order_b": Object {
+                "position_idx": Number(0),
+                "new_pfr_idx": Number(0),
+                "return_collateral_idx": Number(2),
+                "prev_funding_idx": Number(0),
+                "new_funding_idx": Number(0)
+            }
+        }
+    }
+]

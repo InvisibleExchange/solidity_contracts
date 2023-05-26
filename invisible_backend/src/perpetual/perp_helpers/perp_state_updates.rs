@@ -96,16 +96,6 @@ pub fn update_state_after_swap_later_fills(
     let mut tree = state_tree_m.lock();
     let mut updated_note_hashes = updated_note_hashes_m.lock();
 
-    // ? verify note exist in the tree
-    let leaf_hash = tree.get_leaf_by_index(prev_partial_fill_refund_note.index);
-
-    if leaf_hash != prev_partial_fill_refund_note.hash {
-        return Err(send_perp_swap_error(
-            "prev partial refund note used in swap does not exist in the state".to_string(),
-            None,
-            None,
-        ));
-    }
 
     if new_partial_fill_refund_note.is_some() {
         let pfr_note: &Note = new_partial_fill_refund_note.as_ref().unwrap();
