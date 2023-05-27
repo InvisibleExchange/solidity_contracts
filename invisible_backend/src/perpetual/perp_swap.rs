@@ -190,7 +190,7 @@ impl PerpSwap {
                         //
 
                         // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
+                        let prev_position = verify_position_existence(
                             &perpetual_state_tree__,
                             &partialy_filled_positions__,
                             &self.order_a.position,
@@ -198,7 +198,6 @@ impl PerpSwap {
                         )?;
 
                         let (
-                            prev_position,
                             position,
                             new_pfr_info,
                             new_spent_sythetic,
@@ -215,6 +214,7 @@ impl PerpSwap {
                             &self.signature_a.as_ref().unwrap(),
                             self.spent_collateral,
                             self.spent_synthetic,
+                            &prev_position,
                         )?;
 
                         execution_output = TxExecutionThreadOutput {
@@ -234,7 +234,7 @@ impl PerpSwap {
                         //
 
                         // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
+                        let prev_position = verify_position_existence(
                             &perpetual_state_tree__,
                             &partialy_filled_positions__,
                             &self.order_a.position,
@@ -243,7 +243,6 @@ impl PerpSwap {
 
                         let (
                             position_index,
-                            prev_position,
                             position,
                             new_pfr_info,
                             collateral_returned,
@@ -260,6 +259,7 @@ impl PerpSwap {
                             self.fee_taken_a,
                             self.spent_collateral,
                             self.spent_synthetic,
+                            &prev_position,
                         )?;
 
                         execution_output = TxExecutionThreadOutput {
@@ -346,7 +346,7 @@ impl PerpSwap {
                         //
 
                         // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
+                        let prev_position = verify_position_existence(
                             &perpetual_state_tree__,
                             &partialy_filled_positions__,
                             &self.order_b.position,
@@ -354,7 +354,6 @@ impl PerpSwap {
                         )?;
 
                         let (
-                            prev_position,
                             position,
                             new_pfr_info,
                             new_spent_sythetic,
@@ -371,6 +370,7 @@ impl PerpSwap {
                             &self.signature_b.as_ref().unwrap(),
                             self.spent_collateral,
                             self.spent_synthetic,
+                            &prev_position,
                         )?;
 
                         execution_output = TxExecutionThreadOutput {
@@ -390,7 +390,7 @@ impl PerpSwap {
                         //
 
                         // ? Verify the position hash is valid and exists in the state
-                        verify_position_existence(
+                        let prev_position = verify_position_existence(
                             &perpetual_state_tree__,
                             &partialy_filled_positions__,
                             &self.order_b.position,
@@ -399,7 +399,6 @@ impl PerpSwap {
 
                         let (
                             position_index,
-                            prev_position,
                             position,
                             new_pfr_info,
                             collateral_returned,
@@ -416,6 +415,7 @@ impl PerpSwap {
                             self.fee_taken_b,
                             self.spent_collateral,
                             self.spent_synthetic,
+                            &prev_position,
                         )?;
 
                         execution_output = TxExecutionThreadOutput {
@@ -570,6 +570,7 @@ impl PerpSwap {
                     &self.order_a.position_effect_type,
                     execution_output_a.position_index,
                     execution_output_a.position.as_ref(),
+                    execution_output_a.prev_position.as_ref(),
                 )?;
 
                 finalize_updates(
@@ -681,6 +682,7 @@ impl PerpSwap {
                     &self.order_b.position_effect_type,
                     execution_output_b.position_index,
                     execution_output_b.position.as_ref(),
+                    execution_output_b.prev_position.as_ref(),
                 )?;
 
                 finalize_updates(

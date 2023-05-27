@@ -96,7 +96,6 @@ pub fn update_state_after_swap_later_fills(
     let mut tree = state_tree_m.lock();
     let mut updated_note_hashes = updated_note_hashes_m.lock();
 
-
     if new_partial_fill_refund_note.is_some() {
         let pfr_note: &Note = new_partial_fill_refund_note.as_ref().unwrap();
         let pfr_idx = pfr_note.index;
@@ -123,8 +122,11 @@ pub fn update_perpetual_state(
     position_effect_type: &PositionEffectType,
     position_idx: u32,
     position: Option<&PerpPosition>,
+    prev_position: Option<&PerpPosition>,
 ) -> Result<(), PerpSwapExecutionError> {
     //
+
+    // TODO: SHould check that the position exists in the tree
 
     let mut perpetual_state_tree = perpetual_state_tree_m.lock();
     let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();
@@ -134,6 +136,24 @@ pub fn update_perpetual_state(
         perpetual_state_tree.update_leaf_node(&position.hash, position.index as u64);
         perpetual_updated_position_hashes.insert(position.index as u64, position.hash.clone());
     } else {
+        if let None = prev_position {
+            return Err(send_perp_swap_error(
+                "position to update does not exist in the state".to_string(),
+                None,
+                None,
+            ));
+        }
+
+        let leaf_hash = perpetual_state_tree.get_leaf_by_index(prev_position.unwrap().index as u64);
+
+        if prev_position.as_ref().unwrap().hash != leaf_hash {
+            return Err(send_perp_swap_error(
+                "position to update does not exist in the state".to_string(),
+                None,
+                None,
+            ));
+        }
+
         let position_hash: BigUint;
         if position.is_some() {
             position_hash = position.unwrap().hash.clone();

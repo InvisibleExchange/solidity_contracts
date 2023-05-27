@@ -523,6 +523,7 @@ impl TryFrom<MarginChangeReq> for ChangeMarginMessage {
             close_order_fields,
             position,
             signature: sig,
+            user_id: req.user_id,
         })
     }
 }
@@ -572,11 +573,12 @@ pub struct GrpcTxResponse {
 #[derive(Debug)]
 pub struct MarginChangeResponse {
     pub new_note_idx: u64,
-    pub position_address: String,
-    pub position_idx: u64,
-    pub synthetic_token: u64,
-    pub order_side: OrderSide,
-    pub liquidation_price: u64,
+    pub position: PerpPosition,
+    // pub position_address: String,
+    // pub position_idx: u64,
+    // pub synthetic_token: u64,
+    // pub order_side: OrderSide,
+    // pub liquidation_price: u64,
 }
 
 pub enum ControlActionType {
@@ -650,4 +652,5 @@ pub struct ChangeMarginMessage {
     pub close_order_fields: Option<CloseOrderFields>,
     pub position: PerpPosition,
     pub signature: Signature,
+    pub user_id: u64,
 }

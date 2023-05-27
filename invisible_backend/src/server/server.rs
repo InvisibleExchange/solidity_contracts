@@ -201,11 +201,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             margin_change_response = Some((
                                 Some(MarginChangeResponse {
                                     new_note_idx: new_idxs,
-                                    position_address: position.position_address.to_string(),
-                                    position_idx: position.index as u64,
-                                    order_side: position.order_side,
-                                    synthetic_token: position.synthetic_token,
-                                    liquidation_price: position.liquidation_price,
+                                    position,
                                 }),
                                 "".to_string(),
                             ));
@@ -215,8 +211,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             margin_change_response = Some((None, e));
                         }
                     }
-
-                    println!("Margin change response: {:?}", success);
 
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,

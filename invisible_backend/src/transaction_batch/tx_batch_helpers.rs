@@ -257,8 +257,6 @@ pub fn reduce_margin_state_updates(
     let mut perp_tree = perp_state_tree.lock();
     let mut updated_position_hashes = updated_position_hashes.lock();
 
-    println!("new position hash: {}", new_position_hash);
-    println!("position index: {}", position_index);
     perp_tree.update_leaf_node(&new_position_hash, position_index);
     updated_position_hashes.insert(position_index, new_position_hash.clone());
 

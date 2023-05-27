@@ -26,10 +26,10 @@ pub fn execute_close_order(
     fee_taken: u64,
     spent_collateral: u64,
     spent_synthetic: u64,
+    prev_position: &PerpPosition,
 ) -> Result<
     (
         u32,
-        PerpPosition,
         Option<PerpPosition>,
         (Option<Note>, u64, u64),
         u64,
@@ -56,23 +56,22 @@ pub fn execute_close_order(
     let is_fully_filled = new_amount_filled
         >= order.synthetic_amount - DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()];
 
-    let (collateral_returned, new_spent_synthetic, position_index, prev_position, position) =
-        close_position(
-            partialy_filled_positions_m,
-            swap_funding_info,
-            order,
-            signature,
-            fee_taken,
-            spent_collateral,
-            spent_synthetic,
-        )?;
+    let (collateral_returned, new_spent_synthetic, position_index, position) = close_position(
+        partialy_filled_positions_m,
+        swap_funding_info,
+        order,
+        prev_position,
+        signature,
+        fee_taken,
+        spent_collateral,
+        spent_synthetic,
+    )?;
 
     let prev_funding_idx = prev_position.last_funding_idx;
 
     let new_partial_fill_info: (Option<Note>, u64, u64) = (None, new_amount_filled, 0);
     return Ok((
         position_index,
-        prev_position,
         position,
         new_partial_fill_info,
         collateral_returned,
@@ -86,26 +85,23 @@ pub fn execute_close_order(
 // * ======================================================================================================
 
 fn close_position(
-    partialy_filled_positions_m: &Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>,
+    partially_filled_positions_m: &Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>,
     swap_funding_info: &SwapFundingInfo,
     order: &PerpOrder,
+    prev_position: &PerpPosition,
     signature: &Signature,
     fee_taken: u64,
     spent_collateral: u64,
     spent_synthetic: u64,
-) -> Result<(u64, u64, u32, PerpPosition, Option<PerpPosition>), PerpSwapExecutionError> {
-    let mut position: PerpPosition;
+) -> Result<(u64, u64, u32, Option<PerpPosition>), PerpSwapExecutionError> {
+    let mut position: PerpPosition = prev_position.clone();
     let mut prev_spent_synthetic: u64 = 0;
 
     if let Some(pos) = &order.position {
-        let mut pf_positions = partialy_filled_positions_m.lock();
+        let mut pf_positions = partially_filled_positions_m.lock();
         let pf_pos = pf_positions.remove(&pos.position_address.to_string());
-
         if let Some(position_) = pf_pos {
-            position = position_.0;
             prev_spent_synthetic = position_.1;
-        } else {
-            position = pos.clone();
         }
     } else {
         return Err(send_perp_swap_error(
@@ -128,8 +124,6 @@ fn close_position(
             )),
         ));
     }
-
-    let prev_position: PerpPosition = position.clone();
 
     if prev_position.synthetic_token != order.synthetic_token {
         return Err(send_perp_swap_error(
@@ -175,7 +169,6 @@ fn close_position(
             collateral_returned,
             new_spent_synthetic,
             position_index,
-            prev_position,
             None,
         ));
     } else {
@@ -202,7 +195,6 @@ fn close_position(
             collateral_returned,
             new_spent_synthetic,
             position_index,
-            prev_position,
             Some(position),
         ));
     }

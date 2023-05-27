@@ -306,7 +306,7 @@ message SplitNotesRes {
     repeated uint64 zero_idxs = 3;
 }
 
-// *  SPLIT NOTES --------------------------------------------------
+// *  MARGIN CHANGE --------------------------------------------------
 message MarginChangeReq {
     int64 margin_change = 1;
     repeated GrpcNote notes_in = 2;
@@ -314,6 +314,7 @@ message MarginChangeReq {
     GrpcCloseOrderFields close_order_fields = 4;
     GrpcPerpPosition position = 5;
     Signature signature = 6;
+    uint64 user_id = 7; 
     
 }
 

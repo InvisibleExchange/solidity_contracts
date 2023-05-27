@@ -30,17 +30,8 @@ pub fn execute_modify_order(
     signature: &Signature,
     spent_collateral: u64,
     spent_synthetic: u64,
-) -> Result<
-    (
-        PerpPosition,
-        PerpPosition,
-        (Option<Note>, u64, u64),
-        u64,
-        u32,
-        bool,
-    ),
-    PerpSwapExecutionError,
-> {
+    prev_position: &PerpPosition,
+) -> Result<(PerpPosition, (Option<Note>, u64, u64), u64, u32, bool), PerpSwapExecutionError> {
     // ? In case of sequential partial fills block threads updating the same order id untill previous thread is finsihed and fetch the previous partial fill info
     let partial_fill_info = block_until_prev_fill_finished(
         perpetual_partial_fill_tracker_m,
@@ -58,11 +49,12 @@ pub fn execute_modify_order(
     let is_fully_filled = new_amount_filled
         >= order.synthetic_amount - DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()];
 
-    let (prev_position, position, new_spent_synthetic) = modify_position(
+    let (position, new_spent_synthetic) = modify_position(
         partialy_filled_positions_m,
         index_price,
         swap_funding_info,
         order,
+        prev_position,
         signature,
         fee_taken,
         spent_collateral,
@@ -74,7 +66,6 @@ pub fn execute_modify_order(
     let new_partial_fill_info: (Option<Note>, u64, u64) = (None, new_amount_filled, 0);
 
     return Ok((
-        prev_position,
         position,
         new_partial_fill_info,
         new_spent_synthetic,
@@ -91,22 +82,21 @@ fn modify_position(
     index_price: u64,
     swap_funding_info: &SwapFundingInfo,
     order: &PerpOrder,
+    prev_position: &PerpPosition,
     signature: &Signature,
     fee_taken: u64,
     spent_collateral: u64,
     spent_synthetic: u64,
-) -> Result<(PerpPosition, PerpPosition, u64), PerpSwapExecutionError> {
-    let mut position: PerpPosition;
-    let prev_spent_synthetic: u64 = 0;
+) -> Result<(PerpPosition, u64), PerpSwapExecutionError> {
+    let mut position: PerpPosition = prev_position.clone();
+    let mut prev_spent_synthetic: u64 = 0;
 
     if let Some(pos) = &order.position {
         let mut pf_positions = partialy_filled_positions_m.lock();
         let pf_pos = pf_positions.remove(&pos.position_address.to_string());
 
         if let Some(position_) = pf_pos {
-            position = position_.0;
-        } else {
-            position = pos.clone();
+            prev_spent_synthetic = position_.1;
         }
     } else {
         return Err(send_perp_swap_error(
@@ -117,8 +107,6 @@ fn modify_position(
     }
 
     order.verify_order_signature(signature, Some(&position.position_address))?;
-
-    let prev_position: PerpPosition = position.clone();
 
     // ? Check that order token matches synthetic token
     if prev_position.synthetic_token != order.synthetic_token {
@@ -217,5 +205,5 @@ fn modify_position(
 
     let new_spent_synthetic = spent_synthetic + prev_spent_synthetic;
 
-    return Ok((prev_position, position, new_spent_synthetic));
+    return Ok((position, new_spent_synthetic));
 }

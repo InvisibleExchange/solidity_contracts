@@ -352,16 +352,14 @@ impl OrderQueue {
             self.orders.iter_mut().for_each(|(_, wrapper)| {
                 if wrapper.user_id == user_id {
                     if let Order::Perp(ord) = &mut wrapper.order {
-                        ord.position = new_position.clone();
+                        if ord.position.is_some()
+                            && ord.position.as_ref().unwrap().position_address
+                                == new_position.as_ref().unwrap().position_address
+                        {
+                            ord.position = new_position.clone();
+                        }
                     }
                 }
-            });
-        } else {
-            let _ = self.orders.iter_mut().filter(|(_, wrapper)| {
-                if wrapper.user_id == user_id {
-                    return false;
-                }
-                true
             });
         }
 

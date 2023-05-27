@@ -149,7 +149,7 @@ impl Engine for EngineService {
     ) -> Result<Response<OrderResponse>, Status> {
         tokio::task::yield_now().await;
 
-        let now = Instant::now();
+        // let now = Instant::now();
 
         let req: LimitOrderMessage = request.into_inner();
 
@@ -1378,6 +1378,7 @@ impl Engine for EngineService {
             return send_margin_change_error_reply("Invalid change margin message".to_string());
         }
 
+        let user_id = change_margin_message.as_ref().unwrap().user_id;
         let control_mpsc_tx = self.mpsc_tx.clone();
 
         let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
@@ -1401,14 +1402,27 @@ impl Engine for EngineService {
                 Some((margin_change_response_, err_msg)) => {
                     let reply: MarginChangeRes;
                     if let Some(margin_change_response) = margin_change_response_ {
+                        //
+
+                        let market_id = PERP_MARKET_IDS
+                            .get(&margin_change_response.position.synthetic_token.to_string())
+                            .unwrap();
+                        let mut perp_book =
+                            self.perp_order_books.get(market_id).unwrap().lock().await;
+                        perp_book.update_order_positions(
+                            user_id,
+                            &Some(margin_change_response.position.clone()),
+                        );
+                        drop(perp_book);
+
                         store_output_json(&self.swap_output_json, &self.main_storage);
 
                         let pos = Some((
-                            margin_change_response.position_address,
-                            margin_change_response.position_idx,
-                            margin_change_response.synthetic_token,
-                            margin_change_response.order_side == OrderSide::Long,
-                            margin_change_response.liquidation_price,
+                            margin_change_response.position.position_address.to_string(),
+                            margin_change_response.position.index,
+                            margin_change_response.position.synthetic_token,
+                            margin_change_response.position.order_side == OrderSide::Long,
+                            margin_change_response.position.liquidation_price,
                         ));
                         let msg = json!({
                             "message_id": "NEW_POSITIONS",
