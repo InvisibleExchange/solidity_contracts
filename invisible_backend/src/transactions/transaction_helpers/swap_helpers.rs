@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
 use crate::{
-    perpetual::{DECIMALS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
+    perpetual::{DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
@@ -256,7 +256,7 @@ pub fn consistency_checks(
         ));
     }
 
-    // ? Chack that the tokens are valid
+    // ? Check that the tokens are valid
     if !TOKENS.contains(&order_a.token_spent)
         && !VALID_COLLATERAL_TOKENS.contains(&order_a.token_spent)
     {
@@ -283,7 +283,7 @@ pub fn consistency_checks(
             "Tokens swapped do not match".to_string(),
             None,
             Some(format!(
-                "tokens missmatch: \n{:?} != {:?}  or \n{:?} != {:?}",
+                "tokens mismatch: \n{:?} != {:?}  or \n{:?} != {:?}",
                 order_a.token_spent,
                 order_b.token_received,
                 order_a.token_received,
@@ -292,8 +292,12 @@ pub fn consistency_checks(
         ));
     }
 
-    // ? Check that the amounts swapped dont exceed the order amounts
-    if order_a.amount_spent < spent_amount_a || order_b.amount_spent < spent_amount_b {
+    // ? Check that the amounts swapped don't exceed the order amounts
+    let dust_amount_a = DUST_AMOUNT_PER_ASSET[&order_a.token_spent.to_string()];
+    let dust_amount_b = DUST_AMOUNT_PER_ASSET[&order_b.token_spent.to_string()];
+    if order_a.amount_spent < spent_amount_a - dust_amount_a
+        || order_b.amount_spent < spent_amount_b - dust_amount_b
+    {
         return Err(send_swap_error(
             "Amounts swapped exceed order amounts".to_string(),
             None,

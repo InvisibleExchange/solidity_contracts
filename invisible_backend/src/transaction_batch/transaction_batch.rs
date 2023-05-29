@@ -21,8 +21,7 @@ use crate::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
         },
         perp_helpers::{
-            perp_rollback::{rollback_perp_swap, PerpRollbackInfo},
-            perp_swap_helpers::get_max_leverage,
+            perp_rollback::PerpRollbackInfo, perp_swap_helpers::get_max_leverage,
             perp_swap_outptut::PerpSwapResponse,
         },
         perp_position::PerpPosition,
@@ -30,14 +29,9 @@ use crate::{
         VALID_COLLATERAL_TOKENS,
     },
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
-    transactions::transaction_helpers::{
-        db_updates::{update_db_after_note_split, DbNoteUpdater},
-        rollbacks::{rollback_deposit_updates, rollback_swap_updates, rollback_withdrawal_updates},
-    },
+    transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
-    utils::firestore::{
-        start_add_note_thread, start_add_position_thread, start_delete_note_thread,
-    },
+    utils::firestore::{start_add_note_thread, start_add_position_thread},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -320,14 +314,14 @@ impl TransactionBatch {
             _ => {
                 self.running_tx_count += 1;
 
-                if self.running_tx_count >= TRANSACTIONS_PER_BATCH {
-                    if let Err(e) = self.finalize_batch() {
-                        println!("Error finalizing batch: {:?}", e);
-                    } else {
-                        // ? Transaction batch sucessfully finalized
-                        self.running_tx_count = 0;
-                    }
-                }
+                // if self.running_tx_count >= TRANSACTIONS_PER_BATCH {
+                //     if let Err(e) = self.finalize_batch() {
+                //         println!("Error finalizing batch: {:?}", e);
+                //     } else {
+                //         // ? Transaction batch sucessfully finalized
+                //         self.running_tx_count = 0;
+                //     }
+                // }
             }
         }
 
@@ -389,14 +383,14 @@ impl TransactionBatch {
 
         self.running_tx_count += 1;
 
-        if self.running_tx_count >= TRANSACTIONS_PER_BATCH {
-            if let Err(e) = self.finalize_batch() {
-                println!("Error finalizing batch: {:?}", e);
-            } else {
-                // ? Transaction batch sucessfully finalized
-                self.running_tx_count = 0;
-            }
-        }
+        // if self.running_tx_count >= TRANSACTIONS_PER_BATCH {
+        //     if let Err(e) = self.finalize_batch() {
+        //         println!("Error finalizing batch: {:?}", e);
+        //     } else {
+        //         // ? Transaction batch sucessfully finalized
+        //         self.running_tx_count = 0;
+        //     }
+        // }
 
         return handle;
     }
@@ -455,11 +449,11 @@ impl TransactionBatch {
 
     // * Rollback the transaction execution state updates
 
-    pub fn rollback_transaction(&mut self, rollback_info_message: (ThreadId, RollbackMessage)) {
-        let thread_id = rollback_info_message.0;
-        let rollback_message = rollback_info_message.1;
+    pub fn rollback_transaction(&mut self, _rollback_info_message: (ThreadId, RollbackMessage)) {
+        // let thread_id = rollback_info_message.0;
+        // let rollback_message = rollback_info_message.1;
 
-        println!("Rolling back transaction: {:?}", rollback_message.tx_type);
+        // println!("Rolling back transaction: {:?}", rollback_message.tx_type);
 
         // if rollback_message.tx_type == "deposit" {
         //     // ? rollback the deposit execution state updates
@@ -806,7 +800,7 @@ impl TransactionBatch {
         let main_storage = self.main_storage.lock();
 
         // Wait for all operations to finish
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(std::time::Duration::from_millis(300));
 
         let mut batch_init_tree = Tree::from_disk(crate::trees::TreeStateType::Spot)
             .map_err(|_| BatchFinalizationError {})?;
