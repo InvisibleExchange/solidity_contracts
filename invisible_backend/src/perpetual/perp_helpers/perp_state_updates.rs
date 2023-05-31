@@ -126,7 +126,7 @@ pub fn update_perpetual_state(
 ) -> Result<(), PerpSwapExecutionError> {
     //
 
-    // TODO: SHould check that the position exists in the tree
+    // TODO: Should check that the position exists in the tree
 
     let mut perpetual_state_tree = perpetual_state_tree_m.lock();
     let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();

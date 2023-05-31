@@ -196,16 +196,19 @@ pub fn proccess_spot_matching_result(
                     } => {
                         if let Order::Spot(lim_order) = order {
                             if side == OBOrderSide::Ask {
+                                // transactions are ordered as [(taker,maker), (taker,maker), ...]
+                                let is_taker = i % 2 == 0;
+
                                 // He is selling the base asset and buying the quote(price) asset
                                 let spent_amount = qty;
 
-                                // transactions are ordered as [(taker,maker), (taker,maker), ...]
-                                let take_fee = i % 2 == 0;
-
                                 let b_order_tup =
-                                    (lim_order, signature, spent_amount, user_id, take_fee);
+                                    (lim_order, signature, spent_amount, user_id, is_taker);
                                 b_orders.push(b_order_tup);
                             } else {
+                                // transactions are ordered as [(taker,maker), (taker,maker), ...]
+                                let is_taker = i % 2 == 0;
+
                                 // He is buying the base asset and selling the quote(price) asset
                                 let spent_amount = if quote_qty > 0 {
                                     quote_qty
@@ -218,11 +221,8 @@ pub fn proccess_spot_matching_result(
                                     )
                                 };
 
-                                // transactions are ordered as [(taker,maker), (taker,maker), ...]
-                                let take_fee = i % 2 == 0;
-
                                 let a_order_tup =
-                                    (lim_order, signature, spent_amount, user_id, take_fee);
+                                    (lim_order, signature, spent_amount, user_id, is_taker);
                                 a_orders.push(a_order_tup);
                             }
                         } else {

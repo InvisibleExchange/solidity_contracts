@@ -448,7 +448,6 @@ impl TransactionBatch {
     }
 
     // * Rollback the transaction execution state updates
-
     pub fn rollback_transaction(&mut self, _rollback_info_message: (ThreadId, RollbackMessage)) {
         // let thread_id = rollback_info_message.0;
         // let rollback_message = rollback_info_message.1;
