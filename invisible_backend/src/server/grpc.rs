@@ -603,6 +603,7 @@ pub enum MessageType {
     FundingUpdate,
     IndexPriceUpdate,
     Undefined,
+    FinalizeBatch,
 }
 
 impl Default for MessageType {

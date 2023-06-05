@@ -11,10 +11,11 @@ use tokio_tungstenite::tungstenite::Message;
 
 use super::{
     grpc::engine::{
-        AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, GrpcPerpPosition,
-        LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
-        LiquidityRes, OracleUpdateReq, OrderResponse, PerpOrderMessage, RestoreOrderBookMessage,
-        SpotOrderRestoreMessage, StateInfoReq, StateInfoRes, SuccessResponse, WithdrawalMessage,
+        AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, EmptyReq,
+        FinalizeBatchResponse, GrpcPerpPosition, LimitOrderMessage, LiquidationOrderMessage,
+        LiquidationOrderResponse, LiquidityReq, LiquidityRes, OracleUpdateReq, OrderResponse,
+        PerpOrderMessage, RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq,
+        StateInfoRes, SuccessResponse, WithdrawalMessage,
     },
     server_helpers::{
         amend_order_execution::{
@@ -1468,6 +1469,47 @@ impl Engine for EngineService {
     //
     // * ===================================================================================================================================
     //
+
+    async fn finalize_batch(
+        &self,
+        _: Request<EmptyReq>,
+    ) -> Result<Response<FinalizeBatchResponse>, Status> {
+        tokio::task::yield_now().await;
+
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
+
+        let res: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+            let (resp_tx, resp_rx) = oneshot::channel();
+
+            let mut grpc_message = GrpcMessage::new();
+            grpc_message.msg_type = MessageType::FinalizeBatch;
+
+            transaction_mpsc_tx
+                .send((grpc_message, resp_tx))
+                .await
+                .ok()
+                .unwrap();
+            let res = resp_rx.await.unwrap();
+
+            return res;
+        });
+
+        let reply: FinalizeBatchResponse;
+
+        if let Ok(res) = res.await {
+            if res.successful {
+                // OK
+
+                reply = FinalizeBatchResponse {};
+            } else {
+                reply = FinalizeBatchResponse {};
+            }
+        } else {
+            reply = FinalizeBatchResponse {};
+        }
+
+        return Ok(Response::new(reply));
+    }
 
     //
     // * ===================================================================================================================================

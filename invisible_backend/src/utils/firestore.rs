@@ -1,14 +1,12 @@
-use core::num;
 use std::{
+    fs::File,
+    io::Read,
     sync::Arc,
     thread::{spawn, JoinHandle},
+    time::{Instant, SystemTime},
 };
 
-use firestore_db_and_auth::{
-    documents::{self},
-    errors::FirebaseError,
-    Credentials, ServiceSession,
-};
+use firestore_db_and_auth::{documents, errors::FirebaseError, Credentials, ServiceSession};
 use num_bigint::BigUint;
 use num_traits::FromPrimitive;
 use parking_lot::Mutex;
@@ -408,4 +406,146 @@ pub fn start_add_perp_fill_thread(
     });
 
     return handle;
+}
+
+// * FIREBASE STORAGE ===============================================================
+
+use reqwest::Client;
+use serde_json::{from_slice, to_vec, Map, Value};
+
+// Define a struct to deserialize the response from the Firebase Storage API
+#[derive(Deserialize)]
+struct UploadResponse {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct JsonSerdeMapWrapper(Map<String, Value>);
+
+pub async fn upload_file_to_storage(
+    file_name: String,
+    value: Map<String, Value>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    //
+    // let encoded: Vec<u8> = bincode::serialize(&JsonSerdeMapWrapper(value)).unwrap();
+
+    let access_token = get_access_token()?;
+
+    // Create a reqwest client
+    let client = Client::new();
+
+    let serialized_data = to_vec(&value).expect("Serialization failed");
+
+    // Make a POST request to upload the file
+    let response = client
+        .post(
+            "https://firebasestorage.googleapis.com/v0/b/testing-1b2fb.appspot.com/o?name="
+                .to_string()
+                + &file_name,
+        )
+        .header("Content-Type", "application/octet-stream")
+        .header("Authorization", "Bearer ".to_owned() + &access_token)
+        .body(serialized_data)
+        .send()
+        .await?;
+
+    // Deserialize the response
+    let upload_response: UploadResponse = response.json().await?;
+
+    println!(
+        "File uploaded successfully. File name: {}",
+        upload_response.name
+    );
+
+    Ok(())
+}
+
+pub async fn read_file_from_storage(
+    file_name: String,
+) -> Result<Map<String, Value>, Box<dyn std::error::Error>> {
+    // Create a reqwest client
+    let client = Client::new();
+
+    let access_token = get_access_token()?;
+
+    // Make a GET request to download the file
+    let response = client
+        .get(&format!(
+            "https://firebasestorage.googleapis.com/v0/b/testing-1b2fb.appspot.com/o/{}?alt=media",
+            file_name
+        ))
+        .header("Authorization", "Bearer ".to_string() + &access_token)
+        .send()
+        .await?;
+
+    // Read the response content as bytes
+    let file_content = response.bytes().await?.to_vec();
+
+    let deserialized_data: Map<String, Value> =
+        from_slice(&file_content).expect("Deserialization failed");
+
+    Ok(deserialized_data)
+}
+
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ServiceAccount {
+    #[serde(rename = "project_id")]
+    project_id: String,
+    #[serde(rename = "private_key_id")]
+    private_key_id: String,
+    #[serde(rename = "private_key")]
+    private_key: String,
+    #[serde(rename = "client_email")]
+    client_email: String,
+    #[serde(rename = "client_id")]
+    client_id: String,
+}
+
+fn get_access_token() -> Result<String, Box<dyn std::error::Error>> {
+    // Read the service account file
+    let mut file = File::open("firebase-service-account.json").expect("Unable to open the file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Unable to read the file");
+
+    // Parse the service account JSON
+    let service_account: ServiceAccount =
+        from_slice(contents.as_bytes()).expect("Unable to parse service account JSON");
+
+    // Create the JWT payload
+    let claims = Claims {
+        iss: service_account.client_email.clone(),
+        sub: service_account.client_email.clone(),
+        aud: format!("https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit"),
+        iat: SystemTime::now()
+            .duration_since(SystemTime:: UNIX_EPOCH)
+            .expect("Unable to get UNIX EPOCH")
+            .as_secs() as i64,
+        exp: SystemTime::now()
+        .duration_since(SystemTime:: UNIX_EPOCH)
+        .expect("Unable to get UNIX EPOCH")
+        .as_secs() as i64 + 180, // Token expires in 3 minutes
+        uid: None,
+    };
+
+    // Encode the JWT using the private key
+    let header = Header::new(Algorithm::RS256);
+    let private_key = EncodingKey::from_rsa_pem(service_account.private_key.as_bytes())
+        .expect("Unable to create private key from PEM");
+    let token = encode(&header, &claims, &private_key).expect("Unable to encode JWT");
+
+    // Return the access token
+    Ok(token)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    iss: String,
+    sub: String,
+    aud: String,
+    iat: i64,
+    exp: i64,
+    uid: Option<String>,
 }

@@ -16,7 +16,7 @@ use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::{Map, Value};
 
-use crate::trees::tree_utils::ZERO_HASHES;
+use crate::trees::tree_utils::get_zero_hash;
 use crate::utils::crypto_utils::pedersen;
 
 pub mod superficial_tree;
@@ -36,13 +36,14 @@ pub struct Tree {
     pub inner_nodes: Vec<Vec<BigUint>>,
     pub depth: u32,
     pub root: BigUint,
+    pub shift: u32, // in case of a root tree we can start at a different depth
 }
 
 impl Tree {
-    pub fn new(depth: u32) -> Tree {
+    pub fn new(depth: u32, shift: u32) -> Tree {
         let leaf_nodes: Vec<BigUint> = Vec::new();
         let mut inner_nodes: Vec<Vec<BigUint>> = Vec::new();
-        let root = BigUint::from_bytes_le(&ZERO_HASHES.get(depth as usize).unwrap().clone());
+        let root = get_zero_hash(depth, shift);
 
         for _ in 0..depth {
             let empty_vec: Vec<BigUint> = Vec::new();
@@ -54,12 +55,13 @@ impl Tree {
             inner_nodes,
             depth,
             root,
+            shift,
         };
     }
 
     // -----------------------------------------------------------------
-    // Optimizated parrallel transition from one tx_batch to another
-    // Updates the tree with a batch of updates and generates the preimage mulit update proofs
+    // Optimized parallel transition from one tx_batch to another
+    // Updates the tree with a batch of updates and generates the preimage multi update proofs
 
     pub fn batch_transition_updates(
         &mut self,
@@ -117,9 +119,7 @@ impl Tree {
             let len_diff = j as usize - self.inner_nodes[i as usize - 1].len();
 
             for _ in 0..len_diff {
-                self.inner_nodes[i as usize - 1].push(BigUint::from_bytes_le(
-                    &ZERO_HASHES.get(i as usize).unwrap().clone(),
-                ));
+                self.inner_nodes[i as usize - 1].push(get_zero_hash(i, self.shift));
             }
 
             self.inner_nodes[i as usize - 1].push(value);
@@ -148,19 +148,54 @@ impl Tree {
             let res = self.inner_nodes[i as usize - 1][j as usize].clone();
             return res;
         } else {
-            let zero_hash = BigUint::from_bytes_le(&ZERO_HASHES.get(i as usize).unwrap().clone());
+            let zero_hash = get_zero_hash(i, self.shift);
             return zero_hash;
         }
     }
 
     // I/O Operations --------------------------------------------------
 
-    pub fn store_to_disk(&self, tree_state_type: TreeStateType) -> Result<(), Box<dyn Error>> {
-        let path = if tree_state_type == TreeStateType::Spot {
-            Path::new("./storage/merkle_trees/state_tree")
+    pub fn init_trees_in_storage(
+        tree_state_type: &TreeStateType,
+        tree_index: u32,
+        depth: u32,
+    ) -> Result<(), Box<dyn Error>> {
+        let str = if *tree_state_type == TreeStateType::Spot {
+            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
         } else {
-            Path::new("./storage/merkle_trees/perpetual_tree")
+            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
         };
+        let path = Path::new(&str);
+
+        if path.exists() {
+            return Ok(());
+        }
+
+        let mut file: File = File::create(path)?;
+
+        let leaves: Vec<Vec<u8>> = Vec::new();
+
+        let inner_nodes: Vec<Vec<String>> = Vec::new();
+
+        let encoded: Vec<u8> =
+            bincode::serialize(&(leaves, inner_nodes, "0".to_string(), depth)).unwrap();
+
+        file.write_all(&encoded[..])?;
+
+        return Ok(());
+    }
+
+    pub fn store_to_disk(
+        &self,
+        tree_state_type: &TreeStateType,
+        tree_index: u32,
+    ) -> Result<(), Box<dyn Error>> {
+        let str = if *tree_state_type == TreeStateType::Spot {
+            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
+        } else {
+            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
+        };
+        let path = Path::new(&str);
 
         let mut file: File = File::create(path)?;
 
@@ -184,17 +219,23 @@ impl Tree {
         Ok(())
     }
 
-    pub fn from_disk(tree_state_type: TreeStateType) -> Result<Tree, Box<dyn Error>> {
-        let path = if tree_state_type == TreeStateType::Spot {
-            Path::new("./storage/merkle_trees/state_tree")
+    pub fn from_disk(
+        tree_state_type: &TreeStateType,
+        tree_index: u32,
+        depth: u32,
+        shift: u32,
+    ) -> Result<Tree, Box<dyn Error>> {
+        let str = if *tree_state_type == TreeStateType::Spot {
+            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
         } else {
-            Path::new("./storage/merkle_trees/perpetual_tree")
+            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
         };
+        let path = Path::new(&str);
 
         let open_res = File::open(path).ok();
         if open_res.is_none() {
             File::create(path)?;
-            return Ok(Tree::new(32));
+            return Ok(Tree::new(depth, shift));
         };
 
         let mut file: File = open_res.unwrap();
@@ -225,6 +266,7 @@ impl Tree {
             inner_nodes,
             root: BigUint::from_str(&decoded.2.as_str()).unwrap(),
             depth: decoded.3,
+            shift,
         })
     }
 
@@ -665,14 +707,18 @@ fn build_next_row(
     return next_row;
 }
 
-pub fn build_tree(depth: u32, leaf_nodes: &Vec<BigUint>) -> BigUint {
-    let inner_nodes: Vec<Vec<BigUint>> = inner_from_leaf_nodes2(depth as usize, leaf_nodes);
+pub fn build_tree(depth: u32, leaf_nodes: &Vec<BigUint>, shift: u32) -> BigUint {
+    let inner_nodes: Vec<Vec<BigUint>> = inner_from_leaf_nodes2(depth as usize, leaf_nodes, shift);
     let root = inner_nodes[0][0].clone();
 
     return root;
 }
 
-fn inner_from_leaf_nodes2(depth: usize, leaf_nodes: &Vec<BigUint>) -> Vec<Vec<BigUint>> {
+fn inner_from_leaf_nodes2(
+    depth: usize,
+    leaf_nodes: &Vec<BigUint>,
+    shift: u32,
+) -> Vec<Vec<BigUint>> {
     let mut tree: Vec<Vec<BigUint>> = Vec::new();
 
     let first_row = leaf_nodes;
@@ -681,7 +727,7 @@ fn inner_from_leaf_nodes2(depth: usize, leaf_nodes: &Vec<BigUint>) -> Vec<Vec<Bi
     let new_len = if len % 2 == 0 { len / 2 } else { len / 2 + 1 };
     let mut hashes: Vec<BigUint> = vec![BigUint::zero(); new_len];
     let hashes_mutex = Arc::new(Mutex::new(&mut hashes));
-    hash_tree_level(&hashes_mutex, &first_row, 0, 0);
+    hash_tree_level(&hashes_mutex, &first_row, 0, 0, shift);
     tree.push(hashes);
 
     for i in 1..depth {
@@ -689,7 +735,7 @@ fn inner_from_leaf_nodes2(depth: usize, leaf_nodes: &Vec<BigUint>) -> Vec<Vec<Bi
         let new_len = if len % 2 == 0 { len / 2 } else { len / 2 + 1 };
         let mut hashes: Vec<BigUint> = vec![BigUint::zero(); new_len];
         let hashes_mutex = Arc::new(Mutex::new(&mut hashes));
-        hash_tree_level(&hashes_mutex, &tree[i - 1], i, 0);
+        hash_tree_level(&hashes_mutex, &tree[i - 1], i, 0, shift);
         tree.push(hashes);
     }
 
@@ -702,6 +748,7 @@ fn hash_tree_level(
     leaf_nodes: &Vec<BigUint>,
     i: usize,
     n: usize,
+    shift: u32,
 ) {
     let inp_array = leaf_nodes
         .iter()
@@ -714,7 +761,7 @@ fn hash_tree_level(
     if inp_array.len() > 0 {
         rayon::join(
             || {
-                let next_row_hashes = pairwise_hash2(&inp_array, i);
+                let next_row_hashes = pairwise_hash2(&inp_array, i, shift);
                 let mut next_hashes = next_row.lock();
 
                 let hashes_len = next_hashes.len();
@@ -729,24 +776,24 @@ fn hash_tree_level(
 
                 drop(next_hashes);
             },
-            || hash_tree_level(next_row, leaf_nodes, i, n + 1),
+            || hash_tree_level(next_row, leaf_nodes, i, n + 1, shift),
         );
     }
 }
 
-pub fn pairwise_hash2(array: &Vec<&BigUint>, i: usize) -> Vec<BigUint> {
+pub fn pairwise_hash2(array: &Vec<&BigUint>, i: usize, shift: u32) -> Vec<BigUint> {
     // This should be an array of STRIDE length
 
     let mut hashes: Vec<BigUint> = Vec::new();
-    for i in (0..array.len() - 1).step_by(2) {
-        let hash = pedersen(&array[i], &array[i + 1]);
+    for j in (0..array.len() - 1).step_by(2) {
+        let hash = pedersen(&array[j], &array[j + 1]);
         hashes.push(hash);
     }
 
     if array.len() % 2 == 1 {
         hashes.push(pedersen(
             &array[array.len() - 1],
-            &BigUint::from_bytes_le(ZERO_HASHES.get(i as usize).unwrap()),
+            &get_zero_hash(i as u32, shift),
         ));
     }
 

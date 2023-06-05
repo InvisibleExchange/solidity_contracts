@@ -277,6 +277,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .send(grpc_res)
                         .expect("failed sending back the TxResponse in funding update");
                 }
+                MessageType::FinalizeBatch => {
+                    let success = tx_batch.finalize_batch().is_ok();
+
+                    println!("success: {:?}", success);
+
+                    let grpc_res = GrpcTxResponse {
+                        tx_handle: None,
+                        perp_tx_handle: None,
+                        liquidation_tx_handle: None,
+                        new_idxs: None,
+                        margin_change_response: None,
+                        successful: success,
+                    };
+
+                    response
+                        .send(grpc_res)
+                        .expect("failed sending back the TxResponse in finalize batch");
+                }
                 MessageType::Undefined => {
                     println!("Undefined message type");
                 }

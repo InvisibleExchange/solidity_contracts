@@ -69,7 +69,7 @@ pub static MIN_PARTIAL_LIQUIDATION_SIZE: phf::Map<&'static str, u64> = phf_map! 
 pub const LEVERAGE_DECIMALS: u8 = 6; // 6 decimals for leverage
 pub const COLLATERAL_TOKEN_DECIMALS: u8 = 6; // 6 decimals for USDC/USDT...
 
-// mpact Notional Amount = 500 USDC / Initial Margin Fraction
+// impact Notional Amount = 500 USDC / Initial Margin Fraction
 
 // notional_size0 => 2 BTC
 // 3 BTC > 20X leverage > init_margin = 5%
@@ -141,11 +141,11 @@ pub fn get_cross_price(
 
         // ? If round == true, round up else round down
         if round.unwrap() {
-            // round price to 5 decimals
-            return (price * 100000.0).ceil() / 100000.0;
+            // round price to 3 decimals
+            return (price * 1000.0).ceil() / 1000.0;
         } else {
-            // round price to 5 decimals
-            return (price * 100000.0).floor() / 100000.0;
+            // round price to 3 decimals
+            return (price * 1000.0).floor() / 1000.0;
         }
     } else {
         panic!("quote token is not a valid collateral token");

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use serde_json::Value;
 
@@ -15,22 +15,38 @@ use crate::{
 
 use super::notes::Note;
 
+/// The main storage struct that stores all the data on disk.
 pub struct MainStorage {
     tx_db: sled::Db,
     price_db: sled::Db,
     funding_db: sled::Db,
     pub is_empty: bool,
+    pub latest_batch: u32, // every transaction batch stores data separately
 }
 
 impl MainStorage {
     pub fn new() -> Self {
-        let config = Config::new().path("./storage/transaction_data");
+        let dir = fs::read_dir("storage/transaction_data");
+
+        let batch_index = match dir {
+            Ok(dir) => {
+                dir.filter(|entry| entry.as_ref().map(|e| e.path().is_dir()).unwrap_or(false))
+                    .count()
+                    - 1
+            }
+            Err(_) => 0,
+        };
+
+        let config = Config::new()
+            .path("./storage/transaction_data/".to_string() + &batch_index.to_string());
         let tx_db = config.open().unwrap();
 
-        let config = Config::new().path("./storage/price_data");
+        let config =
+            Config::new().path("./storage/price_data/".to_string() + &batch_index.to_string());
         let price_db = config.open().unwrap();
 
-        let config = Config::new().path("./storage/funding_info");
+        let config =
+            Config::new().path("./storage/funding_info/".to_string() + &batch_index.to_string());
         let funding_db = config.open().unwrap();
 
         // Check if the database is empty
@@ -41,6 +57,7 @@ impl MainStorage {
             price_db,
             funding_db,
             is_empty,
+            latest_batch: batch_index as u32,
         }
     }
 
@@ -75,12 +92,23 @@ impl MainStorage {
     /// Reads all the micro-batches from disk and returns them as a vector of json maps.
     ///
     /// # Arguments
-    /// * count - the number of micro-batches that were executed this batch
+    /// * shift_back - the number of micro-batches to shift back from the latest batch
     ///
-    pub fn read_storage(&self) -> Vec<serde_json::Map<String, Value>> {
+    pub fn read_storage(&self, shift_back: u32) -> Vec<serde_json::Map<String, Value>> {
         let mut json_result = Vec::new();
 
-        let index = self.tx_db.get("count").unwrap();
+        let tx_db;
+        let db = if shift_back == 0 {
+            &self.tx_db
+        } else {
+            let batch_index = self.latest_batch - shift_back;
+            let config = Config::new()
+                .path("./storage/transaction_data/".to_string() + &batch_index.to_string());
+            tx_db = config.open().unwrap();
+            &tx_db
+        };
+
+        let index = db.get("count").unwrap();
         let index = match index {
             Some(index) => {
                 let index: u64 = serde_json::from_slice(&index.to_vec()).unwrap();
@@ -246,10 +274,26 @@ impl MainStorage {
 
     /// Clears the storage to make room for the next batch.
     ///
-    pub fn clear_transaction_data(&self) -> Result<()> {
-        self.tx_db.clear()?;
+    pub fn transition_to_new_batch(&mut self) {
+        let new_batch_index = self.latest_batch + 1;
 
-        Ok(())
+        let config = Config::new()
+            .path("./storage/transaction_data/".to_string() + &new_batch_index.to_string());
+        let tx_db = config.open().unwrap();
+
+        let config =
+            Config::new().path("./storage/price_data/".to_string() + &new_batch_index.to_string());
+        let price_db = config.open().unwrap();
+
+        let config = Config::new()
+            .path("./storage/funding_info/".to_string() + &new_batch_index.to_string());
+        let funding_db = config.open().unwrap();
+
+        self.tx_db = tx_db;
+        self.price_db = price_db;
+        self.funding_db = funding_db;
+        self.is_empty = false;
+        self.latest_batch = new_batch_index;
     }
 }
 

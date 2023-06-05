@@ -68,7 +68,7 @@ pub fn proof_pos(leaf_idx: u64, depth: usize) -> Vec<u64> {
     return proof_pos;
 }
 
-pub const ZERO_HASHES: [[u8; 32]; 64] = [
+const ZERO_HASHES: [[u8; 32]; 64] = [
     [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
@@ -326,3 +326,8 @@ pub const ZERO_HASHES: [[u8; 32]; 64] = [
         163, 146, 246, 60, 115, 60, 128, 219, 11, 11, 187, 1,
     ],
 ];
+
+pub fn get_zero_hash(idx: u32, shift: u32) -> BigUint {
+    let depth = idx + shift;
+    BigUint::from_bytes_le(&ZERO_HASHES.get(depth as usize).unwrap().clone())
+}

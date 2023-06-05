@@ -26,7 +26,7 @@ service Engine {
 
     rpc change_position_margin (MarginChangeReq) returns (MarginChangeRes);
 
-    // rpc finalize_batch (FinalizeBatchReq) returns (FinalizeBatchResponse);
+    rpc finalize_batch (EmptyReq) returns (FinalizeBatchResponse);
 
     rpc restore_orderbook (RestoreOrderBookMessage) returns (SuccessResponse);
 
@@ -376,11 +376,13 @@ message ActivePerpOrder {
 
 
 
-// * FUNDING UPDATE ---------------------------------------------------
+// * FINALIZE BATCH ---------------------------------------------------
 
-message StartFundingUpdatesReq {
+message EmptyReq {
 } 
 
+
+message FinalizeBatchResponse {}
 
 
 // * ORACLE PRICE UPDATE ---------------------------------------------------

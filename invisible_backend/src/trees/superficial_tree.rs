@@ -1,7 +1,13 @@
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
+
 use num_bigint::BigUint;
 use num_traits::Zero;
 
-use super::Tree;
+use super::{Tree, TreeStateType};
 
 pub struct SuperficialTree {
     pub leaf_nodes: Vec<BigUint>,
@@ -54,6 +60,62 @@ impl SuperficialTree {
 
             self.leaf_nodes.push(leaf_hash.clone())
         }
+    }
+
+    // -----------------------------------------------------------------
+
+    pub fn from_disk(
+        tree_state_type: &TreeStateType,
+    ) -> Result<SuperficialTree, Box<dyn std::error::Error>> {
+        let str = if *tree_state_type == TreeStateType::Spot {
+            "./storage/merkle_trees/state_tree".to_string()
+        } else {
+            "./storage/merkle_trees/perpetual_tree".to_string()
+        };
+        let dir = fs::read_dir(&str);
+
+        let partitions = match dir {
+            Ok(dir) => dir
+                .filter(|entry| entry.as_ref().map(|e| e.path().is_dir()).unwrap_or(false))
+                .count(),
+            Err(_) => 0,
+        };
+
+        if partitions == 0 {
+            return Ok(SuperficialTree::new(32));
+        }
+
+        let mut leaf_nodes: Vec<BigUint> = Vec::new();
+        let mut zero_idxs: Vec<u64> = Vec::new();
+        for i in 0..partitions {
+            let s = str.clone() + "/" + &i.to_string();
+
+            let path = Path::new(&s);
+            let mut file = File::open(path)?;
+            let mut buf: Vec<u8> = Vec::new();
+
+            file.read_to_end(&mut buf)?;
+
+            let decoded: (Vec<Vec<u8>>, Vec<Vec<String>>, String, u32) =
+                bincode::deserialize(&buf[..])?;
+
+            decoded.0.iter().for_each(|x| {
+                let x = BigUint::from_bytes_le(x);
+                if x == BigUint::zero() {
+                    zero_idxs.push(leaf_nodes.len() as u64);
+                }
+
+                leaf_nodes.push(x);
+            });
+        }
+
+        let count = leaf_nodes.len() as u64;
+        Ok(SuperficialTree {
+            leaf_nodes,
+            depth: 32,
+            count,
+            zero_idxs,
+        })
     }
 
     // -----------------------------------------------------------------

@@ -6,6 +6,7 @@ use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
     fs::File,
+    ops::DerefMut,
     path::Path,
     println,
     str::FromStr,
@@ -31,7 +32,7 @@ use crate::{
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
-    utils::firestore::{start_add_note_thread, start_add_position_thread},
+    utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -62,7 +63,7 @@ use super::{
         restore_note_split, restore_perp_order_execution, restore_spot_order_execution,
         restore_withdrawal_update,
     },
-    tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info},
+    tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info, split_hashmap},
     tx_batch_structs::{get_price_info, GlobalConfig},
 };
 
@@ -75,13 +76,13 @@ use crate::transaction_batch::{
 };
 
 // TODO: This could be weighted sum of different transactions (e.g. 5 for swaps, 1 for deposits, 1 for withdrawals)
-const TRANSACTIONS_PER_BATCH: u16 = 50; // Number of transaction per batch (untill batch finalization)
+const TRANSACTIONS_PER_BATCH: u16 = 10; // Number of transaction per batch (until batch finalization)
 
 // TODO: Make fields in all classes private where they should be
 // Todo: Could store snapshots more often than just on tx_batch updates
 
-// TODO: If you get a note doesent exist error, there should  be a fuction where you can check the existence of all your notes
-// TODO: Maybe have a backup notes storage in the database and every time you log in you check if any of them are still in the state otherweise delete them
+// TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
+// TODO: Maybe have a backup notes storage in the database and every time you log in you check if any of them are still in the state otherwise delete them
 
 pub trait Transaction {
     fn transaction_type(&self) -> &str;
@@ -118,14 +119,14 @@ pub struct TransactionBatch {
     pub max_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the max price, OracleUpdate info of this batch
     //
     pub running_funding_tick_sums: HashMap<u64, i64>, // maps asset id to the sum of all funding ticks in this batch (used for TWAP)
-    pub current_funding_count: u16, // maps asset id to the number of funding ticks applied already (used for TWAP, goes upto 480)
+    pub current_funding_count: u16, // maps asset id to the number of funding ticks applied already (used for TWAP, goes up to 480)
 
     pub funding_rates: HashMap<u64, Vec<i64>>, // maps asset id to an array of funding rates (not reset at new batch)
     pub funding_prices: HashMap<u64, Vec<u64>>, // maps asset id to an array of funding prices (corresponding to the funding rates) (not reset at new batch)
     pub current_funding_idx: u32, // the current index of the funding rates and prices arrays
     pub min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>, // the min funding index of a position being updated in this batch for each asset
     //
-    pub n_deposits: u32,    // number of depositis in this batch
+    pub n_deposits: u32,    // number of deposits in this batch
     pub n_withdrawals: u32, // number of withdrawals in this batch
     //
     pub rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>, // used to rollback the state in case of errors
@@ -251,23 +252,20 @@ impl TransactionBatch {
             self.min_index_price_data = min_index_price_data;
             self.max_index_price_data = max_index_price_data;
         }
-        let swap_output_json = storage.read_storage();
+        let swap_output_json = storage.read_storage(0);
         drop(storage);
 
-        let path = Path::new("storage/merkle_trees/state_tree");
-        let open_res = File::open(path);
-        if let Err(_e) = open_res {
-            self.restore_state(swap_output_json);
-            // If the file doesn't exist, we dont run this function
-            return;
-        }
-        let full_state_tree = Tree::from_disk(TreeStateType::Spot).unwrap();
-        self.state_tree = Arc::new(Mutex::new(SuperficialTree::from_tree(full_state_tree)));
+        let state_tree = match SuperficialTree::from_disk(&TreeStateType::Spot) {
+            Ok(tree) => tree,
+            Err(_) => SuperficialTree::new(32),
+        };
 
-        let full_perpetual_state_tree = Tree::from_disk(TreeStateType::Perpetual).unwrap();
-        self.perpetual_state_tree = Arc::new(Mutex::new(SuperficialTree::from_tree(
-            full_perpetual_state_tree,
-        )));
+        self.state_tree = Arc::new(Mutex::new(state_tree));
+        let perp_state_tree = match SuperficialTree::from_disk(&TreeStateType::Spot) {
+            Ok(tree) => tree,
+            Err(_) => SuperficialTree::new(32),
+        };
+        self.perpetual_state_tree = Arc::new(Mutex::new(perp_state_tree));
 
         self.restore_state(swap_output_json);
     }
@@ -318,7 +316,7 @@ impl TransactionBatch {
                 //     if let Err(e) = self.finalize_batch() {
                 //         println!("Error finalizing batch: {:?}", e);
                 //     } else {
-                //         // ? Transaction batch sucessfully finalized
+                //         // ? Transaction batch successfully finalized
                 //         self.running_tx_count = 0;
                 //     }
                 // }
@@ -387,7 +385,7 @@ impl TransactionBatch {
         //     if let Err(e) = self.finalize_batch() {
         //         println!("Error finalizing batch: {:?}", e);
         //     } else {
-        //         // ? Transaction batch sucessfully finalized
+        //         // ? Transaction batch successfully finalized
         //         self.running_tx_count = 0;
         //     }
         // }
@@ -789,79 +787,111 @@ impl TransactionBatch {
     // * =================================================================
     // * FINALIZE BATCH
 
+    const TREE_DEPTH: u32 = 32;
     pub fn finalize_batch(&mut self) -> Result<(), BatchFinalizationError> {
+        println!("Finalizing batch ...");
+
         // & Get the merkle trees from the beginning of the batch from disk
 
-        let state_tree = self.state_tree.lock();
-        let updated_note_hashes = self.updated_note_hashes.lock();
-        let perpetual_state_tree = self.perpetual_state_tree.lock();
-        let perpetual_updated_position_hashes = self.perpetual_updated_position_hashes.lock();
-        let main_storage = self.main_storage.lock();
+        let state_tree = self.state_tree.clone();
+        let state_tree = state_tree.lock();
 
-        // Wait for all operations to finish
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        let perpetual_state_tree = self.perpetual_state_tree.clone();
+        let perpetual_state_tree = perpetual_state_tree.lock();
 
-        let mut batch_init_tree = Tree::from_disk(crate::trees::TreeStateType::Spot)
-            .map_err(|_| BatchFinalizationError {})?;
-        let mut perpetual_init_tree = Tree::from_disk(crate::trees::TreeStateType::Perpetual)
-            .map_err(|_| BatchFinalizationError {})?;
+        let main_storage = self.main_storage.clone();
+        let mut main_storage = main_storage.lock();
+        let latest_output_json = self.swap_output_json.clone();
+        let latest_output_json = latest_output_json.lock();
 
-        // ? Save the initial tree roots for later
-        let batch_init_root = batch_init_tree.root.clone();
-        let perp_init_root = perpetual_init_tree.root.clone();
+        let current_batch_index = main_storage.latest_batch;
 
-        // & Get the merkle multi updates for this batch
-        let mut preimage_json: Map<String, Value> = Map::new();
-        batch_init_tree.batch_transition_updates(&updated_note_hashes, &mut preimage_json);
+        // ? Store the latest output json
+        main_storage.store_micro_batch(&latest_output_json);
+        // ? Transition to a new batch so that transactions can continue to be processed
+        // TODO: main_storage.transition_to_new_batch();
 
-        let mut perpetual_preimage_json: Map<String, Value> = Map::new();
-        perpetual_init_tree.batch_transition_updates(
-            &perpetual_updated_position_hashes,
-            &mut perpetual_preimage_json,
-        );
+        println!("current_batch_index: {}", current_batch_index);
 
-        let counts =
+        let min_funding_idxs = &self.min_funding_idxs;
+        let funding_rates = &self.funding_rates;
+        let funding_prices = &self.funding_prices;
+        let min_index_price_data = &self.min_index_price_data;
+        let max_index_price_data = &self.max_index_price_data;
+
+        let mut updated_note_hashes_c = self.updated_note_hashes.lock();
+        let updated_note_hashes: HashMap<u64, BigUint> = updated_note_hashes_c.clone();
+        println!("Updated note hashes: {:?}", updated_note_hashes);
+        let mut perpetual_updated_position_hashes_c = self.perpetual_updated_position_hashes.lock();
+        let perpetual_updated_position_hashes: HashMap<u64, BigUint> =
+            perpetual_updated_position_hashes_c.clone();
+
+        // ?  Get the funding info
+        let funding_info: FundingInfo =
+            get_funding_info(min_funding_idxs, funding_rates, funding_prices);
+
+        // ? Get the price info
+        let price_info_json = get_price_info(min_index_price_data, max_index_price_data);
+
+        // ? Get the final updated counts for the cairo program input
+        let [num_output_notes, num_zero_notes, num_output_positions, num_empty_positions] =
             get_final_updated_counts(&updated_note_hashes, &perpetual_updated_position_hashes);
-        let num_output_notes: u32 = counts[0];
-        let num_zero_notes: u32 = counts[1];
-        let num_output_positions: u32 = counts[2];
-        let num_empty_positions: u32 = counts[3];
+        let (n_deposits, n_withdrawals) = (self.n_deposits, self.n_withdrawals);
 
+        println!("2");
+
+        updated_note_hashes_c.clear();
+        perpetual_updated_position_hashes_c.clear();
+
+        // Drop the locks before updating the trees
+        drop(state_tree);
+        drop(perpetual_state_tree);
+        drop(main_storage);
+        drop(updated_note_hashes_c);
+        drop(perpetual_updated_position_hashes_c);
+
+        // ? Reset the batch
+        self.reset_batch();
+
+        println!("batch reset");
+
+        // ? Update the merkle trees and get the new roots and preimages
+        let (
+            prev_spot_root,
+            new_spot_root,
+            prev_perp_root,
+            new_perp_root,
+            preimage_json,
+            perpetual_preimage_json,
+        ) = self.update_trees(updated_note_hashes, perpetual_updated_position_hashes)?;
+
+        println!("updated trees: {:?} {:?} ", prev_spot_root, new_spot_root);
+
+        // ? Construct the global state and config
         let global_dex_state: GlobalDexState = GlobalDexState::new(
-            1234, // todo
-            &batch_init_root,
-            &batch_init_tree.root,
-            &perp_init_root,
-            &perpetual_init_tree.root,
-            batch_init_tree.depth,
-            perpetual_init_tree.depth,
-            1_000_000, // todo
+            1234, // todo: Could be a version code and a tx_batch count
+            &prev_spot_root,
+            &new_spot_root,
+            &prev_perp_root,
+            &new_perp_root,
+            Self::TREE_DEPTH,
+            Self::TREE_DEPTH,
+            1_000_000, // Todo
             num_output_notes,
             num_zero_notes,
             num_output_positions,
             num_empty_positions,
-            self.n_deposits,
-            self.n_withdrawals,
+            n_deposits,
+            n_withdrawals,
         );
 
         let global_config: GlobalConfig = GlobalConfig::new();
 
-        let funding_info: FundingInfo = get_funding_info(
-            &self.min_funding_idxs,
-            &self.funding_rates,
-            &self.funding_prices,
-        );
+        let main_storage = self.main_storage.lock();
+        let swap_output_json = main_storage.read_storage(1);
+        drop(main_storage);
 
-        let price_info_json =
-            get_price_info(&self.min_index_price_data, &self.max_index_price_data);
-
-        let mut swap_output_json = main_storage.read_storage();
-
-        let mut latest_output_json = self.swap_output_json.lock();
-        swap_output_json.append(&mut latest_output_json);
-        drop(latest_output_json);
-
-        let output_json = get_json_output(
+        let output_json: Map<String, Value> = get_json_output(
             &global_dex_state,
             &global_config,
             &funding_info,
@@ -872,47 +902,155 @@ impl TransactionBatch {
         );
 
         // & Write to file
-        // cairo_contracts/transaction_batch/tx_batch_input.json
-        let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
-        std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
-
-        // & Store the merkle trees to disk
-        batch_init_tree
-            .store_to_disk(crate::trees::TreeStateType::Spot)
-            .map_err(|_| BatchFinalizationError {})?;
-        perpetual_init_tree
-            .store_to_disk(crate::trees::TreeStateType::Perpetual)
-            .map_err(|_| BatchFinalizationError {})?;
-
-        // & Store the snapshot info to disk
-        // store_snapshot_data(
-        //     &self.partial_fill_tracker.lock(),
-        //     &self.perpetual_partial_fill_tracker.lock(),
-        //     &self.partialy_opened_positions.lock(),
-        //     &self.funding_rates,
-        //     &self.funding_prices,
-        //     self.current_funding_idx,
-        // )
-        // .map_err(|_| BatchFinalizationError {})?;
-
-        main_storage.clear_transaction_data().unwrap();
+        // let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
+        // std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
+        let _handle = upload_file_to_storage(current_batch_index.to_string(), output_json);
 
         println!("Transaction batch finalized successfully!");
 
-        drop(batch_init_tree);
-        drop(state_tree);
-        drop(updated_note_hashes);
-        drop(swap_output_json);
-        //
-        drop(perpetual_init_tree);
-        drop(perpetual_state_tree);
-        drop(perpetual_updated_position_hashes);
-        drop(main_storage);
-
-        // & Reset the batch
-        self.reset_batch();
-
         Ok(())
+    }
+
+    const PARTITION_SIZE_EXPONENT: u32 = 16;
+    pub fn update_trees(
+        &mut self,
+        updated_note_hashes: HashMap<u64, BigUint>,
+        updated_position_hashes: HashMap<u64, BigUint>,
+    ) -> Result<
+        (
+            BigUint,
+            BigUint,
+            BigUint,
+            BigUint,
+            Map<String, Value>,
+            Map<String, Value>,
+        ),
+        BatchFinalizationError,
+    > {
+        // * UPDATE SPOT TREES  -------------------------------------------------------------------------------------
+        let mut updated_root_hashes: HashMap<u64, BigUint> = HashMap::new(); // the new roots of all tree partitions
+
+        let mut preimage_json: Map<String, Value> = Map::new();
+
+        let partitioned_hashes = split_hashmap(
+            updated_note_hashes,
+            2_usize.pow(Self::PARTITION_SIZE_EXPONENT) as usize,
+        );
+
+        // ? Loop over all partitions and update the trees
+        for (partition_index, partition) in partitioned_hashes {
+            if partition.is_empty() {
+                continue;
+            }
+
+            println!("partition_index: {}", partition_index);
+
+            let (_, new_root) = self.tree_partition_update(
+                partition,
+                &mut preimage_json,
+                partition_index as u32,
+                false,
+            )?;
+
+            println!("new_root: {}", new_root);
+
+            updated_root_hashes.insert(partition_index as u64, new_root);
+        }
+
+        // ? use the newly generated roots to update the state tree
+        let (prev_spot_root, new_spot_root) =
+            self.tree_partition_update(updated_root_hashes, &mut preimage_json, u32::MAX, false)?;
+
+        println!("new_spot_root: {}", new_spot_root);
+
+        // * UPDATE PERPETUAL TREES  -------------------------------------------------------------------------------------
+        let mut updated_root_hashes: HashMap<u64, BigUint> = HashMap::new(); // the new roots of all tree partitions
+
+        let mut perpetual_preimage_json: Map<String, Value> = Map::new();
+        let partitioned_hashes = split_hashmap(
+            updated_position_hashes,
+            2_usize.pow(Self::PARTITION_SIZE_EXPONENT) as usize,
+        );
+
+        // ? Loop over all partitions and update the trees
+        for (partition_index, partition) in partitioned_hashes {
+            if partition.is_empty() {
+                continue;
+            }
+
+            let (_, new_root) = self.tree_partition_update(
+                partition,
+                &mut perpetual_preimage_json,
+                partition_index as u32,
+                true,
+            )?;
+
+            updated_root_hashes.insert(partition_index as u64, new_root);
+        }
+        // ? use the newly generated roots to update the state tree
+        let (prev_perp_root, new_perp_root) = self.tree_partition_update(
+            updated_root_hashes,
+            &mut perpetual_preimage_json,
+            u32::MAX,
+            true,
+        )?;
+
+        Ok((
+            prev_spot_root,
+            new_spot_root,
+            prev_perp_root,
+            new_perp_root,
+            preimage_json,
+            perpetual_preimage_json,
+        ))
+    }
+
+    pub fn tree_partition_update(
+        &mut self,
+        updated_note_hashes: HashMap<u64, BigUint>,
+        preimage_json: &mut Map<String, Value>,
+        tree_index: u32,
+        is_perpetual: bool,
+    ) -> Result<(BigUint, BigUint), BatchFinalizationError> {
+        let tree_type = if is_perpetual {
+            crate::trees::TreeStateType::Perpetual
+        } else {
+            crate::trees::TreeStateType::Spot
+        };
+
+        let shift = if tree_index == u32::MAX {
+            Self::TREE_DEPTH - Self::PARTITION_SIZE_EXPONENT
+        } else {
+            0
+        };
+
+        Tree::init_trees_in_storage(
+            &tree_type,
+            tree_index,
+            Self::PARTITION_SIZE_EXPONENT + shift,
+        )
+        .map_err(|_| BatchFinalizationError {})?;
+        let mut batch_init_tree = Tree::from_disk(
+            &tree_type,
+            tree_index,
+            Self::PARTITION_SIZE_EXPONENT + shift,
+            shift,
+        )
+        .map_err(|_| BatchFinalizationError {})?;
+
+        let prev_root = batch_init_tree.root.clone();
+
+        batch_init_tree.batch_transition_updates(&updated_note_hashes, preimage_json);
+
+        let new_root = batch_init_tree.root.clone();
+
+        if let Err(e) = batch_init_tree.store_to_disk(&tree_type, tree_index) {
+            println!("Error storing tree to disk: {:?}", e);
+        }
+
+        println!("helloworld");
+
+        Ok((prev_root, new_root))
     }
 
     // * =================================================================
@@ -1161,19 +1299,7 @@ impl TransactionBatch {
     }
 
     // * RESET * //
-
     fn reset_batch(&mut self) {
-        let mut updated_note_hashes = self.updated_note_hashes.lock();
-        // let mut swap_output_json = self.swap_output_json.lock();
-
-        updated_note_hashes.clear();
-        // swap_output_json.clear();
-
-        // ====================================
-
-        let mut perpetual_updated_note_hashes = self.perpetual_updated_position_hashes.lock();
-        perpetual_updated_note_hashes.clear();
-
         _init_empty_tokens_map::<(u64, OracleUpdate)>(&mut self.min_index_price_data);
         _init_empty_tokens_map::<(u64, OracleUpdate)>(&mut self.max_index_price_data);
         // ? Funding is seperate from batch execution so it is not reset

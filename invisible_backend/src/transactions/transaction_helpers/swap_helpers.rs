@@ -309,8 +309,10 @@ pub fn consistency_checks(
     }
 
     // ? Check that the fees taken dont exceed the order fees
-    if fee_taken_a * order_a.amount_received > order_a.fee_limit * spent_amount_b
-        || fee_taken_b * order_b.amount_received > order_b.fee_limit * spent_amount_a
+    if fee_taken_a as u128 * order_a.amount_received as u128
+        > order_a.fee_limit as u128 * spent_amount_b as u128
+        || fee_taken_b as u128 * order_b.amount_received as u128
+            > order_b.fee_limit as u128 * spent_amount_a as u128
     {
         return Err(send_swap_error(
             "Fees taken exceed order fees".to_string(),

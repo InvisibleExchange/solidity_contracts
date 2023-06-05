@@ -1,6 +1,7 @@
 use num_bigint::BigUint;
 use num_traits::Zero;
 use parking_lot::Mutex;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use serde_json::{Map, Value};
 use std::{
     cmp::max,
@@ -158,6 +159,37 @@ pub fn fetch_snapshot_data() -> std::result::Result<
     ) = bincode::deserialize(&encoded[..]).unwrap();
 
     Ok(decoded)
+}
+
+pub fn split_hashmap(
+    hashmap: HashMap<u64, BigUint>,
+    chunk_size: usize,
+) -> Vec<(usize, HashMap<u64, BigUint>)> {
+    let max_key = *hashmap.keys().max().unwrap_or(&0);
+    let num_submaps = (max_key as usize + chunk_size) / chunk_size;
+
+    let submaps: Vec<(usize, HashMap<u64, BigUint>)> = (0..num_submaps)
+        .into_par_iter()
+        .map(|submap_index| {
+            let submap: HashMap<u64, BigUint> = hashmap
+                .iter()
+                .filter(|(key, _)| {
+                    let submap_start = if submap_index == 0 {
+                        0
+                    } else {
+                        submap_index * chunk_size
+                    };
+                    let submap_end = (submap_index + 1) * chunk_size;
+                    **key >= submap_start as u64 && **key < submap_end as u64
+                })
+                .map(|(key, value)| (key % chunk_size as u64, value.clone()))
+                .collect();
+
+            (submap_index, submap)
+        })
+        .collect();
+
+    submaps
 }
 
 // * CHANGE MARGIN ================================================================================
@@ -326,3 +358,5 @@ pub fn get_funding_info(
     let min_funding_idxs = min_funding_idxs.lock().clone();
     FundingInfo::new(funding_rates, funding_prices, &min_funding_idxs)
 }
+
+//
