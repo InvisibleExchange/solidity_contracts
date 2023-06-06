@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt::Debug,
-    fs::File,
+    fs::{self, File},
     io::{Read, Write},
     ops::Deref,
     path::Path,
@@ -155,36 +155,6 @@ impl Tree {
 
     // I/O Operations --------------------------------------------------
 
-    pub fn init_trees_in_storage(
-        tree_state_type: &TreeStateType,
-        tree_index: u32,
-        depth: u32,
-    ) -> Result<(), Box<dyn Error>> {
-        let str = if *tree_state_type == TreeStateType::Spot {
-            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
-        } else {
-            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
-        };
-        let path = Path::new(&str);
-
-        if path.exists() {
-            return Ok(());
-        }
-
-        let mut file: File = File::create(path)?;
-
-        let leaves: Vec<Vec<u8>> = Vec::new();
-
-        let inner_nodes: Vec<Vec<String>> = Vec::new();
-
-        let encoded: Vec<u8> =
-            bincode::serialize(&(leaves, inner_nodes, "0".to_string(), depth)).unwrap();
-
-        file.write_all(&encoded[..])?;
-
-        return Ok(());
-    }
-
     pub fn store_to_disk(
         &self,
         tree_state_type: &TreeStateType,
@@ -226,16 +196,25 @@ impl Tree {
         shift: u32,
     ) -> Result<Tree, Box<dyn Error>> {
         let str = if *tree_state_type == TreeStateType::Spot {
-            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
+            "./storage/merkle_trees/state_tree/"
         } else {
-            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
+            "./storage/merkle_trees/perpetual_tree/"
         };
-        let path = Path::new(&str);
+        let path_str = str.to_string() + &tree_index.to_string();
+        let path = Path::new(&path_str);
 
         let open_res = File::open(path).ok();
         if open_res.is_none() {
-            File::create(path)?;
-            return Ok(Tree::new(depth, shift));
+            if Path::new(&str).exists() {
+                File::create(path)?;
+                println!("file created");
+                return Ok(Tree::new(depth, shift));
+            } else {
+                fs::create_dir(&str)?;
+                File::create(path)?;
+                println!("file created");
+                return Ok(Tree::new(depth, shift));
+            }
         };
 
         let mut file: File = open_res.unwrap();

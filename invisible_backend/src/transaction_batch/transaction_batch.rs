@@ -1,10 +1,12 @@
 use firestore_db_and_auth::ServiceSession;
+use futures::Future;
 use num_bigint::BigUint;
 use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
+    error::Error,
     fs::File,
     ops::DerefMut,
     path::Path,
@@ -811,8 +813,6 @@ impl TransactionBatch {
         // ? Transition to a new batch so that transactions can continue to be processed
         // TODO: main_storage.transition_to_new_batch();
 
-        println!("current_batch_index: {}", current_batch_index);
-
         let min_funding_idxs = &self.min_funding_idxs;
         let funding_rates = &self.funding_rates;
         let funding_prices = &self.funding_prices;
@@ -821,7 +821,7 @@ impl TransactionBatch {
 
         let mut updated_note_hashes_c = self.updated_note_hashes.lock();
         let updated_note_hashes: HashMap<u64, BigUint> = updated_note_hashes_c.clone();
-        println!("Updated note hashes: {:?}", updated_note_hashes);
+        println!("Updated note hashes: {:?}", updated_note_hashes.len());
         let mut perpetual_updated_position_hashes_c = self.perpetual_updated_position_hashes.lock();
         let perpetual_updated_position_hashes: HashMap<u64, BigUint> =
             perpetual_updated_position_hashes_c.clone();
@@ -838,8 +838,6 @@ impl TransactionBatch {
             get_final_updated_counts(&updated_note_hashes, &perpetual_updated_position_hashes);
         let (n_deposits, n_withdrawals) = (self.n_deposits, self.n_withdrawals);
 
-        println!("2");
-
         updated_note_hashes_c.clear();
         perpetual_updated_position_hashes_c.clear();
 
@@ -852,8 +850,6 @@ impl TransactionBatch {
 
         // ? Reset the batch
         self.reset_batch();
-
-        println!("batch reset");
 
         // ? Update the merkle trees and get the new roots and preimages
         let (
@@ -888,7 +884,7 @@ impl TransactionBatch {
         let global_config: GlobalConfig = GlobalConfig::new();
 
         let main_storage = self.main_storage.lock();
-        let swap_output_json = main_storage.read_storage(1);
+        let swap_output_json = main_storage.read_storage(0); //todo1);
         drop(main_storage);
 
         let output_json: Map<String, Value> = get_json_output(
@@ -904,7 +900,13 @@ impl TransactionBatch {
         // & Write to file
         // let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
         // std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
-        let _handle = upload_file_to_storage(current_batch_index.to_string(), output_json);
+        let _handle = tokio::spawn(async move {
+            if let Err(e) =
+                upload_file_to_storage(current_batch_index.to_string(), output_json).await
+            {
+                println!("Error uploading file to storage: {:?}", e);
+            }
+        });
 
         println!("Transaction batch finalized successfully!");
 
@@ -943,8 +945,6 @@ impl TransactionBatch {
                 continue;
             }
 
-            println!("partition_index: {}", partition_index);
-
             let (_, new_root) = self.tree_partition_update(
                 partition,
                 &mut preimage_json,
@@ -952,16 +952,12 @@ impl TransactionBatch {
                 false,
             )?;
 
-            println!("new_root: {}", new_root);
-
             updated_root_hashes.insert(partition_index as u64, new_root);
         }
 
         // ? use the newly generated roots to update the state tree
         let (prev_spot_root, new_spot_root) =
             self.tree_partition_update(updated_root_hashes, &mut preimage_json, u32::MAX, false)?;
-
-        println!("new_spot_root: {}", new_spot_root);
 
         // * UPDATE PERPETUAL TREES  -------------------------------------------------------------------------------------
         let mut updated_root_hashes: HashMap<u64, BigUint> = HashMap::new(); // the new roots of all tree partitions
@@ -1024,12 +1020,6 @@ impl TransactionBatch {
             0
         };
 
-        Tree::init_trees_in_storage(
-            &tree_type,
-            tree_index,
-            Self::PARTITION_SIZE_EXPONENT + shift,
-        )
-        .map_err(|_| BatchFinalizationError {})?;
         let mut batch_init_tree = Tree::from_disk(
             &tree_type,
             tree_index,
@@ -1047,8 +1037,6 @@ impl TransactionBatch {
         if let Err(e) = batch_init_tree.store_to_disk(&tree_type, tree_index) {
             println!("Error storing tree to disk: {:?}", e);
         }
-
-        println!("helloworld");
 
         Ok((prev_root, new_root))
     }

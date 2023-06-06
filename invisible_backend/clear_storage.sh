@@ -5,5 +5,5 @@ cd storage
 mkdir merkle_trees
 
 
-cd ../../invisible_react/express_server
+cd ../../relay_server/src
 rm ./orderBooks.db

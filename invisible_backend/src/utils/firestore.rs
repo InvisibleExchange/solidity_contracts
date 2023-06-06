@@ -427,7 +427,6 @@ pub async fn upload_file_to_storage(
     value: Map<String, Value>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     //
-    // let encoded: Vec<u8> = bincode::serialize(&JsonSerdeMapWrapper(value)).unwrap();
 
     let access_token = get_access_token()?;
 
