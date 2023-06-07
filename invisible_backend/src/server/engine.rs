@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     sync::Arc,
     thread::{JoinHandle, ThreadId},
-    time::Instant,
+    time::SystemTime,
 };
 use tokio_tungstenite::tungstenite::Message;
 
@@ -152,6 +152,12 @@ impl Engine for EngineService {
 
         // let now = Instant::now();
 
+        let start = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+        println!("start: {}: ", start);
+
         let req: LimitOrderMessage = request.into_inner();
 
         let user_id = req.user_id;
@@ -273,6 +279,12 @@ impl Engine for EngineService {
         // }
 
         store_output_json(&self.swap_output_json, &self.main_storage);
+
+        let end = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+        println!("end: {}: ", end);
 
         // Send a successul reply to the caller
         let reply = OrderResponse {

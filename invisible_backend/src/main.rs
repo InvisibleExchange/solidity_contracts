@@ -1,25 +1,25 @@
-use invisible_backend::utils::firestore::{read_file_from_storage, upload_file_to_storage};
+use invisible_backend::{
+    trees::{Tree, TreeStateType},
+    utils::firestore::{read_file_from_storage, upload_file_to_storage},
+};
 
 use serde_json::{json, Map};
 mod scripts;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let file_name = "test.json";
+    // let file_name = "test.json";
 
-    let mut json_map = Map::new();
-    json_map.insert(
-        "hello".to_string(),
-        json!({
-            "hello": "world",
-            "foo": "bar"
-        }),
-    );
-    upload_file_to_storage(file_name.to_string(), json_map)
-        .await
-        .unwrap();
+    let tree1 = Tree::from_disk(&TreeStateType::Spot, 0, 16, 0)?;
 
-    read_file_from_storage(file_name.to_string()).await?;
+    let roots_tree = Tree::from_disk(&TreeStateType::Spot, u32::MAX, 16, 16)?;
+
+    println!("Tree1 root: {:?}", tree1.root);
+    println!("Roots tree leaves: {:?}", roots_tree.leaf_nodes);
+    println!("Roots tree root: {:?}", roots_tree.root);
+
+    // let res = read_file_from_storage("0".to_string()).await?;
+    // println!("{:?}", res);
 
     Ok(())
 }

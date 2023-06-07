@@ -51,20 +51,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("\nrunning_tx_count: {:?}", tx_batch.running_tx_count);
 
-    // println!("\nlatest_index_price: {:?}", tx_batch.latest_index_price);
-    // println!(
-    //     "\nmin_index_price_data: {:?}",
-    //     tx_batch.min_index_price_data
-    // );
-    // println!(
-    //     "\nmax_index_price_data: {:?}",
-    //     tx_batch.max_index_price_data
-    // );
 
-    // println!("\nfunding_rates: {:?}", tx_batch.funding_rates);
-    // println!("\nfunding_prices: {:?}", tx_batch.funding_prices);
-    // println!("\nfunding index: {:?}", tx_batch.current_funding_idx);
-    // println!("\nmin funding indexes: {:?}", tx_batch.min_funding_idxs);
+    
+
+
+
+
 
     // TODO: TESTING ==========================================================
 
@@ -279,8 +271,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 MessageType::FinalizeBatch => {
                     let success = tx_batch.finalize_batch().is_ok();
-
-                    println!("success: {:?}", success);
 
                     let grpc_res = GrpcTxResponse {
                         tx_handle: None,

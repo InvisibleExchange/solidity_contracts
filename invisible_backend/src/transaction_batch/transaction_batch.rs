@@ -791,7 +791,7 @@ impl TransactionBatch {
 
     const TREE_DEPTH: u32 = 32;
     pub fn finalize_batch(&mut self) -> Result<(), BatchFinalizationError> {
-        println!("Finalizing batch ...");
+        println!("\n\nFinalizing batch ...");
 
         // & Get the merkle trees from the beginning of the batch from disk
 
@@ -811,7 +811,7 @@ impl TransactionBatch {
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
         // ? Transition to a new batch so that transactions can continue to be processed
-        // TODO: main_storage.transition_to_new_batch();
+        main_storage.transition_to_new_batch();
 
         let min_funding_idxs = &self.min_funding_idxs;
         let funding_rates = &self.funding_rates;
@@ -821,7 +821,6 @@ impl TransactionBatch {
 
         let mut updated_note_hashes_c = self.updated_note_hashes.lock();
         let updated_note_hashes: HashMap<u64, BigUint> = updated_note_hashes_c.clone();
-        println!("Updated note hashes: {:?}", updated_note_hashes.len());
         let mut perpetual_updated_position_hashes_c = self.perpetual_updated_position_hashes.lock();
         let perpetual_updated_position_hashes: HashMap<u64, BigUint> =
             perpetual_updated_position_hashes_c.clone();
@@ -884,7 +883,7 @@ impl TransactionBatch {
         let global_config: GlobalConfig = GlobalConfig::new();
 
         let main_storage = self.main_storage.lock();
-        let swap_output_json = main_storage.read_storage(0); //todo1);
+        let swap_output_json = main_storage.read_storage(1);
         drop(main_storage);
 
         let output_json: Map<String, Value> = get_json_output(
