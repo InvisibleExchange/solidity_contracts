@@ -47,7 +47,7 @@ let wsConnections = [];
 
 // & WEBSOCKET CLIENT
 let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket(`ws://${SERVER_URL}:50053/`);
+let wsClient = new W3CWebSocket(`ws://localhost:50053/`);
 
 wsClient.onopen = function () {
   console.log("WebSocket Client Connected");
