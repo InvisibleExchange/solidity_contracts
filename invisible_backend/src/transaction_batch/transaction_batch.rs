@@ -234,28 +234,26 @@ impl TransactionBatch {
     /// This initializes the transaction batch from a previous state
     pub fn init(&mut self) {
         let storage = self.main_storage.lock();
-        if storage.is_empty {
-            return;
+        if !storage.funding_db.is_empty() {
+            if let Ok((funding_rates, funding_prices, funding_idx, min_funding_idxs)) =
+                storage.read_funding_info()
+            {
+                self.funding_rates = funding_rates;
+                self.funding_prices = funding_prices;
+                self.current_funding_idx = funding_idx;
+                self.min_funding_idxs = Arc::new(Mutex::new(min_funding_idxs));
+            }
         }
 
-        if let Ok((funding_rates, funding_prices, funding_idx, min_funding_idxs)) =
-            storage.read_funding_info()
-        {
-            self.funding_rates = funding_rates;
-            self.funding_prices = funding_prices;
-            self.current_funding_idx = funding_idx;
-            self.min_funding_idxs = Arc::new(Mutex::new(min_funding_idxs));
+        if !storage.funding_db.is_empty() {
+            if let Some((latest_index_price, min_index_price_data, max_index_price_data)) =
+                storage.read_price_data()
+            {
+                self.latest_index_price = latest_index_price;
+                self.min_index_price_data = min_index_price_data;
+                self.max_index_price_data = max_index_price_data;
+            }
         }
-
-        if let Some((latest_index_price, min_index_price_data, max_index_price_data)) =
-            storage.read_price_data()
-        {
-            self.latest_index_price = latest_index_price;
-            self.min_index_price_data = min_index_price_data;
-            self.max_index_price_data = max_index_price_data;
-        }
-        let swap_output_json = storage.read_storage(0);
-        drop(storage);
 
         let state_tree = match SuperficialTree::from_disk(&TreeStateType::Spot) {
             Ok(tree) => tree,
@@ -263,13 +261,17 @@ impl TransactionBatch {
         };
 
         self.state_tree = Arc::new(Mutex::new(state_tree));
-        let perp_state_tree = match SuperficialTree::from_disk(&TreeStateType::Spot) {
+        let perp_state_tree = match SuperficialTree::from_disk(&TreeStateType::Perpetual) {
             Ok(tree) => tree,
             Err(_) => SuperficialTree::new(32),
         };
         self.perpetual_state_tree = Arc::new(Mutex::new(perp_state_tree));
 
-        self.restore_state(swap_output_json);
+        if !storage.tx_db.is_empty() {
+            let swap_output_json = storage.read_storage(0);
+            drop(storage);
+            self.restore_state(swap_output_json);
+        }
     }
 
     pub fn execute_transaction<T: Transaction + std::marker::Send + 'static>(
@@ -791,8 +793,6 @@ impl TransactionBatch {
 
     const TREE_DEPTH: u32 = 32;
     pub fn finalize_batch(&mut self) -> Result<(), BatchFinalizationError> {
-        println!("\n\nFinalizing batch ...");
-
         // & Get the merkle trees from the beginning of the batch from disk
 
         let state_tree = self.state_tree.clone();
@@ -810,7 +810,6 @@ impl TransactionBatch {
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
-        // ? Transition to a new batch so that transactions can continue to be processed
         main_storage.transition_to_new_batch();
 
         let min_funding_idxs = &self.min_funding_idxs;
@@ -860,8 +859,6 @@ impl TransactionBatch {
             perpetual_preimage_json,
         ) = self.update_trees(updated_note_hashes, perpetual_updated_position_hashes)?;
 
-        println!("updated trees: {:?} {:?} ", prev_spot_root, new_spot_root);
-
         // ? Construct the global state and config
         let global_dex_state: GlobalDexState = GlobalDexState::new(
             1234, // todo: Could be a version code and a tx_batch count
@@ -896,23 +893,26 @@ impl TransactionBatch {
             perpetual_preimage_json,
         );
 
-        // & Write to file
-        // let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
-        // std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
-        let _handle = tokio::spawn(async move {
-            if let Err(e) =
-                upload_file_to_storage(current_batch_index.to_string(), output_json).await
-            {
-                println!("Error uploading file to storage: {:?}", e);
-            }
-        });
+        // Todo: This is for testing only ----------------------------
+        let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
+        std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
+        // Todo: This is for testing only ----------------------------
+
+        // & Write transaction batch json to database
+        // let _handle = tokio::spawn(async move {
+        //     if let Err(e) =
+        //         upload_file_to_storage(current_batch_index.to_string(), output_json).await
+        //     {
+        //         println!("Error uploading file to storage: {:?}", e);
+        //     }
+        // });
 
         println!("Transaction batch finalized successfully!");
 
         Ok(())
     }
 
-    const PARTITION_SIZE_EXPONENT: u32 = 16;
+    const PARTITION_SIZE_EXPONENT: u32 = 12; //16;
     pub fn update_trees(
         &mut self,
         updated_note_hashes: HashMap<u64, BigUint>,
@@ -1014,18 +1014,18 @@ impl TransactionBatch {
         };
 
         let shift = if tree_index == u32::MAX {
-            Self::TREE_DEPTH - Self::PARTITION_SIZE_EXPONENT
+            Self::PARTITION_SIZE_EXPONENT
         } else {
             0
         };
+        let depth = if tree_index == u32::MAX {
+            Self::TREE_DEPTH - Self::PARTITION_SIZE_EXPONENT
+        } else {
+            Self::PARTITION_SIZE_EXPONENT
+        };
 
-        let mut batch_init_tree = Tree::from_disk(
-            &tree_type,
-            tree_index,
-            Self::PARTITION_SIZE_EXPONENT + shift,
-            shift,
-        )
-        .map_err(|_| BatchFinalizationError {})?;
+        let mut batch_init_tree = Tree::from_disk(&tree_type, tree_index, depth, shift)
+            .map_err(|_| BatchFinalizationError {})?;
 
         let prev_root = batch_init_tree.root.clone();
 

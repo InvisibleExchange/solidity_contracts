@@ -293,8 +293,8 @@ pub fn consistency_checks(
     }
 
     // ? Check that the amounts swapped don't exceed the order amounts
-    let dust_amount_a = DUST_AMOUNT_PER_ASSET[&order_a.token_spent.to_string()];
-    let dust_amount_b = DUST_AMOUNT_PER_ASSET[&order_b.token_spent.to_string()];
+    let dust_amount_a: u64 = DUST_AMOUNT_PER_ASSET[&order_a.token_spent.to_string()];
+    let dust_amount_b: u64 = DUST_AMOUNT_PER_ASSET[&order_b.token_spent.to_string()];
     if order_a.amount_spent < spent_amount_a - dust_amount_a
         || order_b.amount_spent < spent_amount_b - dust_amount_b
     {

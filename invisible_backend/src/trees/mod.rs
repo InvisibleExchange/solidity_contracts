@@ -132,7 +132,7 @@ impl Tree {
         if self.leaf_nodes.get(n as usize).is_some() {
             return self.leaf_nodes[n as usize].clone();
         } else {
-            return BigUint::zero();
+            return get_zero_hash(0, self.shift);
         }
     }
 
@@ -207,12 +207,10 @@ impl Tree {
         if open_res.is_none() {
             if Path::new(&str).exists() {
                 File::create(path)?;
-                println!("file created");
                 return Ok(Tree::new(depth, shift));
             } else {
                 fs::create_dir(&str)?;
                 File::create(path)?;
-                println!("file created");
                 return Ok(Tree::new(depth, shift));
             }
         };
@@ -272,6 +270,7 @@ impl Tree {
     // ! For Testing
     pub fn verify_root(&self) -> bool {
         let leaf_nodes = pad_leaf_nodes(&self.leaf_nodes, self.depth as usize, BigUint::zero());
+
         let inner_nodes: Vec<Vec<BigUint>> =
             inner_from_leaf_nodes(self.depth as usize, &leaf_nodes);
         let root = inner_nodes[0][0].clone();

@@ -14,8 +14,8 @@ use serde_json::Value;
 use crate::{
     perpetual::{
         perp_position::PerpPosition, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET,
-        LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, PRICE_DECIMALS_PER_ASSET, TOKENS,
-        VALID_COLLATERAL_TOKENS,
+        LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MIN_PARTIAL_LIQUIDATION_SIZE,
+        PRICE_DECIMALS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
     },
     utils::crypto_utils::verify,
     utils::errors::{send_oracle_update_error, OracleUpdateError},
@@ -449,6 +449,7 @@ pub struct GlobalConfig {
     pub leverage_bounds_per_asset: Vec<f64>,
     pub dust_amount_per_asset: Vec<u64>,
     pub observers: Vec<String>,
+    pub min_partial_liquidation_sizes: Vec<u64>,
 }
 
 impl GlobalConfig {
@@ -460,6 +461,7 @@ impl GlobalConfig {
         let leverage_decimals = LEVERAGE_DECIMALS;
         let leverage_bounds_per_asset = flatten_leverage_bounds(&LEVERAGE_BOUNDS_PER_ASSET);
         let dust_amount_per_asset = flatten_map(&DUST_AMOUNT_PER_ASSET);
+        let min_partial_liquidation_sizes = flatten_map(&MIN_PARTIAL_LIQUIDATION_SIZE);
 
         let observers = OBSERVERS.iter().map(|x| x.to_string()).collect();
 
@@ -472,6 +474,7 @@ impl GlobalConfig {
             leverage_bounds_per_asset,
             dust_amount_per_asset,
             observers,
+            min_partial_liquidation_sizes,
         }
     }
 }
@@ -480,20 +483,27 @@ fn flatten_map<T>(x: &phf::Map<&'static str, T>) -> Vec<u64>
 where
     T: Into<u64> + Copy,
 {
+    let mut sorted_keys = x.keys().collect::<Vec<&&str>>();
+    sorted_keys.sort();
+
     let mut v: Vec<u64> = Vec::new();
-    for (k, val) in x.into_iter() {
-        let t = u64::from_str(k).unwrap();
-        v.push(t);
+    for k in sorted_keys {
+        let val = x.get(k).unwrap();
+        v.push(u64::from_str(k).unwrap());
         v.push((*val).into());
     }
     return v;
 }
 
 fn flatten_leverage_bounds(x: &phf::Map<&'static str, [f32; 2]>) -> Vec<f64> {
+    let mut sorted_keys = x.keys().collect::<Vec<&&str>>();
+    sorted_keys.sort();
+
     let mut v: Vec<f64> = Vec::new();
-    for (k, val) in x.into_iter() {
-        let t = f64::from_str(k).unwrap();
-        v.push(t);
+
+    for k in sorted_keys {
+        let val = x.get(k).unwrap();
+        v.push(f64::from_str(k).unwrap());
         v.push(val[0] as f64);
         v.push(val[1] as f64);
     }

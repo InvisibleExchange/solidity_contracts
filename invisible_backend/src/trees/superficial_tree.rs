@@ -75,9 +75,9 @@ impl SuperficialTree {
         let dir = fs::read_dir(&str);
 
         let partitions = match dir {
-            Ok(dir) => dir
-                .filter(|entry| entry.as_ref().map(|e| e.path().is_dir()).unwrap_or(false))
-                .count(),
+            Ok(dir) => dir.count() - 1,
+            // .filter(|entry| entry.as_ref().map(|e| e.path().is_dir()).unwrap_or(false))
+            // .count(),
             Err(_) => 0,
         };
 

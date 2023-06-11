@@ -414,9 +414,9 @@ fn hash_order(
     hash_inputs.push(&position_effect_type_);
 
     let order_side: BigUint = if *order_side == OrderSide::Long {
-        BigUint::zero()
-    } else {
         BigUint::one()
+    } else {
+        BigUint::zero()
     };
     hash_inputs.push(&order_side);
 

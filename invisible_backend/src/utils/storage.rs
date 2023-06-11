@@ -17,10 +17,9 @@ use super::notes::Note;
 
 /// The main storage struct that stores all the data on disk.
 pub struct MainStorage {
-    tx_db: sled::Db,
-    price_db: sled::Db,
-    funding_db: sled::Db,
-    pub is_empty: bool,
+    pub tx_db: sled::Db,
+    pub price_db: sled::Db,
+    pub funding_db: sled::Db,
     pub latest_batch: u32, // every transaction batch stores data separately
 }
 
@@ -56,7 +55,6 @@ impl MainStorage {
             tx_db,
             price_db,
             funding_db,
-            is_empty,
             latest_batch: batch_index as u32,
         }
     }
@@ -118,7 +116,7 @@ impl MainStorage {
         };
 
         for i in 0..index {
-            let value = self.tx_db.get(&i.to_string()).unwrap();
+            let value = db.get(&i.to_string()).unwrap();
             let json_string = value.unwrap().to_vec();
             let res_vec: Vec<serde_json::Map<String, Value>> =
                 serde_json::from_slice(&json_string).unwrap();
@@ -281,18 +279,7 @@ impl MainStorage {
             .path("./storage/transaction_data/".to_string() + &new_batch_index.to_string());
         let tx_db = config.open().unwrap();
 
-        let config =
-            Config::new().path("./storage/price_data/".to_string() + &new_batch_index.to_string());
-        let price_db = config.open().unwrap();
-
-        let config = Config::new()
-            .path("./storage/funding_info/".to_string() + &new_batch_index.to_string());
-        let funding_db = config.open().unwrap();
-
         self.tx_db = tx_db;
-        self.price_db = price_db;
-        self.funding_db = funding_db;
-        self.is_empty = false;
         self.latest_batch = new_batch_index;
     }
 }

@@ -281,6 +281,7 @@ impl PerpPosition {
             &self.order_side,
             self.synthetic_token,
         );
+
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             updated_margin,
@@ -412,7 +413,8 @@ impl PerpPosition {
 
         let updated_size = self.position_size - reduction_size;
 
-        let reduction_margin = (reduction_size * self.margin) / self.position_size;
+        let reduction_margin =
+            ((reduction_size as u128 * self.margin as u128) / self.position_size as u128) as u64;
 
         // & get the profit/loss to add/subtract from the margin
         let decimal_conversion =
@@ -1001,15 +1003,15 @@ fn _hash_position(
 
     let input_one: u8 = if *order_side == OrderSide::Long {
         if allow_partial_liquidations {
-            1
+            3
         } else {
-            0
+            2
         }
     } else {
         if allow_partial_liquidations {
-            2
+            1
         } else {
-            3
+            0
         }
     };
     let input_one = BigUint::from_u8(input_one).unwrap();

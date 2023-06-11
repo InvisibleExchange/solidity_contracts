@@ -41,8 +41,8 @@ pub fn verify(stark_key: &BigUint, msg_hash: &BigUint, signature: &Signature) ->
         &FieldElement::from_dec_str(&msg_hash.to_string()).unwrap(),
         &signature.to_starknet_signature(),
     ) {
-        Ok(_) => {
-            return true;
+        Ok(valid) => {
+            return valid;
         }
         Err(_) => {
             return false;
