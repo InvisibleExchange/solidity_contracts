@@ -73,6 +73,7 @@ func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
         position.liquidation_price,
         position.position_address,
         position.last_funding_idx,
+        position.allow_partial_liquidations,
     );
 
     assert position_hash = position.hash;
@@ -90,13 +91,16 @@ func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
     liquidation_price: felt,
     position_address: felt,
     last_funding_idx: felt,
+    allow_partial_liquidations: felt,
 ) -> (res: felt) {
     alloc_locals;
+
+    let input_one = 2 * order_side + allow_partial_liquidations;
 
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, order_side);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, input_one);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, synthetic_token);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, position_size);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, entry_price);
@@ -130,7 +134,9 @@ func _hash_open_order_fields{pedersen_ptr: HashBuiltin*}(order_fields: OpenOrder
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, order_fields.collateral_token);
 
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, order_fields.position_address);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, order_fields.blinding);
+        let (hash_state_ptr) = hash_update_single(
+            hash_state_ptr, order_fields.allow_partial_liquidations
+        );
 
         let (res) = hash_finalize(hash_state_ptr);
         let pedersen_ptr = hash_ptr;
@@ -166,6 +172,7 @@ func _hash_perp_order_internal{pedersen_ptr: HashBuiltin*}(perp_order: PerpOrder
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, perp_order.fee_limit);
         let (res) = hash_finalize(hash_state_ptr);
         let pedersen_ptr = hash_ptr;
+
         return (res=res);
     }
 }

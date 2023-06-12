@@ -12,14 +12,14 @@ from perpetuals.order.order_structs import PerpOrder
 
 func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
     order: PerpOrder,
-    pub_key_sum: EcPoint,
+    address: felt,
+    blinding: felt,
     collateral_token: felt,
     unspent_margin: felt,
-    blinding: felt,
     prev_hash: felt,
 ) {
     let (pfr_note: Note) = partial_fill_updates(
-        order, pub_key_sum, collateral_token, unspent_margin, blinding
+        order, address, blinding, collateral_token, unspent_margin
     );
 
     // * Update the note dict with the new notes
@@ -47,7 +47,7 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
 }
 
 func partial_fill_updates{pedersen_ptr: HashBuiltin*}(
-    order: PerpOrder, pub_key_sum: EcPoint, token: felt, unspent_margin: felt, blinding: felt
+    order: PerpOrder, address: felt, blinding: felt, token: felt, unspent_margin: felt
 ) -> (pfr_note: Note) {
     alloc_locals;
 
@@ -57,8 +57,21 @@ func partial_fill_updates{pedersen_ptr: HashBuiltin*}(
 
     // Todo: change dummy blinding factor
     let (pfr_note: Note) = construct_new_note(
-        pub_key_sum.x, token, unspent_margin, blinding, new_pfr_note_idx
+        address, token, unspent_margin, blinding, new_pfr_note_idx
     );
 
     return (pfr_note,);
+}
+
+func remove_prev_pfr_note{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(prev_pfr_note: Note) {
+    alloc_locals;
+
+    let note_dict_ptr = note_dict;
+    assert note_dict_ptr.key = prev_pfr_note.index;
+    assert note_dict_ptr.prev_value = prev_pfr_note.hash;
+    assert note_dict_ptr.new_value = 0;
+
+    let note_dict = note_dict + DictAccess.SIZE;
+
+    return ();
 }

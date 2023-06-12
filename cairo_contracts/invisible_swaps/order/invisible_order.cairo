@@ -19,7 +19,6 @@ struct Invisibl3Order {
     amount_received: felt,
     fee_limit: felt,
     dest_received_address: felt,  // x coordinate of address
-    dest_spent_blinding: felt,
     dest_received_blinding: felt,
 }
 
@@ -64,9 +63,6 @@ func _hash_transaction_internal{pedersen_ptr: HashBuiltin*, range_check_ptr}(
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, invisibl3_order.fee_limit);
         let (hash_state_ptr) = hash_update_single(
             hash_state_ptr, invisibl3_order.dest_received_address
-        );
-        let (hash_state_ptr) = hash_update_single(
-            hash_state_ptr, invisibl3_order.dest_spent_blinding
         );
         let (hash_state_ptr) = hash_update_single(
             hash_state_ptr, invisibl3_order.dest_received_blinding

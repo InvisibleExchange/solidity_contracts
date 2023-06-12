@@ -202,10 +202,12 @@ func write_position_info_to_output{
 
     let output: PerpPositionOutput* = position_output_ptr;
 
+    // & | index (64 bits) | synthetic_token (64 bits) | position_size (64 bits) | order_side (1 bits) | allow_partial_liquidations (1 bit)
     assert output.batched_position_info_slot1 = (
         ((position.index * 2 ** 64) + position.synthetic_token) * 2 ** 64 + position.position_size
-    ) * 2 ** 8 + position.order_side;
+    ) * 2 ** 4 + position.order_side * 2 + position.allow_partial_liquidations;
 
+    // & | entry_price (64 bits) | liquidation_price (64 bits) | last_funding_idx (32 bits)
     assert output.batched_position_info_slot2 = (
         ((position.entry_price * 2 ** 64) + position.liquidation_price) * 2 ** 32 +
         position.last_funding_idx
@@ -265,6 +267,7 @@ func write_position_dict_to_output{
         memory[ids.position.address_ + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position_["last_funding_idx"])
         memory[ids.position.address_ + PERP_POSITION_INDEX_OFFSET] = int(position_["index"])
         memory[ids.position.address_ + PERP_POSITION_HASH_OFFSET] = int(position_["hash"])
+        memory[ids.position.address_ + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
     %}
 
     verify_position_hash(position);
@@ -307,7 +310,6 @@ func init_output_structs{pedersen_ptr: HashBuiltin*}(dex_state_ptr: GlobalDexSta
         dust_amount_per_asset = global_config["dust_amount_per_asset"]
         observers = global_config["observers"]
 
-        print("global_config_output_ptr", global_config_output_ptr)
 
         counter = 0
         memory[global_config_output_ptr + counter] = len(assets)
@@ -336,7 +338,6 @@ func init_output_structs{pedersen_ptr: HashBuiltin*}(dex_state_ptr: GlobalDexSta
         memory[global_config_output_ptr + counter] = len(global_config["observers"])
         counter += 1
         for i in range(len(observers)):
-            print(global_config_output_ptr + counter + i)
             memory[global_config_output_ptr + counter + i] = int(observers[i])
     %}
 

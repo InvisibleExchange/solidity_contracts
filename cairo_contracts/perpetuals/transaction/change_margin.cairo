@@ -139,6 +139,7 @@ func update_state_after_increase{
             "last_funding_idx": ids.position.last_funding_idx,
             "index": ids.position.index,
             "hash": ids.position.hash,
+            "allow_partial_liquidations": ids.position.allow_partial_liquidations,
         }
     %}
 
@@ -205,6 +206,7 @@ func update_state_after_decrease{
             "last_funding_idx": ids.position.last_funding_idx,
             "index": ids.position.index,
             "hash": ids.position.hash,
+            "allow_partial_liquidations": ids.position.allow_partial_liquidations,
         }
     %}
 
@@ -322,7 +324,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
 
         position = current_margin_change_info["position"]
 
-        memory[ids.position.address_ + PERP_POSITION_ORDER_SIDE_OFFSET] = 0 if position["order_side"] == "Long" else 1
+        memory[ids.position.address_ + PERP_POSITION_ORDER_SIDE_OFFSET] = 1 if position["order_side"] == "Long" else 0
         memory[ids.position.address_ + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(position["synthetic_token"])
         memory[ids.position.address_ + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(position["collateral_token"])
         memory[ids.position.address_ + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position["position_size"])
@@ -334,6 +336,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         memory[ids.position.address_ + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position["last_funding_idx"])
         memory[ids.position.address_ + PERP_POSITION_INDEX_OFFSET] = int(position["index"])
         memory[ids.position.address_ + PERP_POSITION_HASH_OFFSET] = int(position["hash"])
+        memory[ids.position.address_ + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = 1 if position["allow_partial_liquidations"] else 0
 
 
         signature = current_margin_change_info["signature"]

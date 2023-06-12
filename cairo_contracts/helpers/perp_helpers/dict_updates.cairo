@@ -91,7 +91,6 @@ func update_rc_note_dict{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(rc_
                "token": ids.rc_note.token,
                "amount": ids.rc_note.amount,
            }
-
     %}
 
     return ();
@@ -124,6 +123,7 @@ func update_position_dict{pedersen_ptr: HashBuiltin*, position_dict: DictAccess*
             "last_funding_idx": ids.position.last_funding_idx,
             "index": ids.position.index,
             "hash": ids.position.hash,
+            "allow_partial_liquidations": ids.position.allow_partial_liquidations,
         }
     %}
 

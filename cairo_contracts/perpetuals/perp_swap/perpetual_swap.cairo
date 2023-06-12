@@ -66,7 +66,9 @@ func execute_perpetual_swap{
     %}
 
     // ? verify consistency checks
-    consistency_checks(perp_order_a, perp_order_b, spent_collateral, spent_synthetic);
+    consistency_checks(
+        perp_order_a, perp_order_b, spent_collateral, spent_synthetic, fee_taken_a, fee_taken_b
+    );
 
     range_checks(perp_order_a, perp_order_b);
 
@@ -123,7 +125,7 @@ func handle_inputs(perp_order_a: PerpOrder*, perp_order_b: PerpOrder*) {
             raise Exception("Invalid position effect type")
         memory[order_a_addr + POSITION_EFFECT_TYPE_OFFSET] = pos_effect_type
         memory[order_a_addr + POS_ADDR_OFFSET] = int(order_a_input["pos_addr"])
-        memory[order_a_addr + ORDER_SIDE_OFFSET] = 0 if order_a_input["order_side"] == "Long" else 1
+        memory[order_a_addr + ORDER_SIDE_OFFSET] = 1 if order_a_input["order_side"] == "Long" else 0
         memory[order_a_addr + SYNTHETIC_TOKEN_OFFSET] = int(order_a_input["synthetic_token"])
         memory[order_a_addr + SYNTHETIC_AMOUNT_OFFSET] = int(order_a_input["synthetic_amount"])
         memory[order_a_addr + COLLATERAL_AMOUNT_OFFSET] = int(order_a_input["collateral_amount"])
@@ -154,7 +156,7 @@ func handle_inputs(perp_order_a: PerpOrder*, perp_order_b: PerpOrder*) {
             raise Exception("Invalid position effect type")
         memory[order_b_addr + POSITION_EFFECT_TYPE_OFFSET] = pos_effect_type
         memory[order_b_addr + POS_ADDR_OFFSET] = int(order_b_input["pos_addr"])
-        memory[order_b_addr + ORDER_SIDE_OFFSET] = 0 if order_b_input["order_side"] == "Long" else 1
+        memory[order_b_addr + ORDER_SIDE_OFFSET] = 1 if order_b_input["order_side"] == "Long" else 0
         memory[order_b_addr + SYNTHETIC_TOKEN_OFFSET] = int(order_b_input["synthetic_token"])
         memory[order_b_addr + SYNTHETIC_AMOUNT_OFFSET] = int(order_b_input["synthetic_amount"])
         memory[order_b_addr + COLLATERAL_AMOUNT_OFFSET] = int(order_b_input["collateral_amount"])

@@ -168,7 +168,7 @@ pub fn check_note_sums(order: &LimitOrder) -> Result<(), SwapThreadExecutionErro
     for note in order.notes_in.iter() {
         if note.token != order.token_spent {
             return Err(send_swap_error(
-                "note and order token missmatch".to_string(),
+                "note and order token mismatch".to_string(),
                 Some(order.order_id),
                 None,
             ));
@@ -190,6 +190,7 @@ pub fn check_note_sums(order: &LimitOrder) -> Result<(), SwapThreadExecutionErro
             None,
         ));
     }
+    // Todo: if any leftover value store it in insurance fund
 
     Ok(())
 }

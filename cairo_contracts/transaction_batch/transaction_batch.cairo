@@ -186,6 +186,15 @@ func main{
     local squashed_position_dict_len = (squashed_position_dict_end - squashed_position_dict) /
         DictAccess.SIZE;
 
+    // local pos_dict_len = (position_dict - position_dict_start) / DictAccess.SIZE;
+    // %{
+    //     for i in range(ids.pos_dict_len):
+    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +0])
+    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +1])
+    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +2])
+    //         # print("======")
+    // %}
+
     // * VERIFY MERKLE TREE UPDATES ******************************************************
 
     verify_merkle_tree_updates(
@@ -218,19 +227,21 @@ func main{
 
     // local note_dict_len = (note_dict - note_dict_start) / DictAccess.SIZE;
     // %{
-    //     for i in range(ids.note_dict_len):
-    //         print(memory[ids.note_dict_start.address_ + i*ids.DictAccess.SIZE +0])
-    //         print(memory[ids.note_dict_start.address_ + i*ids.DictAccess.SIZE +1])
-    //         print(memory[ids.note_dict_start.address_ + i*ids.DictAccess.SIZE +2])
-    //         print("======")
+    //     for i in range(ids.squashed_note_dict_len):
+    //         print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +0])
+    //         # print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +1])
+    //         print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +2])
+    //         # print("======")
+
+    // print("======")
     // %}
-    // local pos_dict_len = (position_dict - position_dict_start) / DictAccess.SIZE;
+    // // local pos_dict_len = (position_dict - position_dict_start) / DictAccess.SIZE;
     // %{
-    //     for i in range(ids.pos_dict_len):
-    //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SI
-    //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +1])
+    //     for i in range(ids.squashed_position_dict_len):
+    //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +0])
+    //         # print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +1])
     //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +2])
-    //         print("======")
+    //         # print("======")
     // %}
 
     // update the output ptr to point to the end of the program output
@@ -269,7 +280,12 @@ func execute_transactions{
     if (nondet %{ tx_type == "swap" %} != 0) {
         %{ current_swap = current_transaction %}
 
+        %{ t1_note_split = time.time() %}
         execute_swap();
+        %{
+            t2_note_split = time.time()
+            print("spot swap time: ", t2_note_split - t1_note_split)
+        %}
 
         return execute_transactions();
     }
@@ -293,7 +309,12 @@ func execute_transactions{
     if (nondet %{ tx_type == "perpetual_swap" %} != 0) {
         %{ current_swap = current_transaction %}
 
+        %{ t1_note_split = time.time() %}
         execute_perpetual_swap();
+        %{
+            t2_note_split = time.time()
+            print("perp swap time: ", t2_note_split - t1_note_split)
+        %}
 
         return execute_transactions();
     }
@@ -301,7 +322,12 @@ func execute_transactions{
     if (nondet %{ tx_type == "note_split" %} != 0) {
         %{ current_split_info = current_transaction["note_split"] %}
 
+        %{ t1_note_split = time.time() %}
         execute_note_split();
+        %{
+            t2_note_split = time.time()
+            print("note split time: ", t2_note_split - t1_note_split)
+        %}
 
         return execute_transactions();
     }

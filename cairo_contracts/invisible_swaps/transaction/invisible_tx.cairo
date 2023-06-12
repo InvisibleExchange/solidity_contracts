@@ -15,7 +15,7 @@ from starkware.cairo.common.hash_state import (
 )
 
 from helpers.utils import Note, construct_new_note, sum_notes, hash_note, take_fee
-from helpers.signatures.signatures import verify_spot_signature, verify_sig
+from helpers.signatures.signatures import verify_spot_signature
 from helpers.spot_helpers.dict_updates import update_note_dict
 
 from helpers.spot_helpers.checks import range_checks_
@@ -65,7 +65,15 @@ func execute_invisibl3_transaction{
         );
     } else {
         // ! if the order was filled partially before this
-        later_fills(order_hash, invisibl3_order, receive_amount, spend_amount, fee_taken);
+        later_fills(
+            notes_in_len,
+            notes_in,
+            order_hash,
+            invisibl3_order,
+            receive_amount,
+            spend_amount,
+            fee_taken,
+        );
     }
 
     return ();
@@ -95,7 +103,7 @@ func first_fill{
 
     // ? verify the sums match the refund and spend amounts
     let (sum_inputs: felt) = sum_notes(notes_in_len, notes_in, invisibl3_order.token_spent, 0);
-    assert sum_inputs - refund_note.amount = invisibl3_order.amount_spent;
+    assert_le(invisibl3_order.amount_spent + refund_note.amount, sum_inputs);
 
     // ? Verify all values are in a certain range
     range_checks_(invisibl3_order, refund_note, spend_amount);
@@ -105,7 +113,6 @@ func first_fill{
 
     // ? verify the signatures for the notes spent
     let (pub_key_sum: EcPoint) = verify_spot_signature(order_hash, notes_in_len, notes_in);
-    // assert pub_key_sum.x = invisibl3_order.dest_spent_address;
 
     local swap_note_idx: felt;
     %{
@@ -135,8 +142,11 @@ func first_fill{
         return ();
     }
 
+    let notes_in_0 = notes_in[0];
     let unspent_amount = invisibl3_order.amount_spent - spend_amount;
-    refund_partial_fill(invisibl3_order, pub_key_sum, unspent_amount, 0);
+    refund_partial_fill(
+        invisibl3_order, notes_in_0.address.x, notes_in_0.blinding_factor, unspent_amount, 0
+    );
 
     return ();
 }
@@ -150,6 +160,8 @@ func later_fills{
     zero_note_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(
+    notes_in_len: felt,
+    notes_in: Note*,
     order_hash: felt,
     invisibl3_order: Invisibl3Order,
     receive_amount: felt,
@@ -180,8 +192,14 @@ func later_fills{
         memory[addr_ + HASH_OFFSET] = int(note_hash)
     %}
 
+    // ? Check for valid token
+    assert prev_fill_refund_note.token = invisibl3_order.token_spent;
+
+    // ? Check for valid address
+    assert prev_fill_refund_note.address.x = notes_in[0].address.x;
+
     // ? Verify the signature for the refund note
-    verify_sig(order_hash, prev_fill_refund_note.address);
+    verify_spot_signature(order_hash, notes_in_len, notes_in);
 
     // ? take a fee
     take_fee(invisibl3_order.token_received, fee_taken);
@@ -231,8 +249,15 @@ func later_fills{
     }
 
     let unspent_amount = prev_fill_refund_note.amount - spend_amount;
-    %{ print("later fill: ", ids.unspent_amount) %}
-    refund_partial_fill(invisibl3_order, prev_fill_refund_note.address, unspent_amount, 0);
+    refund_partial_fill(
+        invisibl3_order,
+        prev_fill_refund_note.address.x,
+        prev_fill_refund_note.blinding_factor,
+        unspent_amount,
+        prev_fill_refund_note.hash,
+    );
+
+    // order: Invisibl3Order, address: felt, blinding: felt, unspent_amount: felt, prev_hash: felt
 
     return ();
 }

@@ -37,7 +37,6 @@ func python_define_utils() {
         AMOUNT_RECEIVED_OFFSET = ids.Invisibl3Order.amount_received
         FEE_LIMIT_OFFSET = ids.Invisibl3Order.fee_limit
         DEST_RECEIVED_ADDR_OFFSET = ids.Invisibl3Order.dest_received_address
-        DEST_SPENT_BLINDING_OFFSET = ids.Invisibl3Order.dest_spent_blinding
         DEST_RECEIVED_BLINDING_OFFSET = ids.Invisibl3Order.dest_received_blinding
 
         # * PERPETUAL ORDER ==========================================================
@@ -56,12 +55,12 @@ func python_define_utils() {
 
         OPEN_ORDER_FIELDS_SIZE = ids.OpenOrderFields.SIZE
         INITIAL_MARGIN_OFFSET = ids.OpenOrderFields.initial_margin
-        COLLATERAL_TOKEN_OFFSET = ids.OpenOrderFields.collateral_token
+        OOF_COLLATERAL_TOKEN_OFFSET = ids.OpenOrderFields.collateral_token
         NOTES_IN_LEN_OFFSET = ids.OpenOrderFields.notes_in_len
         NOTES_IN_OFFSET = ids.OpenOrderFields.notes_in
         REFUND_NOTE_OFFSET = ids.OpenOrderFields.refund_note
         POSITION_ADDRESS_OFFSET = ids.OpenOrderFields.position_address
-        OPF_BLINDING_OFFSET = ids.OpenOrderFields.blinding
+        ALLOW_PARTIAL_LIQUIDATIONS_OFFSET = ids.OpenOrderFields.allow_partial_liquidations
 
         CLOSE_ORDER_FIELDS_SIZE = ids.CloseOrderFields.SIZE
         RETURN_COLLATERAL_ADDRESS_OFFSET = ids.CloseOrderFields.return_collateral_address
@@ -81,6 +80,7 @@ func python_define_utils() {
         PERP_POSITION_LAST_FUNDING_IDX_OFFSET = ids.PerpPosition.last_funding_idx
         PERP_POSITION_INDEX_OFFSET = ids.PerpPosition.index
         PERP_POSITION_HASH_OFFSET = ids.PerpPosition.hash
+        PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET = ids.PerpPosition.allow_partial_liquidations
 
         # * WITHDRAWAL ================================================================
         WITHDRAWAL_SIZE = ids.Withdrawal.SIZE
@@ -107,6 +107,7 @@ func python_define_utils() {
         DUST_AMOUNT_PER_ASSET_OFFSET = ids.GlobalConfig.dust_amount_per_asset
         OBSERVERS_LEN_OFFSET = ids.GlobalConfig.observers_len
         OBSERVERS_OFFSET = ids.GlobalConfig.observers
+        MIN_PARTIAL_LIQUIDATION_SIZE_OFFSET = ids.GlobalConfig.min_partial_liquidation_size
 
 
 
@@ -125,6 +126,7 @@ func python_define_utils() {
             print("last_funding_idx: ", memory[position_address + 9])
             print("index: ", memory[position_address + 10])
             print("hash: ", memory[position_address + 11])
+            print("allow_partial_liquidations: ", memory[position_address + 12])
 
         def print_note(note_address):
             print("address: ", memory[note_address + 0])

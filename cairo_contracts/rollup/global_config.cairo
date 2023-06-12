@@ -15,6 +15,7 @@ struct GlobalConfig {
     dust_amount_per_asset: felt*,
     observers_len: felt,
     observers: felt*,
+    min_partial_liquidation_size: felt*,
 }
 
 func get_array_index_for_token{range_check_ptr, global_config: GlobalConfig*}(token: felt) -> (
@@ -56,7 +57,9 @@ func token_decimals{range_check_ptr, global_config: GlobalConfig*}(token: felt) 
     let (token_idx) = get_array_index_for_token(token);
 
     let decimals_per_asset = global_config.decimals_per_asset;
+
     assert token = decimals_per_asset[2 * token_idx];
+
     let decimals = decimals_per_asset[2 * token_idx + 1];
 
     return (decimals,);
@@ -67,7 +70,9 @@ func price_decimals{range_check_ptr, global_config: GlobalConfig*}(token: felt) 
     let (token_idx) = get_array_index_for_token(token);
 
     let price_decimals_per_asset = global_config.price_decimals_per_asset;
+
     assert token = price_decimals_per_asset[2 * token_idx];
+
     let decimals = price_decimals_per_asset[2 * token_idx + 1];
 
     return (decimals,);
@@ -82,6 +87,19 @@ func get_dust_amount{range_check_ptr, global_config: GlobalConfig*}(token: felt)
     let dust_amount = dust_amount_per_asset[2 * token_idx + 1];
 
     return (dust_amount,);
+}
+
+// Get min partial liquidation size for a token
+func get_min_partial_liquidation_size{range_check_ptr, global_config: GlobalConfig*}(
+    token: felt
+) -> (res: felt) {
+    let (token_idx) = get_array_index_for_token(token);
+
+    let min_partial_liquidation_size = global_config.min_partial_liquidation_size;
+    assert token = min_partial_liquidation_size[2 * token_idx];
+    let size = min_partial_liquidation_size[2 * token_idx + 1];
+
+    return (size,);
 }
 
 func init_global_config(global_config_ptr: GlobalConfig*) {
@@ -127,6 +145,12 @@ func init_global_config(global_config_ptr: GlobalConfig*) {
         memory[ids.global_config_ptr.address_ + OBSERVERS_OFFSET] = observers_ = segments.add()
         for i in range(len(observers)):
             memory[observers_ + i] = int(observers[i])
+        # min partial liquidation size 
+        min_partial_liquidation_sizes = global_config["min_partial_liquidation_sizes"]
+        memory[ids.global_config_ptr.address_ + MIN_PARTIAL_LIQUIDATION_SIZE_OFFSET] = min_pl_size = segments.add()
+        for i in range(0, len(min_partial_liquidation_sizes), 2):
+            memory[min_pl_size + i] = int(min_partial_liquidation_sizes[i])
+            memory[min_pl_size + i + 1] = int(min_partial_liquidation_sizes[i+1])
     %}
 
     return ();

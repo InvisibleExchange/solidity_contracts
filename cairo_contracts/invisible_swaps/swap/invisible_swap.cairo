@@ -161,7 +161,6 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         memory[order_A_addr + AMOUNT_SPENT_OFFSET] = int(order_A_input["amount_spent"])
         memory[order_A_addr + AMOUNT_RECEIVED_OFFSET] = int(order_A_input["amount_received"]) 
         memory[order_A_addr + DEST_RECEIVED_ADDR_OFFSET] = int(order_A_input["dest_received_address"]["x"])# Need just the x coordinate
-        memory[order_A_addr + DEST_SPENT_BLINDING_OFFSET] = int(order_A_input["dest_spent_blinding"])
         memory[order_A_addr + DEST_RECEIVED_BLINDING_OFFSET] = int(order_A_input["dest_received_blinding"])
         memory[order_A_addr + FEE_LIMIT_OFFSET] = int(order_A_input["fee_limit"])
 
@@ -212,7 +211,6 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         memory[order_B_addr + AMOUNT_SPENT_OFFSET] = int(order_B_input["amount_spent"])
         memory[order_B_addr + AMOUNT_RECEIVED_OFFSET] = int(order_B_input["amount_received"])
         memory[order_B_addr + DEST_RECEIVED_ADDR_OFFSET] = int(order_B_input["dest_received_address"]["x"]) # Need just the x coordinate
-        memory[order_B_addr + DEST_SPENT_BLINDING_OFFSET] = int(order_B_input["dest_spent_blinding"])
         memory[order_B_addr + DEST_RECEIVED_BLINDING_OFFSET] = int(order_B_input["dest_received_blinding"])
         memory[order_B_addr + FEE_LIMIT_OFFSET] = int(order_B_input["fee_limit"])
 

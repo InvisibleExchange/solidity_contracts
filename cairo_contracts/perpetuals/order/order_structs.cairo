@@ -22,7 +22,7 @@ struct OpenOrderFields {
     notes_in: Note*,
     refund_note: Note,
     position_address: felt,
-    blinding: felt,
+    allow_partial_liquidations: felt,
 }
 
 struct CloseOrderFields {
@@ -43,4 +43,5 @@ struct PerpPosition {
     last_funding_idx: felt,
     index: felt,
     hash: felt,
+    allow_partial_liquidations: felt,
 }

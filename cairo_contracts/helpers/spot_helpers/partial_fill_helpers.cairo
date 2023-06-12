@@ -15,11 +15,11 @@ from invisible_swaps.order.invisible_order import Invisibl3Order
 from helpers.utils import Note, construct_new_note, sum_notes, hash_note, validate_fee_taken
 
 func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
-    order: Invisibl3Order, pub_key_sum: EcPoint, unspent_amount: felt, prev_hash: felt
+    order: Invisibl3Order, address: felt, blinding: felt, unspent_amount: felt, prev_hash: felt
 ) {
     //
 
-    let (pfr_note: Note) = partial_fill_updates(order, pub_key_sum, unspent_amount);
+    let (pfr_note: Note) = partial_fill_updates(order, address, blinding, unspent_amount);
 
     // * Update the note dict with the new notes
 
@@ -46,7 +46,7 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
 }
 
 func partial_fill_updates{pedersen_ptr: HashBuiltin*}(
-    invisible_order: Invisibl3Order, pub_key_sum: EcPoint, unspent_amount: felt
+    invisible_order: Invisibl3Order, address: felt, blinding: felt, unspent_amount: felt
 ) -> (pf_note: Note) {
     alloc_locals;
 
@@ -55,11 +55,7 @@ func partial_fill_updates{pedersen_ptr: HashBuiltin*}(
 
     // ? This is the refund note of the leftover amount that wasn't spent in the swap
     let (partial_fill_note: Note) = construct_new_note(
-        pub_key_sum.x,
-        invisible_order.token_spent,
-        unspent_amount,
-        invisible_order.dest_spent_blinding,
-        new_fill_refund_note_idx,
+        address, invisible_order.token_spent, unspent_amount, blinding, new_fill_refund_note_idx
     );
 
     return (partial_fill_note,);

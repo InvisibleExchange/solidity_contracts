@@ -56,7 +56,7 @@ async function getOracleUpdate(token) {
       let oracleUpdate = {
         token: token,
         timestamp: timestamp,
-        observer_ids: [1],
+        observer_ids: [0],
         prices: [price],
         signatures: [{ r: sig[0], s: sig[1] }],
       };

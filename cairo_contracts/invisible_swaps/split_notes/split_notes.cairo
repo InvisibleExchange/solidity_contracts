@@ -21,12 +21,15 @@ func execute_note_split{pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: 
     let (notes_in_sum: felt) = sum_notes(notes_in_len, notes_in, token, 0);
     let (notes_out_sum: felt) = sum_notes(notes_out_len, notes_out, token, 0);
 
-    assert(notes_in[0].address.x == notes_out[0].address.x);
-    assert(notes_in[0].blinding_factor == notes_out[0].blinding_factor);
-    assert(notes_in[notes_in_len-1].address.x == notes_out[notes_out_len-1].address.x);
-    assert(notes_in[notes_in_len-1].blinding_factor == notes_out[notes_out_len-1].blinding_factor);
+    let note_in1 = notes_in[0];
+    let note_in2 = notes_in[notes_in_len - 1];
 
-    assert(notes_out_sum == notes_in_sum);
+    assert note_in1.address.x = notes_out[0].address.x;
+    assert note_in1.blinding_factor = notes_out[0].blinding_factor;
+    assert note_in2.address.x = notes_out[notes_out_len - 1].address.x;
+    assert note_in2.blinding_factor = notes_out[notes_out_len - 1].blinding_factor;
+
+    assert notes_out_sum = notes_in_sum;
 
     let cond = is_le(notes_out_len, notes_in_len);
 

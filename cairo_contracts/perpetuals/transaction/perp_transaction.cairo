@@ -59,7 +59,7 @@ from perpetuals.transaction.change_margin import get_init_margin
 
 from rollup.global_config import get_dust_amount
 
-from helpers.perp_helpers.partial_fill_helpers_perp import refund_partial_fill
+from helpers.perp_helpers.partial_fill_helpers_perp import refund_partial_fill, remove_prev_pfr_note
 from helpers.perp_helpers.dict_updates import (
     update_note_dict,
     update_rc_note_dict,
@@ -189,14 +189,14 @@ func execute_open_order{
             open_order_fields.collateral_token,
             0,
         );
-        // Todo: assert sum >= open_order_fields.refund_note.amount + open_order_fields.initial_margin;
+        assert sum = open_order_fields.refund_note.amount + open_order_fields.initial_margin;
 
-        let (pub_key_sum: EcPoint) = verify_open_order_signature(
+        verify_open_order_signature(
             order.hash, open_order_fields.notes_in_len, open_order_fields.notes_in
         );
 
         let (scaler) = pow(10, global_config.leverage_decimals);
-        let (leverage: felt, _) = unsigned_div_rem(init_margin * scaler, spent_collateral);
+        let (leverage: felt, _) = unsigned_div_rem(spent_collateral * scaler, init_margin);
 
         let (position: PerpPosition) = open_new_position(
             order,
@@ -212,9 +212,7 @@ func execute_open_order{
         update_position_dict(0, position);
 
         // ? Refund excess margin if necessary
-        refund_unspent_margin_first_fill(
-            order, open_order_fields, init_margin, spent_synthetic, pub_key_sum
-        );
+        refund_unspent_margin_first_fill(order, open_order_fields, init_margin, spent_synthetic);
 
         // ? Update note dict
         update_note_dict(
@@ -238,14 +236,16 @@ func execute_open_order{
             memory[ids.prev_pfr_note.address_ + HASH_OFFSET] = int(note_data["hash"])
         %}
 
-        checks_prev_fill_consistencies(order, init_margin, prev_pfr_note);
+        checks_prev_fill_consistencies(order, open_order_fields, init_margin, prev_pfr_note);
 
-        verify_sig(order.hash, prev_pfr_note.address);
+        verify_open_order_signature(
+            order.hash, open_order_fields.notes_in_len, open_order_fields.notes_in
+        );
 
         let (price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
 
         let (scaler) = pow(10, global_config.leverage_decimals);
-        let (leverage: felt, _) = unsigned_div_rem(init_margin * scaler, spent_collateral);
+        let (leverage: felt, _) = unsigned_div_rem(spent_collateral * scaler, init_margin);
 
         let (prev_position_hash: felt, position: PerpPosition) = add_margin_to_position(
             order, init_margin, fee_taken, leverage, price
@@ -413,6 +413,7 @@ func open_new_position{
         funding_idx,
         position_idx,
         fee_taken,
+        open_order_fields.allow_partial_liquidations,
     );
 
     return (position,);
@@ -610,13 +611,7 @@ func refund_unspent_margin_first_fill{
     pedersen_ptr: HashBuiltin*,
     note_dict: DictAccess*,
     global_config: GlobalConfig*,
-}(
-    order: PerpOrder,
-    open_order_fields: OpenOrderFields,
-    init_margin: felt,
-    spent_synthetic: felt,
-    pub_key_sum: EcPoint,
-) {
+}(order: PerpOrder, open_order_fields: OpenOrderFields, init_margin: felt, spent_synthetic: felt) {
     alloc_locals;
 
     let unspent_margin = open_order_fields.initial_margin - init_margin;
@@ -638,12 +633,13 @@ func refund_unspent_margin_first_fill{
         return ();
     }
 
+    let notes_in_0 = open_order_fields.notes_in[0];
     refund_partial_fill(
         order,
-        pub_key_sum,
+        notes_in_0.address.x,
+        notes_in_0.blinding_factor,
         open_order_fields.collateral_token,
         unspent_margin,
-        open_order_fields.blinding,
         0,
     );
 
@@ -671,22 +667,22 @@ func refund_unspent_margin_later_fills{
 
     let all_margin_spent: felt = is_le(unspent_margin, dust_amount_collateral);
 
-    // let is_partially_filled_a = c1 * c2
     if (all_margin_spent == 1) {
+        remove_prev_pfr_note(pfr_note);
         return ();
     }
     if (nondet %{ current_order["amount_filled"] + ids.spent_synthetic + dust_amount_synthetic < ids.order.synthetic_amount %} != 0) {
         %{ print("!! ORDER FILLED BUT MARGIN NOT FULLY SPENT (SEE WHY)!!") %}
-        // Todo: Should do something with the leftover collateral (maybe insurance fund)
+        remove_prev_pfr_note(pfr_note);
         return ();
     }
 
     refund_partial_fill(
         order,
-        pfr_note.address,
+        pfr_note.address.x,
+        pfr_note.blinding_factor,
         open_order_fields.collateral_token,
         unspent_margin,
-        open_order_fields.blinding,
         pfr_note.hash,
     );
 
@@ -703,7 +699,7 @@ func get_perp_position() -> PerpPosition {
     %{
         position_addr = ids.position.address_
 
-        memory[position_addr + PERP_POSITION_ORDER_SIDE_OFFSET] = 0 if prev_position["order_side"] == "Long" else 1
+        memory[position_addr + PERP_POSITION_ORDER_SIDE_OFFSET] = 1 if prev_position["order_side"] == "Long" else 0
         memory[position_addr + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(prev_position["synthetic_token"])
         memory[position_addr + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(prev_position["collateral_token"])
         memory[position_addr + PERP_POSITION_POSITION_SIZE_OFFSET] = int(prev_position["position_size"])
@@ -715,6 +711,7 @@ func get_perp_position() -> PerpPosition {
         memory[position_addr + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(prev_position["last_funding_idx"])
         memory[position_addr + PERP_POSITION_INDEX_OFFSET] = int(prev_position["index"])
         memory[position_addr + PERP_POSITION_HASH_OFFSET] = int(prev_position["hash"])
+        memory[position_addr + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = int(prev_position["allow_partial_liquidations"])
     %}
 
     return (position);
@@ -727,10 +724,12 @@ func get_open_order_fields{pedersen_ptr: HashBuiltin*}(open_order_fields: OpenOr
         open_order_field_inputs = current_order["open_order_fields"]
 
         memory[ids.open_order_fields.address_ + INITIAL_MARGIN_OFFSET] = int(open_order_field_inputs["initial_margin"])
-        memory[ids.open_order_fields.address_ + COLLATERAL_TOKEN_OFFSET] = int(open_order_field_inputs["collateral_token"])
+        memory[ids.open_order_fields.address_ + OOF_COLLATERAL_TOKEN_OFFSET] = int(open_order_field_inputs["collateral_token"])
+
+        memory[ids.open_order_fields.address_ + POSITION_ADDRESS_OFFSET] = int(open_order_field_inputs["position_address"]) # x coordinate
+        memory[ids.open_order_fields.address_ + ALLOW_PARTIAL_LIQUIDATIONS_OFFSET] =  1 if open_order_field_inputs["allow_partial_liquidations"] else 0    
 
         input_notes = open_order_field_inputs["notes_in"]
-
         memory[ids.open_order_fields.address_ + NOTES_IN_LEN_OFFSET] = len(input_notes)
         memory[ids.open_order_fields.address_ + NOTES_IN_OFFSET] = notes_ = segments.add()
         for i in range(len(input_notes)):
@@ -759,10 +758,6 @@ func get_open_order_fields{pedersen_ptr: HashBuiltin*}(open_order_fields: OpenOr
             memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + BLINDING_FACTOR_OFFSET] = 0
             memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + INDEX_OFFSET] = 0
             memory[ids.open_order_fields.address_ + REFUND_NOTE_OFFSET + HASH_OFFSET] = 0
-
-        memory[ids.open_order_fields.address_ + POSITION_ADDRESS_OFFSET] = int(open_order_field_inputs["position_address"]) # x coordinate
-
-        memory[ids.open_order_fields.address_ + OPF_BLINDING_OFFSET] = int(open_order_field_inputs["blinding"])
     %}
 
     return ();
@@ -772,7 +767,7 @@ func get_close_order_fields{pedersen_ptr: HashBuiltin*}(close_order_fields: Clos
     %{
         close_order_field_inputs = current_order["close_order_fields"]
 
-        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(close_order_field_inputs["dest_received_address"])
+        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(close_order_field_inputs["dest_received_address"]["x"])
         memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(close_order_field_inputs["dest_received_blinding"])
     %}
 
