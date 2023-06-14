@@ -155,23 +155,6 @@ fn hash_margin_change_message(margin_change: &ChangeMarginMessage) -> BigUint {
     }
 }
 
-// pub fn send_finalize_batch(
-//     mpsc_tx: MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
-// ) -> TokioJoinHandle<GrpcTxResponse> {
-//     let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-//         let (resp_tx, resp_rx) = oneshot::channel();
-
-//         let mut grpc_message = GrpcMessage::new();
-//         grpc_message.msg_type = MessageType::FinalizeBatchMessage;
-
-//         mpsc_tx.send((grpc_message, resp_tx)).await.ok().unwrap();
-
-//         return resp_rx.await.unwrap();
-//     });
-
-//     return handle;
-// }
-
 pub fn store_output_json(
     swap_output_json_: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
     main_storage_: &Arc<Mutex<MainStorage>>,
