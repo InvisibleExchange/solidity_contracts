@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::{collections::HashMap, sync::Arc};
 
 use futures::stream::SplitSink;
@@ -202,6 +203,8 @@ pub fn proccess_spot_matching_result(
                                 // He is selling the base asset and buying the quote(price) asset
                                 let spent_amount = qty;
 
+                                let spent_amount = min(spent_amount, lim_order.amount_spent);
+
                                 let b_order_tup =
                                     (lim_order, signature, spent_amount, user_id, is_taker);
                                 b_orders.push(b_order_tup);
@@ -220,6 +223,7 @@ pub fn proccess_spot_matching_result(
                                         price,
                                     )
                                 };
+                                let spent_amount = min(spent_amount, lim_order.amount_spent);
 
                                 let a_order_tup =
                                     (lim_order, signature, spent_amount, user_id, is_taker);
@@ -361,6 +365,8 @@ pub fn proccess_perp_matching_result(
                             if side == OBOrderSide::Ask {
                                 // The synthetic exchnaged in the swap
                                 let spent_synthetic = qty;
+                                let spent_synthetic =
+                                    min(spent_synthetic, perp_order.synthetic_amount);
 
                                 // transactions are ordered as [(taker,maker), (taker,maker), ...]
                                 let take_fee = i % 2 == 0;
@@ -380,6 +386,8 @@ pub fn proccess_perp_matching_result(
                                         price,
                                     )
                                 };
+                                let collateral_spent =
+                                    min(collateral_spent, perp_order.collateral_amount);
 
                                 // transactions are ordered as [(taker,maker), (taker,maker), ...]
                                 let take_fee = i % 2 == 0;

@@ -181,7 +181,7 @@ fn modify_position(
             // ? Check that leverage is valid relative to the notional position size after increasing size
             if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
                 println!(
-                    "Leverage would be too high {} > {}",
+                    "Leverage would be too high {} < {}",
                     get_max_leverage(order.synthetic_token, order.synthetic_amount),
                     leverage
                 );

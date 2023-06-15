@@ -801,7 +801,7 @@ impl PerpPosition {
             ));
         }
 
-        let pnl = self.get_pnl(index_price);
+        let pnl: i64 = 0; //self.get_pnl(index_price);
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
