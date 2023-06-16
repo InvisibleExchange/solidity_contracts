@@ -65,7 +65,7 @@ pub async fn execute_spot_swaps_after_amend_order(
     };
 
     let retry_messages;
-    match await_swap_handles(ws_connections, privileged_ws_connections, handles).await {
+    match await_swap_handles(ws_connections, privileged_ws_connections, handles, user_id).await {
         Ok(rm) => retry_messages = rm,
         Err(e) => return Err(e),
     };
@@ -133,6 +133,7 @@ pub async fn execute_perp_swaps_after_amend_order(
         ws_connections,
         privileged_ws_connections,
         processed_res,
+        user_id,
     )
     .await
     {

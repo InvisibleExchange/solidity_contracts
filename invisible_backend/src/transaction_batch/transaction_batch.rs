@@ -1,14 +1,10 @@
 use firestore_db_and_auth::ServiceSession;
-use futures::Future;
 use num_bigint::BigUint;
 use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
-    error::Error,
-    fs::File,
-    ops::DerefMut,
     path::Path,
     println,
     str::FromStr,
@@ -34,7 +30,7 @@ use crate::{
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
-    utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
+    utils::firestore::{start_add_note_thread, start_add_position_thread},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -78,13 +74,11 @@ use crate::transaction_batch::{
 };
 
 // TODO: This could be weighted sum of different transactions (e.g. 5 for swaps, 1 for deposits, 1 for withdrawals)
-const TRANSACTIONS_PER_BATCH: u16 = 10; // Number of transaction per batch (until batch finalization)
+// const TRANSACTIONS_PER_BATCH: u16 = 10; // Number of transaction per batch (until batch finalization)
 
 // TODO: Make fields in all classes private where they should be
-// Todo: Could store snapshots more often than just on tx_batch updates
 
 // TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
-// TODO: Maybe have a backup notes storage in the database and every time you log in you check if any of them are still in the state otherwise delete them
 
 pub trait Transaction {
     fn transaction_type(&self) -> &str;
@@ -806,7 +800,7 @@ impl TransactionBatch {
         let latest_output_json = self.swap_output_json.clone();
         let latest_output_json = latest_output_json.lock();
 
-        let current_batch_index = main_storage.latest_batch;
+        // let current_batch_index = main_storage.latest_batch;
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);

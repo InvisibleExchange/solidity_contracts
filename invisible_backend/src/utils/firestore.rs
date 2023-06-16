@@ -3,7 +3,7 @@ use std::{
     io::Read,
     sync::Arc,
     thread::{spawn, JoinHandle},
-    time::{Instant, SystemTime},
+    time::SystemTime,
 };
 
 use firestore_db_and_auth::{documents, errors::FirebaseError, Credentials, ServiceSession};
@@ -102,7 +102,7 @@ pub fn retry_failed_updates(
     // ? ADD AND REMOVED POSITIONS TO/FROM THE DATABASE
     let perp_state_tree_m = perp_state_tree.lock();
     let positions = positions_info.0;
-    for mut position in positions {
+    for position in positions {
         if position.hash == perp_state_tree_m.get_leaf_by_index(position.index as u64) {
             if position.hash == position.hash_position() {
                 store_new_position(&sess, backup_storage, &position);

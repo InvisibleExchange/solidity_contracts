@@ -46,6 +46,8 @@ use super::{
     WsConnectionsMap,
 };
 
+type SwapErrorInfo = (Option<u64>, u64, u64, String);
+
 pub async fn execute_perp_swap(
     perp_swap: PerpSwap,
     transaction_mpsc_tx: MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
@@ -61,7 +63,7 @@ pub async fn execute_perp_swap(
         (Option<PerpPosition>, Option<PerpPosition>),
         Message,
     )>,
-    Option<(Option<u64>, u64, u64)>,
+    Option<SwapErrorInfo>,
 ) {
     // ? Stores the values of order a in case of rollbacks/failures
     let order_a_clone = perp_swap.order_a.clone();
@@ -213,8 +215,6 @@ pub async fn execute_perp_swap(
                 );
             }
             Err(err) => {
-                println!("\n{:?}", err.current_context());
-
                 let should_rollback = perp_rollback_safeguard.lock().contains_key(&thread_id);
 
                 if should_rollback {
@@ -231,7 +231,7 @@ pub async fn execute_perp_swap(
 
                 // ? Reinsert the orders back into the orderbook
                 let PerpSwapExecutionError {
-                    err_msg: _,
+                    err_msg,
                     invalid_order,
                 } = err.current_context();
 
@@ -258,7 +258,7 @@ pub async fn execute_perp_swap(
                         }
 
                         if taker_order_id == *invalid_order_id {
-                            return (None, None);
+                            return (None, Some((None, 0, 0, err_msg.to_owned())));
                         }
                     }
                 } else {
@@ -273,7 +273,10 @@ pub async fn execute_perp_swap(
                     maker_order_id_ = Some(maker_order_id);
                 }
 
-                return (None, Some((maker_order_id_, taker_order_id, qty)));
+                return (
+                    None,
+                    Some((maker_order_id_, taker_order_id, qty, err_msg.to_owned())),
+                );
             }
         },
         Err(_) => {
@@ -298,7 +301,15 @@ pub async fn execute_perp_swap(
                     .restore_pending_order(Order::Perp(maker_order), qty);
             }
 
-            return (None, Some((Some(maker_order_id), taker_order_id, qty)));
+            return (
+                None,
+                Some((
+                    Some(maker_order_id),
+                    taker_order_id,
+                    qty,
+                    "Error executing perpetual swap".to_string(),
+                )),
+            );
         }
     }
 }
@@ -312,7 +323,8 @@ pub async fn process_and_execute_perp_swaps(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
-) -> std::result::Result<(Vec<(Option<u64>, u64, u64)>, u64), String> {
+    user_id: u64,
+) -> std::result::Result<(Vec<SwapErrorInfo>, u64), String> {
     // ? Parse processed_res into swaps and get the new order_id
     let res = proccess_perp_matching_result(processed_res);
 
@@ -350,7 +362,7 @@ pub async fn process_and_execute_perp_swaps(
             let res = handle.await;
 
             let (retry_msg, position_pair) =
-                await_perp_handle(ws_connections, privileged_ws_connections, res).await;
+                await_perp_handle(ws_connections, privileged_ws_connections, res, user_id).await;
 
             if let Some(msg) = retry_msg {
                 retry_messages.push(msg);
@@ -411,7 +423,7 @@ type HandleResult = std::result::Result<
             (Option<PerpPosition>, Option<PerpPosition>),
             Message,
         )>,
-        Option<(Option<u64>, u64, u64)>,
+        Option<SwapErrorInfo>,
     ),
     JoinError,
 >;
@@ -420,8 +432,9 @@ pub async fn await_perp_handle(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     handle_res: HandleResult,
+    user_id: u64,
 ) -> (
-    Option<(Option<u64>, u64, u64)>,
+    Option<SwapErrorInfo>,
     Option<(Option<PerpPosition>, Option<PerpPosition>)>,
 ) {
     // ? Wait for the swaps to finish
@@ -496,8 +509,25 @@ pub async fn await_perp_handle(
 
         return (None, Some(position_pair));
     // If the taker swap failed, try matching it again with another order
-    } else if handle_res.as_ref().unwrap().0.is_some() {
-        return (Some(handle_res.unwrap().1.unwrap()), None);
+    } else if handle_res.as_ref().unwrap().1.is_some() {
+        let error_res = handle_res.unwrap().1.unwrap();
+
+        let msg = json!({
+            "message_id": "PERP_SWAP_ERROR",
+            "error_message": error_res.3,
+        });
+        let msg = Message::Text(msg.to_string());
+
+        // ? Send a message to the user_id websocket
+        if let Err(_) = send_direct_message(ws_connections, user_id, msg).await {
+            println!("Error sending perp swap message")
+        };
+
+        if error_res.0 == None && error_res.1 == 0 && error_res.2 == 0 {
+            return (None, None);
+        }
+
+        return (Some(error_res), None);
     }
 
     (None, None)
@@ -517,7 +547,7 @@ pub async fn retry_failed_perp_swaps(
     is_market: bool,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
-    retry_messages: Vec<(Option<u64>, u64, u64)>,
+    retry_messages: Vec<SwapErrorInfo>,
     failed_counterpart_ids: Option<Vec<u64>>,
 ) -> std::result::Result<(), String> {
     // ? Retry the failed swaps
@@ -525,7 +555,7 @@ pub async fn retry_failed_perp_swaps(
     let mut new_retry_messages = Vec::new();
 
     for msg_ in retry_messages {
-        let (maker_order_id, taker_order_id, qty) = msg_;
+        let (maker_order_id, taker_order_id, qty, _) = msg_;
 
         if maker_order_id.is_some() {
             failed_ids.push(maker_order_id.unwrap());
@@ -558,6 +588,7 @@ pub async fn retry_failed_perp_swaps(
             ws_connections,
             privileged_ws_connections,
             &mut processed_res,
+            user_id,
         )
         .await
         {

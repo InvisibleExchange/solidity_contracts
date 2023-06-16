@@ -40,6 +40,7 @@ use super::{
     broadcast_message, proccess_spot_matching_result, send_direct_message, WsConnectionsMap,
 };
 
+type SwapErrorInfo = (Option<u64>, u64, u64, String);
 pub async fn execute_swap(
     swap: Swap,
     transaction_mpsc_tx: MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
@@ -50,7 +51,7 @@ pub async fn execute_swap(
     backup_storage: Arc<Mutex<BackupStorage>>,
 ) -> (
     Option<((Message, Message), (u64, u64), Message)>,
-    Option<(Option<u64>, u64, u64)>,
+    Option<SwapErrorInfo>,
 ) {
     // ? Store relevant values before the swap in case of failure (for rollbacks and orderbook reinsertions)
     let order_a_clone = swap.order_a.clone();
@@ -256,11 +257,12 @@ pub async fn execute_swap(
                 }
 
                 let mut maker_order_id_ = None;
+                let mut error_message = "".to_string();
                 if let TransactionExecutionError::Swap(swap_execution_error) = err.current_context()
                 {
                     let mut book = order_book.lock().await;
 
-                    // println!("swap execution error: {:?}", swap_execution_error);
+                    error_message = swap_execution_error.err_msg.to_string();
 
                     if let Some(invalid_order_id) = swap_execution_error.invalid_order {
                         // ? only add the order back into the orderbook if not eql invalid_order_id
@@ -284,7 +286,7 @@ pub async fn execute_swap(
                             }
 
                             if taker_order_id == invalid_order_id {
-                                return (None, None);
+                                return (None, Some((None, 0, 0, error_message.to_owned())));
                             }
                         }
                     } else {
@@ -300,7 +302,10 @@ pub async fn execute_swap(
                     }
                 }
 
-                return (None, Some((maker_order_id_, taker_order_id, qty)));
+                return (
+                    None,
+                    Some((maker_order_id_, taker_order_id, qty, error_message)),
+                );
 
                 // Todo: Could save these errors somewhere and have some kind of analytics
             }
@@ -332,7 +337,15 @@ pub async fn execute_swap(
                     .restore_pending_order(Order::Spot(maker_order), qty);
             }
 
-            return (None, Some((Some(maker_order_id), taker_order_id, qty)));
+            return (
+                None,
+                Some((
+                    Some(maker_order_id),
+                    taker_order_id,
+                    qty,
+                    "Error executing swap".to_string(),
+                )),
+            );
         }
     }
 }
@@ -350,7 +363,7 @@ pub async fn process_and_execute_spot_swaps(
             std::result::Result<
                 (
                     Option<((Message, Message), (u64, u64), Message)>,
-                    Option<(Option<u64>, u64, u64)>,
+                    Option<SwapErrorInfo>,
                 ),
                 JoinError,
             >,
@@ -441,7 +454,7 @@ use async_recursion::async_recursion;
 type SwapExecutionResultMessage = std::result::Result<
     (
         Option<((Message, Message), (u64, u64), Message)>,
-        Option<(Option<u64>, u64, u64)>,
+        Option<SwapErrorInfo>,
     ),
     JoinError,
 >;
@@ -450,16 +463,16 @@ pub async fn await_swap_handles(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     messages: Vec<SwapExecutionResultMessage>,
-) -> std::result::Result<Vec<(Option<u64>, u64, u64)>, String> {
+    user_id: u64,
+) -> std::result::Result<Vec<SwapErrorInfo>, String> {
     // ? Wait for the swaps to finish
     let mut retry_messages = Vec::new();
     for msg_ in messages {
         if let Err(_) = msg_ {
             continue;
         }
-
+        // If the swap was successful, send the messages to the users
         if msg_.as_ref().unwrap().0.is_some() {
-            // If the swap was successful, send the messages to the users
             let ((msg_a, msg_b), (user_id_a, user_id_b), fill_msg) = msg_.unwrap().0.unwrap();
 
             // ? Send a message to the user_id websocket
@@ -478,10 +491,27 @@ pub async fn await_swap_handles(
             {
                 println!("Error sending swap fill message")
             };
-        } else if msg_.as_ref().unwrap().1.is_some() {
-            // If there was an error in the swap, retry the order
+        }
+        // If there was an error in the swap, retry the order
+        else if msg_.as_ref().unwrap().1.is_some() {
+            let error_res = msg_.unwrap().1.unwrap();
 
-            retry_messages.push(msg_.unwrap().1.unwrap());
+            let msg = json!({
+                "message_id": "PERP_SWAP_ERROR",
+                "error_message": error_res.3,
+            });
+            let msg = Message::Text(msg.to_string());
+
+            // ? Send a message to the user_id websocket
+            if let Err(_) = send_direct_message(ws_connections, user_id, msg).await {
+                println!("Error sending perp swap message")
+            };
+
+            if error_res.0 == None && error_res.1 == 0 && error_res.2 == 0 {
+                continue;
+            }
+
+            retry_messages.push(error_res);
         }
     }
 
@@ -502,11 +532,21 @@ pub async fn retry_failed_swaps(
     is_market: bool,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
-    retry_messages: Vec<(Option<u64>, u64, u64)>,
+    retry_messages: Vec<SwapErrorInfo>,
     failed_counterpart_ids: Option<Vec<u64>>,
 ) -> std::result::Result<(), String> {
     for msg_ in retry_messages {
-        let (maker_order_id, taker_order_id, qty) = msg_;
+        let (maker_order_id, taker_order_id, qty, err_msg) = msg_;
+
+        // ? Send error message to the user_id websocket
+        let msg = json!({
+            "message_id": "SPOT_SWAP_ERROR",
+            "error_message": err_msg,
+        });
+        let msg = Message::Text(msg.to_string());
+        if let Err(_) = send_direct_message(ws_connections, user_id, msg).await {
+            println!("Error sending swap message")
+        };
 
         let mut failed_ids = if failed_counterpart_ids.is_some() {
             failed_counterpart_ids.clone().unwrap()
@@ -555,7 +595,14 @@ pub async fn retry_failed_swaps(
         };
 
         let retry_messages;
-        match await_swap_handles(ws_connections, privileged_ws_connections, new_handles).await {
+        match await_swap_handles(
+            ws_connections,
+            privileged_ws_connections,
+            new_handles,
+            user_id,
+        )
+        .await
+        {
             Ok(rm) => retry_messages = rm,
             Err(e) => return Err(e),
         };

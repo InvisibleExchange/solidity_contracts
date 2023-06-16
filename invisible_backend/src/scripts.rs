@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use invisible_backend::{perpetual::VALID_COLLATERAL_TOKENS, utils::storage::MainStorage};
 
-pub fn calculate_fees() {
+pub fn _calculate_fees() {
     let storage = MainStorage::new();
 
     let swap_output_json = storage.read_storage(0);

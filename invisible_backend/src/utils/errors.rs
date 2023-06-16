@@ -127,7 +127,7 @@ pub fn send_perp_swap_error(
     invalid_order: Option<u64>, // The id if the order is invalid and shouldnt be retruned to the orderbook
     attachment: Option<String>,
 ) -> Report<PerpSwapExecutionError> {
-    println!("ERROR: {:?}", attachment);
+    // println!("ERROR: {:?}", attachment);
 
     let report = Report::new(PerpSwapExecutionError {
         err_msg: err_msg.clone(),

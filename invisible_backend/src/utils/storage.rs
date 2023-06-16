@@ -7,10 +7,7 @@ use sled::{Config, Result};
 use crate::{
     perpetual::perp_position::PerpPosition,
     transaction_batch::tx_batch_structs::OracleUpdate,
-    transactions::transaction_helpers::{
-        rollbacks::RollbackInfo,
-        transaction_output::{FillInfo, PerpFillInfo},
-    },
+    transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
 };
 
 use super::notes::Note;
@@ -47,9 +44,6 @@ impl MainStorage {
         let config =
             Config::new().path("./storage/funding_info/".to_string() + &batch_index.to_string());
         let funding_db = config.open().unwrap();
-
-        // Check if the database is empty
-        let is_empty = tx_db.is_empty();
 
         MainStorage {
             tx_db,
@@ -292,7 +286,7 @@ pub struct BackupStorage {
     removable_positions_db: sled::Db, // For failed removable positions updates
     fills_db: sled::Db,               // For failed spot fills updates
     perp_fills_db: sled::Db,          // For failed perp fills updates
-    rollback_db: sled::Db,            // For rollback transactions
+                                      // rollback_db: sled::Db,            // For rollback transactions
 }
 
 impl BackupStorage {
@@ -315,8 +309,8 @@ impl BackupStorage {
         let config = Config::new().path("./storage/backups/perp_fills");
         let perp_fills_db = config.open().unwrap();
 
-        let config = Config::new().path("./storage/rollback_info");
-        let rollback_db = config.open().unwrap();
+        // let config = Config::new().path("./storage/rollback_info");
+        // let rollback_db = config.open().unwrap();
 
         BackupStorage {
             note_db,
@@ -325,7 +319,7 @@ impl BackupStorage {
             removable_positions_db,
             fills_db,
             perp_fills_db,
-            rollback_db,
+            // rollback_db,
         }
     }
 
@@ -452,14 +446,12 @@ impl BackupStorage {
         fills
     }
 
-    // TODO:
-    pub fn store_spot_rollback(&self, thread_id: u64, rollback: &RollbackInfo) -> Result<()> {
-        // for x in self.fills_db.iter() {}
-
-        // self.rollback_db.insert(key, fill)?;
-
-        Ok(())
-    }
+    // // TODO:
+    // pub fn store_spot_rollback(&self, thread_id: u64, rollback: &RollbackInfo) -> Result<()> {
+    //     // for x in self.fills_db.iter() {}
+    //     // self.rollback_db.insert(key, fill)?;
+    //     Ok(())
+    // }
 
     // pub struct RollbackInfo {
     //     pub zero_idxs: Option<Vec<u64>>,
