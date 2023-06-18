@@ -7,14 +7,12 @@ const {
   initDb,
   storeSpotOrder,
   storePerpOrder,
-  initOrderBooks,
-  compileLiqUpdateMessage,
-  listenToLiquidityUpdates,
   getLiquidatablePositions,
-} = require("./helpers");
+} = require("./helpers/helpers");
 
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
+const { initServer } = require("./helpers/initServer");
 
 const corsOptions = {
   origin: "*",
@@ -31,72 +29,32 @@ const packageDefinition = protoLoader.loadSync(
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
 
-const CONFIG_CODE = "1234567890";
-const RELAY_SERVER_ID = "43147634234";
 const SERVER_URL = "localhost:50052";
 
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
 const db = initDb();
 
-// * ORDER BOOKS AND LIQUIDITY ====================================================================================
+let spot24hVolumes = {};
+let spot24hTrades = {};
+function updateSpot24hInfo(volumes, trades) {
+  spot24hVolumes = volumes;
+  spot24hTrades = trades;
+}
+let perp24hVolumes = {};
+let perp24hTrades = {};
+function updatePerp24hInfo(volumes, trades) {
+  perp24hVolumes = volumes;
+  perp24hTrades = trades;
+}
+let fundingRates = {};
+let fundingPrices = {};
+function updateFundingInfo(rates, prices) {
+  fundingRates = rates;
+  fundingPrices = prices;
+}
 
-const orderBooks = initOrderBooks();
-let fillUpdates = [];
-let wsConnections = [];
-
-// & WEBSOCKET CLIENT
-let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket(`ws://localhost:50053/`);
-
-wsClient.onopen = function () {
-  console.log("WebSocket Client Connected");
-  wsClient.send(
-    JSON.stringify({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE })
-  );
-};
-
-wsClient.onmessage = function (e) {
-  listenToLiquidityUpdates(e, db, orderBooks, fillUpdates);
-};
-
-// & WEBSOCKET SERVER
-const WebSocket = require("ws");
-const wss = new WebSocket.Server({ port: 4040 });
-const SEND_LIQUIDITY_PERIOD = 1000;
-
-wss.on("connection", (ws) => {
-  ws.on("message", (message) => {});
-
-  wsConnections.push(ws);
-});
-
-// ? Send the update to all connected clients
-setInterval(() => {
-  let updates = compileLiqUpdateMessage(orderBooks);
-  let message = JSON.stringify({
-    message_id: "LIQUIDITY_UPDATE",
-    liquidity_updates: updates,
-  });
-
-  let fillMessage = fillUpdates.length
-    ? JSON.stringify({
-        message_id: "SWAP_FILLED",
-        fillUpdates: fillUpdates,
-      })
-    : null;
-
-  fillUpdates = [];
-
-  for (const ws of wsConnections) {
-    ws.send(message);
-    if (fillMessage) {
-      ws.send(fillMessage);
-    }
-  }
-}, SEND_LIQUIDITY_PERIOD);
-
-console.log("WebSocket server started on port 4040");
+initServer(client, db, updateSpot24hInfo, updatePerp24hInfo, updateFundingInfo);
 
 /// =============================================================================
 
@@ -248,14 +206,24 @@ app.post("/finalize_batch", (req, res) => {
 
 // ===================================================================
 
-// * APPLY FUNDING UPDATE
-app.post("/apply_funding", (req, res) => {
-  client.apply_funding(req.body, function (err, response) {
-    if (err) {
-      console.log(err);
-    } else {
-      res.send({ response: response });
-    }
+// * GET FUNDING INFO
+app.post("/get_market_info", (req, res) => {
+  // TODO: For testing
+  fundingRates = { 12345: [272, 103, -510], 54321: [321, -150, 283] };
+  fundingPrices = {
+    12345: [25000_000_000, 25130_000_000, 25300_000_000],
+    54321: [1500, 1600, 1700],
+  };
+
+  res.send({
+    response: {
+      fundingPrices,
+      fundingRates,
+      spot24hVolumes,
+      spot24hTrades,
+      perp24hVolumes,
+      perp24hTrades,
+    },
   });
 });
 

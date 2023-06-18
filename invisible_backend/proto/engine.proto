@@ -18,21 +18,27 @@ service Engine {
 
     rpc amend_order (AmendOrderRequest) returns (AmendOrderResponse);
 
-    rpc get_liquidity (LiquidityReq) returns (LiquidityRes);
-
-    rpc get_orders (OrdersReq) returns (OrdersRes);
-
     rpc split_notes (SplitNotesReq) returns (SplitNotesRes);
 
     rpc change_position_margin (MarginChangeReq) returns (MarginChangeRes);
 
-    rpc finalize_batch (EmptyReq) returns (FinalizeBatchResponse);
-
-    rpc restore_orderbook (RestoreOrderBookMessage) returns (SuccessResponse);
+    //
 
     // rpc start_funding (StartFundingUpdatesReq) returns (SuccessResponse);
 
+    rpc finalize_batch (EmptyReq) returns (FinalizeBatchResponse);
+
     rpc update_index_price (OracleUpdateReq) returns (SuccessResponse);
+
+    rpc restore_orderbook (RestoreOrderBookMessage) returns (SuccessResponse);
+
+    //
+
+    rpc get_orders (OrdersReq) returns (OrdersRes);
+
+    rpc get_liquidity (LiquidityReq) returns (LiquidityRes);
+
+    rpc get_funding_info (FundingReq) returns (FundingRes);
 
     rpc get_state_info (StateInfoReq) returns (StateInfoRes);
 
@@ -291,6 +297,24 @@ message BookEntry {
     uint64 amount = 2;
     uint64 timestamp = 3;
 }
+
+// * FUNDING ---------------------------------------------------
+
+message FundingReq {
+}
+
+message FundingRes {
+    bool successful = 1;
+    repeated FundingInfo fundings = 2;
+    string error_message = 3; 
+}
+
+message FundingInfo {
+    uint64 token = 1;
+    repeated int64 funding_rates = 2;
+    repeated uint64 funding_prices = 3;
+}
+
 
 
 // *  SPLIT NOTES --------------------------------------------------

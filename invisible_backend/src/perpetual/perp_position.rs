@@ -867,7 +867,6 @@ impl PerpPosition {
             &self.order_side,
             self.synthetic_token,
         );
-
         let new_liquidation_price: u64 = _get_liquidation_price(
             self.entry_price,
             margin_after_funding as u64,

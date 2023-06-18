@@ -555,7 +555,7 @@ impl TryFrom<GrpcOracleUpdate> for OracleUpdate {
 
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GrpcTxResponse {
     pub tx_handle: Option<
         JoinHandle<Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError>>,
@@ -565,7 +565,17 @@ pub struct GrpcTxResponse {
         Option<JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>>>,
     pub margin_change_response: Option<(Option<MarginChangeResponse>, String)>, //
     pub new_idxs: Option<std::result::Result<Vec<u64>, String>>, // For deposit orders
+    pub funding_info: Option<(HashMap<u64, Vec<i64>>, HashMap<u64, Vec<u64>>)>,
     pub successful: bool,
+}
+
+impl GrpcTxResponse {
+    pub fn new(successful: bool) -> GrpcTxResponse {
+        GrpcTxResponse {
+            successful,
+            ..Default::default()
+        }
+    }
 }
 
 // * CONTROL ENGINE ======================================================================

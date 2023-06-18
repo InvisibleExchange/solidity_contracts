@@ -11,10 +11,10 @@ use tokio_tungstenite::tungstenite::Message;
 use super::{
     grpc::engine::{
         AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, EmptyReq,
-        FinalizeBatchResponse, GrpcPerpPosition, LimitOrderMessage, LiquidationOrderMessage,
-        LiquidationOrderResponse, LiquidityReq, LiquidityRes, OracleUpdateReq, OrderResponse,
-        PerpOrderMessage, RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq,
-        StateInfoRes, SuccessResponse, WithdrawalMessage,
+        FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes, GrpcPerpPosition,
+        LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
+        LiquidityRes, OracleUpdateReq, OrderResponse, PerpOrderMessage, RestoreOrderBookMessage,
+        SpotOrderRestoreMessage, StateInfoReq, StateInfoRes, SuccessResponse, WithdrawalMessage,
     },
     server_helpers::{
         amend_order_execution::{
@@ -65,8 +65,8 @@ use crate::{
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{
-            send_amend_order_error_reply, send_liquidation_order_error_reply,
-            PerpSwapExecutionError,
+            send_amend_order_error_reply, send_funding_error_reply,
+            send_liquidation_order_error_reply, PerpSwapExecutionError,
         },
         storage::{BackupStorage, MainStorage},
     },
@@ -137,7 +137,6 @@ pub struct EngineService {
     pub ws_connections: Arc<TokioMutex<WsConnectionsMap>>,
     pub privileged_ws_connections: Arc<TokioMutex<Vec<u64>>>,
     //
-    pub tx_count: Arc<Mutex<u16>>, // TODO: For testing only
 }
 
 // #[tokio::]
@@ -1625,5 +1624,64 @@ impl Engine for EngineService {
         };
 
         return Ok(Response::new(reply));
+    }
+
+    async fn get_funding_info(
+        &self,
+        _: Request<FundingReq>,
+    ) -> Result<Response<FundingRes>, Status> {
+        tokio::task::yield_now().await;
+
+        let control_mpsc_tx = self.mpsc_tx.clone();
+
+        let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+            let (resp_tx, resp_rx) = oneshot::channel();
+
+            let mut grpc_message = GrpcMessage::new();
+            grpc_message.msg_type = MessageType::FundingUpdate;
+
+            control_mpsc_tx
+                .send((grpc_message, resp_tx))
+                .await
+                .ok()
+                .unwrap();
+
+            return resp_rx.await.unwrap();
+        });
+
+        if let Ok(grpc_res) = handle.await {
+            match grpc_res.funding_info {
+                Some((funding_rates, funding_prices)) => {
+                    let mut fundings = Vec::new();
+                    for token in funding_rates.keys() {
+                        let rates = funding_rates.get(token).unwrap();
+                        let prices = funding_prices.get(token).unwrap();
+
+                        let funding_info = FundingInfo {
+                            token: *token,
+                            funding_rates: rates.clone(),
+                            funding_prices: prices.clone(),
+                        };
+
+                        fundings.push(funding_info);
+                    }
+
+                    let reply = FundingRes {
+                        successful: true,
+                        fundings,
+                        error_message: "".to_string(),
+                    };
+
+                    return Ok(Response::new(reply));
+                }
+                None => {
+                    return send_funding_error_reply("failed to get funding info".to_string());
+                }
+            }
+        } else {
+            println!("Unknown error in get funding info");
+
+            return send_funding_error_reply("failed to get funding info".to_string());
+        }
     }
 }

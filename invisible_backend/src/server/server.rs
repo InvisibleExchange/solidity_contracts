@@ -49,14 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "\nperp state tree: {:?}",
         tx_batch.perpetual_state_tree.lock().leaf_nodes
     );
-    println!("\nrunning_tx_count: {:?}", tx_batch.running_tx_count);
-
-
-    
-
-
-
-
 
     // TODO: TESTING ==========================================================
 
@@ -82,14 +74,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let handle =
                         tx_batch.execute_transaction(grpc_message.deposit_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: Some(handle),
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.tx_handle = Some(handle);
+
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: Some(handle),
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
 
                     response
                         .send(grpc_res)
@@ -98,14 +93,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::SwapMessage => {
                     let handle = tx_batch.execute_transaction(grpc_message.swap_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: Some(handle),
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: Some(handle),
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.tx_handle = Some(handle);
 
                     response
                         .send(grpc_res)
@@ -115,14 +113,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let handle =
                         tx_batch.execute_transaction(grpc_message.withdrawal_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: Some(handle),
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: Some(handle),
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.tx_handle = Some(handle);
 
                     response
                         .send(grpc_res)
@@ -132,14 +133,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let handle = tx_batch
                         .execute_perpetual_transaction(grpc_message.perp_swap_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: Some(handle),
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: Some(handle),
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.perp_tx_handle = Some(handle);
 
                     response
                         .send(grpc_res)
@@ -149,14 +153,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let handle = tx_batch
                         .execute_liquidation_transaction(grpc_message.liquidation_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: Some(handle),
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: Some(handle),
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.liquidation_tx_handle = Some(handle);
 
                     response
                         .send(grpc_res)
@@ -166,14 +173,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let (notes_in, notes_out) = grpc_message.split_notes_message.unwrap();
                     let zero_idxs = tx_batch.split_notes(notes_in, notes_out);
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: Some(zero_idxs),
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: Some(zero_idxs),
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.new_idxs = Some(zero_idxs);
 
                     response
                         .send(grpc_res)
@@ -204,14 +214,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response,
-                        successful: success,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response,
+                    //     successful: success,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(success);
+                    grpc_res.margin_change_response = margin_change_response;
 
                     response
                         .send(grpc_res)
@@ -220,50 +233,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::Rollback => {
                     tx_batch.rollback_transaction(grpc_message.rollback_info_message.unwrap());
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: true,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
 
                     response
                         .send(grpc_res)
                         .expect("failed sending back the TxResponse in rollback");
                 }
                 MessageType::FundingUpdate => {
-                    let funding_update = grpc_message.funding_update_message.unwrap();
+                    if let Some(funding_update) = grpc_message.funding_update_message {
+                        tx_batch.per_minute_funding_updates(funding_update);
 
-                    tx_batch.per_minute_funding_updates(funding_update);
+                        // let grpc_res = GrpcTxResponse {
+                        //     tx_handle: None,
+                        //     perp_tx_handle: None,
+                        //     liquidation_tx_handle: None,
+                        //     new_idxs: None,
+                        //     margin_change_response: None,
+                        //     funding_info: None,
+                        //     successful: true,
+                        // };
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: true,
-                    };
+                        let grpc_res = GrpcTxResponse::new(true);
 
-                    response
-                        .send(grpc_res)
-                        .expect("failed sending back the TxResponse in funding update");
+                        response
+                            .send(grpc_res)
+                            .expect("failed sending back the TxResponse in funding update");
+                    } else {
+                        let funding_rates = tx_batch.funding_rates.clone();
+                        let funding_prices = tx_batch.funding_prices.clone();
+
+                        let mut grpc_res = GrpcTxResponse::new(true);
+                        grpc_res.funding_info = Some((funding_rates, funding_prices));
+
+                        response
+                            .send(grpc_res)
+                            .expect("failed sending back the TxResponse in funding update");
+                    }
                 }
                 MessageType::IndexPriceUpdate => {
                     let oracle_updates = grpc_message.price_update_message.unwrap();
 
                     let updated_prices = tx_batch.update_index_prices(oracle_updates);
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: updated_prices.is_ok(),
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: updated_prices.is_ok(),
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(updated_prices.is_ok());
 
                     response
                         .send(grpc_res)
@@ -272,14 +302,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::FinalizeBatch => {
                     let success = tx_batch.finalize_batch().is_ok();
 
-                    let grpc_res = GrpcTxResponse {
-                        tx_handle: None,
-                        perp_tx_handle: None,
-                        liquidation_tx_handle: None,
-                        new_idxs: None,
-                        margin_change_response: None,
-                        successful: success,
-                    };
+                    // let grpc_res = GrpcTxResponse {
+                    //     tx_handle: None,
+                    //     perp_tx_handle: None,
+                    //     liquidation_tx_handle: None,
+                    //     new_idxs: None,
+                    //     margin_change_response: None,
+                    //     successful: success,
+                    // };
+
+                    let mut grpc_res = GrpcTxResponse::new(success);
 
                     response
                         .send(grpc_res)
@@ -362,7 +394,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         perp_order_books,
         ws_connections,
         privileged_ws_connections,
-        tx_count: Arc::new(Mutex::new(0)),
         main_storage,
         backup_storage,
         swap_output_json,

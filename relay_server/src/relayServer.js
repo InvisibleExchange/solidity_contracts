@@ -23,73 +23,28 @@ app.use(express.json());
 
 const db = initDb();
 
-const CONFIG_CODE = "1234567890";
-const RELAY_SERVER_ID = "43147634234";
-const SERVER_URL = "54.212.28.196";
+const SERVER_URL = "localhost"; //"54.212.28.196";
 
-// * ORDER BOOKS AND LIQUIDITY ====================================================================================
+let spot24hVolumes = {};
+let spot24hTrades = {};
+function updateSpot24hInfo(volumes, trades) {
+  spot24hVolumes = volumes;
+  spot24hTrades = trades;
+}
+let perp24hVolumes = {};
+let perp24hTrades = {};
+function updatePerp24hInfo(volumes, trades) {
+  perp24hVolumes = volumes;
+  perp24hTrades = trades;
+}
+let fundingRates = {};
+let fundingPrices = {};
+function updateFundingInfo(rates, prices) {
+  fundingRates = rates;
+  fundingPrices = prices;
+}
 
-const orderBooks = initOrderBooks();
-let fillUpdates = [];
-let wsConnections = [];
-
-// & WEBSOCKET CLIENT
-let W3CWebSocket = require("websocket").w3cwebsocket;
-let wsClient = new W3CWebSocket(`ws://localhost:50053/`);
-
-wsClient.onopen = function () {
-  console.log("WebSocket Client Connected");
-  wsClient.send(
-    JSON.stringify({ user_id: RELAY_SERVER_ID, config_code: CONFIG_CODE })
-  );
-};
-
-wsClient.onmessage = function (e) {
-  listenToLiquidityUpdates(e, db, orderBooks, fillUpdates);
-};
-
-// & WEBSOCKET SERVER
-const WebSocket = require("ws");
-const wss = new WebSocket.Server({ port: 4040 });
-const SEND_LIQUIDITY_PERIOD = 1000;
-
-wss.on("connection", (ws) => {
-  ws.on("message", (message) => {});
-
-  wsConnections.push(ws);
-
-  ws.on("close", () => {});
-});
-
-// ? Send the update to all connected clients
-setInterval(() => {
-  let updates = compileLiqUpdateMessage(orderBooks);
-
-  let message = JSON.stringify({
-    message_id: "LIQUIDITY_UPDATE",
-    liquidity_updates: updates,
-  });
-
-  let fillMessage = fillUpdates.length
-    ? JSON.stringify({
-        message_id: "SWAP_FILLED",
-        fillUpdates: fillUpdates,
-      })
-    : null;
-
-  fillUpdates = [];
-
-  for (const ws of wsConnections) {
-    ws.send(message);
-    if (fillMessage) {
-      ws.send(fillMessage);
-    }
-  }
-}, SEND_LIQUIDITY_PERIOD);
-
-console.log("WebSocket server started on port 4040");
-
-// /home/ubuntu/Invisible/invisible_react/express_server/relayServer.js
+initServer(client, db, updateSpot24hInfo, updatePerp24hInfo, updateFundingInfo);
 
 // * RABBITMQ CONFIG ====================================================================================
 
@@ -246,7 +201,7 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       );
     });
 
-    // *  CGANGE POSITION MARGIN -----------------------------------------------------------
+    // *  CHANGE POSITION MARGIN -----------------------------------------------------------
     app.post("/change_position_margin", (req, res) => {
       delegateRequest(
         req.body,
@@ -271,7 +226,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
     });
 
     // * GET ORDERS ---------------------------------------------------------------------
-
     app.post("/get_orders", (req, res) => {
       delegateRequest(
         req.body,
@@ -281,6 +235,26 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
         queue,
         correlationIdToResolve
       );
+    });
+
+    // * GET FUNDING INFO -----------------------------------------------------------------
+    app.post("/get_market_info", (req, res) => {
+      // TODO: For testing
+      fundingRates = { 12345: [272, 103, -510], 54321: [321, -150, 283] };
+      fundingPrices = {
+        12345: [25000_000_000, 25130_000_000, 25300_000_000],
+        54321: [1500, 1600, 1700],
+      };
+      res.send({
+        response: {
+          fundingPrices,
+          fundingRates,
+          spot24hVolumes,
+          spot24hTrades,
+          perp24hVolumes,
+          perp24hTrades,
+        },
+      });
     });
 
     // // ===================================================================
@@ -325,8 +299,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
     //     }
     //   });
     // });
-
-    // TODO
   });
 });
 
