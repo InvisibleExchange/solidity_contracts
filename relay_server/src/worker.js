@@ -3,7 +3,7 @@ const amqp = require("amqplib/callback_api");
 
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
-const { initDb, storeSpotOrder, storePerpOrder } = require("./helpers");
+const { initDb, storeSpotOrder, storePerpOrder } = require("./helpers/helpers");
 
 const path = require("path");
 const protoPath = path.join(
@@ -141,6 +141,11 @@ async function processOrder(correlationId, order) {
   } else if (correlationId.startsWith("get_liquidity")) {
     // gets all liquidity for a user in the backend engine
     let res = await callGetLiquidityRpcWithPromise(order);
+
+    return res;
+  } else if (correlationId.startsWith("get_funding_info")) {
+    // gets all liquidity for a user in the backend engine
+    let res = await callGetFundingInfoRpcWithPromise();
 
     return res;
   }
@@ -285,6 +290,18 @@ function callGetOrderRpcWithPromise(ordersReq) {
 function callGetLiquidityRpcWithPromise(liquidityReq) {
   return new Promise((resolve, reject) => {
     client.get_liquidity(liquidityReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callGetFundingInfoRpcWithPromise() {
+  return new Promise((resolve, reject) => {
+    client.get_funding_info({}, function (err, response) {
       if (err) {
         reject(err);
       } else {

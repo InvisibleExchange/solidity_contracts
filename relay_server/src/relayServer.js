@@ -5,12 +5,8 @@ const port = 4000;
 const amqp = require("amqplib/callback_api");
 
 const cors = require("cors");
-const {
-  listenToLiquidityUpdates,
-  initDb,
-  compileLiqUpdateMessage,
-  initOrderBooks,
-} = require("./helpers");
+const { initDb } = require("./helpers/helpers");
+const { initServer, initFundingInfoInterval } = require("./helpers/initServer");
 
 const corsOptions = {
   origin: "*",
@@ -44,7 +40,7 @@ function updateFundingInfo(rates, prices) {
   fundingPrices = prices;
 }
 
-initServer(client, db, updateSpot24hInfo, updatePerp24hInfo, updateFundingInfo);
+initServer(db, updateSpot24hInfo, updatePerp24hInfo);
 
 // * RABBITMQ CONFIG ====================================================================================
 
@@ -93,6 +89,20 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       "amq.rabbitmq.reply-to",
       (msg) => {
         const correlationId = msg.properties.correlationId;
+
+        if (correlationId == "get_funding_info") {
+          if (msg.content.successful) {
+            let rates = {};
+            let prices = {};
+            for (const fundingInfo of msg.content.fundings) {
+              rates[fundingInfo.token] = fundingInfo.funding_rates;
+              prices[fundingInfo.token] = fundingInfo.funding_prices;
+            }
+
+            updateFundingInfo(rates, prices);
+          }
+        }
+
         const res = correlationIdToResolve.get(correlationId);
         if (res) {
           correlationIdToResolve.delete(correlationId);
@@ -103,7 +113,12 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       { noAck: true }
     );
 
-    // TODO
+    initFundingInfoInterval(
+      channel,
+      queue,
+      correlationIdToResolve,
+      delegateRequest
+    );
 
     // * EXECUTE DEPOSIT -----------------------------------------------------------------
     app.post("/execute_deposit", (req, res) => {

@@ -10,13 +10,7 @@ const { priceUpdate } = require("../helpers/mmPriceFeeds");
 const CONFIG_CODE = "1234567890";
 const RELAY_SERVER_ID = "43147634234";
 
-function initServer(
-  client,
-  db,
-  updateSpot24hInfo,
-  updatePerp24hInfo,
-  updateFundingInfo
-) {
+function initServer(db, updateSpot24hInfo, updatePerp24hInfo) {
   // & Init order books ==================
   const orderBooks = initOrderBooks();
   let fillUpdates = [];
@@ -118,7 +112,9 @@ function initServer(
     } catch {}
   }, 15 * 60 * 1000);
   // & Get funding every 1 hour  ===================================================================
+}
 
+function initFundingInfo(client, updateFundingInfo) {
   client.get_funding_info({}, function (err, response) {
     if (err) {
       console.log(err);
@@ -158,6 +154,37 @@ function initServer(
   }, 60 * 60 * 1000);
 }
 
+function initFundingInfoInterval(
+  channel,
+  queue,
+  correlationIdToResolve,
+  delegateRequest
+) {
+  delegateRequest(
+    {},
+    "get_funding_info",
+    channel,
+    null,
+    queue,
+    correlationIdToResolve
+  );
+
+  setInterval(() => {
+    try {
+      delegateRequest(
+        {},
+        "get_funding_info",
+        channel,
+        null,
+        queue,
+        correlationIdToResolve
+      );
+    } catch {}
+  }, 60 * 60 * 1000);
+}
+
 module.exports = {
   initServer,
+  initFundingInfo,
+  initFundingInfoInterval,
 };

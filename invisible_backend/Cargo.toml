@@ -1,19 +1,16 @@
-[package]
-name = "invisible_backend"
-version = "0.0.1"
-edition = "2021"
+# [package]
+# name = "invisible_backend"
+# version = "0.0.1"
+# edition = "2021"
 
 
 [[bin]]
 name = "server"
 path = "src/server/server.rs"
 
-[[bin]]
-name = "client"
-path = "src/server/client.rs"
-
-
-
+# [[bin]]
+# name = "client"
+# path = "src/server/client.rs"
 
 
 [lib]

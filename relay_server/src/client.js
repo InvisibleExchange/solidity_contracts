@@ -12,7 +12,7 @@ const {
 
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
-const { initServer } = require("./helpers/initServer");
+const { initServer, initFundingInfo } = require("./helpers/initServer");
 
 const corsOptions = {
   origin: "*",
@@ -54,7 +54,8 @@ function updateFundingInfo(rates, prices) {
   fundingPrices = prices;
 }
 
-initServer(client, db, updateSpot24hInfo, updatePerp24hInfo, updateFundingInfo);
+initServer(db, updateSpot24hInfo, updatePerp24hInfo);
+initFundingInfo(client, updateFundingInfo);
 
 /// =============================================================================
 
