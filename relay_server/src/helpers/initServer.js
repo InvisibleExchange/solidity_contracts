@@ -160,14 +160,16 @@ function initFundingInfoInterval(
   correlationIdToResolve,
   delegateRequest
 ) {
-  delegateRequest(
-    {},
-    "get_funding_info",
-    channel,
-    null,
-    queue,
-    correlationIdToResolve
-  );
+  setTimeout(() => {
+    delegateRequest(
+      {},
+      "get_funding_info",
+      channel,
+      null,
+      queue,
+      correlationIdToResolve
+    );
+  }, 3000);
 
   setInterval(() => {
     try {

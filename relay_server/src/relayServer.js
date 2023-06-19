@@ -19,7 +19,7 @@ app.use(express.json());
 
 const db = initDb();
 
-const SERVER_URL = "localhost"; //"54.212.28.196";
+const SERVER_URL = "54.212.28.196";
 
 let spot24hVolumes = {};
 let spot24hTrades = {};
@@ -90,24 +90,30 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       (msg) => {
         const correlationId = msg.properties.correlationId;
 
-        if (correlationId == "get_funding_info") {
-          if (msg.content.successful) {
+        console.log(
+          "correlation ID",
+          correlationId.startsWith("get_funding_info")
+        );
+
+        if (correlationId.startsWith("get_funding_info")) {
+          let response = JSON.parse(msg.content);
+          if (response.successful) {
             let rates = {};
             let prices = {};
-            for (const fundingInfo of msg.content.fundings) {
+            for (const fundingInfo of response.fundings) {
               rates[fundingInfo.token] = fundingInfo.funding_rates;
               prices[fundingInfo.token] = fundingInfo.funding_prices;
             }
 
             updateFundingInfo(rates, prices);
           }
-        }
+        } else {
+          const res = correlationIdToResolve.get(correlationId);
+          if (res) {
+            correlationIdToResolve.delete(correlationId);
 
-        const res = correlationIdToResolve.get(correlationId);
-        if (res) {
-          correlationIdToResolve.delete(correlationId);
-
-          res.send({ response: JSON.parse(msg.content) });
+            res.send({ response: JSON.parse(msg.content) });
+          }
         }
       },
       { noAck: true }
@@ -122,6 +128,8 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
 
     // * EXECUTE DEPOSIT -----------------------------------------------------------------
     app.post("/execute_deposit", (req, res) => {
+      console.log("executing");
+
       delegateRequest(
         req.body,
         "deposit",

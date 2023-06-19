@@ -20,8 +20,8 @@ const packageDefinition = protoLoader.loadSync(protoPath, {
   oneofs: true,
 });
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
-const SERVER_URL = "localhost";
-// const SERVER_URL = "54.212.28.196";
+// const SERVER_URL = "localhost";
+const SERVER_URL = "54.212.28.196";
 
 const client = new engine.Engine(
   `${SERVER_URL}:50052`,
