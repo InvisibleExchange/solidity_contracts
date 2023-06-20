@@ -4,7 +4,7 @@ const protoLoader = require("@grpc/proto-loader");
 const axios = require("axios");
 
 const packageDefinition = protoLoader.loadSync(
-  "../../invisible_backend/proto/engine.proto",
+  "../../../invisible_backend/proto/engine.proto",
   { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
@@ -13,8 +13,10 @@ const SERVER_URL = "localhost:50052";
 
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
+const path = require("path");
 const dotenv = require("dotenv");
-dotenv.config();
+
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 let token2symbol = {
   12345: "btcusd",
@@ -26,14 +28,15 @@ const PRICE_DECIMALS_PER_ASSET = {
 };
 const { getKeyPair, sign } = require("starknet").ec;
 
-const CRYPTOWATCH_API_KEY = process.env.CRYPTOWATCH_API_KEY;
-
 /**
  *
  * @param {"btcusd" / "ethusd"} symbol
  */
 async function getOracleUpdate(token) {
   let symbol = token2symbol[token];
+
+  const CRYPTOWATCH_API_KEY = process.env.CRYPTOWATCH_API_KEY;
+
   let res = await axios
     .get(
       `https://api.cryptowat.ch/markets/coinbase/${symbol}/price?apikey=` +
@@ -78,12 +81,10 @@ function main() {
     let updates = [];
     for (let token of [12345, 54321]) {
       let update = await getOracleUpdate(token);
-
       if (update) {
         updates.push(update);
       }
     }
-
     if (updates.length == 0) {
       return;
     }
@@ -96,7 +97,7 @@ function main() {
         }
       }
     );
-  }, 10_000);
+  }, 3_000);
 }
 
 main();
