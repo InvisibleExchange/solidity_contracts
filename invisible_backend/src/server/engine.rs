@@ -1297,21 +1297,24 @@ impl Engine for EngineService {
                 return send_split_notes_error_reply("Invalid note".to_string());
             }
         }
-        let mut notes_out: Vec<Note> = Vec::new();
+        let new_note: Note;
+        let mut refund_note: Option<Note> = None;
         if req.note_out.is_some() {
             let note_out = Note::try_from(req.note_out.unwrap());
 
             if let Ok(n) = note_out {
-                notes_out.push(n);
+                new_note = n;
             } else {
                 return send_split_notes_error_reply("Invalid note".to_string());
             }
+        } else {
+            return send_split_notes_error_reply("Invalid note".to_string());
         }
         if req.refund_note.is_some() {
-            let refund_note = Note::try_from(req.refund_note.unwrap());
+            let refund_note_ = Note::try_from(req.refund_note.unwrap());
 
-            if let Ok(n) = refund_note {
-                notes_out.push(n);
+            if let Ok(n) = refund_note_ {
+                refund_note = Some(n);
             } else {
                 return send_split_notes_error_reply("Invalid note".to_string());
             }
@@ -1324,7 +1327,7 @@ impl Engine for EngineService {
 
             let mut grpc_message = GrpcMessage::new();
             grpc_message.msg_type = MessageType::SplitNotes;
-            grpc_message.split_notes_message = Some((notes_in, notes_out));
+            grpc_message.split_notes_message = Some((notes_in, new_note, refund_note));
 
             control_mpsc_tx
                 .send((grpc_message, resp_tx))

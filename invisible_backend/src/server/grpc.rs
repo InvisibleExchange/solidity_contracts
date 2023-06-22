@@ -630,7 +630,7 @@ pub struct GrpcMessage {
     pub withdrawal_message: Option<Withdrawal>,
     pub perp_swap_message: Option<PerpSwap>,
     pub liquidation_message: Option<LiquidationSwap>,
-    pub split_notes_message: Option<(Vec<Note>, Vec<Note>)>,
+    pub split_notes_message: Option<(Vec<Note>, Note, Option<Note>)>,
     pub change_margin_message: Option<ChangeMarginMessage>,
     pub rollback_info_message: Option<(ThreadId, RollbackMessage)>,
     pub funding_update_message: Option<FundingUpdateMessage>,

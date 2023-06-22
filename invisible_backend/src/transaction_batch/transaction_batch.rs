@@ -25,7 +25,7 @@ use crate::{
         },
         perp_position::PerpPosition,
         perp_swap::PerpSwap,
-        VALID_COLLATERAL_TOKENS,
+        DUST_AMOUNT_PER_ASSET, VALID_COLLATERAL_TOKENS,
     },
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
@@ -500,7 +500,8 @@ impl TransactionBatch {
     pub fn split_notes(
         &mut self,
         notes_in: Vec<Note>,
-        notes_out: Vec<Note>,
+        new_note: Note,
+        refund_note: Option<Note>,
     ) -> std::result::Result<Vec<u64>, String> {
         let token = notes_in[0].token;
 
@@ -521,23 +522,44 @@ impl TransactionBatch {
             sum_in += note.amount;
         }
 
-        let note_out1 = &notes_out[0];
-        let note_out2 = &notes_out[1];
-        if note_out1.token != token || note_out2.token != token {
+        if new_note.token != token {
             return Err("Invalid token".to_string());
         }
 
         let note_in1 = &notes_in[0];
-        let note_in2 = &notes_in[notes_in.len() - 1];
-        if note_out1.blinding != note_in1.blinding
-            || note_out1.address.x != note_in1.address.x
-            || note_out2.blinding != note_in2.blinding
-            || note_out2.address.x != note_in2.address.x
-        {
+        if new_note.blinding != note_in1.blinding || new_note.address.x != note_in1.address.x {
             return Err("Mismatch od address and blinding between input/output notes".to_string());
         }
+        let new_amount = new_note.amount;
 
-        if sum_in != note_out1.amount + note_out2.amount {
+        let mut notes_out = Vec::new();
+        notes_out.push(new_note);
+
+        let mut refund_amount: u64 = 0;
+        if refund_note.is_some() {
+            let refund_note_ = refund_note.unwrap();
+
+            if refund_note_.token != token {
+                return Err("Invalid token".to_string());
+            }
+
+            let note_in2 = &notes_in[notes_in.len() - 1];
+            if refund_note_.blinding != note_in2.blinding
+                || refund_note_.address.x != note_in2.address.x
+            {
+                return Err(
+                    "Mismatch od address and blinding between input/output notes".to_string(),
+                );
+            }
+
+            refund_amount = refund_note_.amount;
+
+            notes_out.push(refund_note_);
+        }
+
+        if sum_in < new_amount + refund_amount
+            || sum_in > new_amount + refund_amount + DUST_AMOUNT_PER_ASSET[&token.to_string()]
+        {
             return Err("New note amounts exceed old note amounts".to_string());
         }
 

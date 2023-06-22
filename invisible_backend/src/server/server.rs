@@ -170,8 +170,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .expect("failed sending back the TxResponse in perp swap");
                 }
                 MessageType::SplitNotes => {
-                    let (notes_in, notes_out) = grpc_message.split_notes_message.unwrap();
-                    let zero_idxs = tx_batch.split_notes(notes_in, notes_out);
+                    let (notes_in, new_note, refund_note) =
+                        grpc_message.split_notes_message.unwrap();
+                    let zero_idxs = tx_batch.split_notes(notes_in, new_note, refund_note);
 
                     // let grpc_res = GrpcTxResponse {
                     //     tx_handle: None,
