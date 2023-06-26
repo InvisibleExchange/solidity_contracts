@@ -26,8 +26,8 @@ use super::{
         },
         send_to_relay_server,
         swap_execution::{
-            await_swap_handles, process_and_execute_spot_swaps, process_limit_order_request,
-            retry_failed_swaps,
+            await_swap_handles, process_and_execute_spot_swaps, process_batch_order_request,
+            process_limit_order_request, retry_failed_swaps,
         },
         PERP_MARKET_IDS,
     },
@@ -154,6 +154,8 @@ impl Engine for EngineService {
 
         let user_id = req.user_id;
         let is_market: bool = req.is_market;
+        let prices = req.prices.clone();
+        let amounts = req.amounts.clone();
 
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
@@ -187,19 +189,39 @@ impl Engine for EngineService {
             return send_order_error_reply(err_msg);
         }
 
-        let mut processed_res = process_limit_order_request(
-            self.order_books.get(&market_id).clone().unwrap(),
-            limit_order.clone(),
-            side,
-            signature.clone(),
-            user_id,
-            is_market,
-            false,
-            0,
-            0,
-            None,
-        )
-        .await;
+        let mut processed_res: Vec<std::result::Result<Success, Failed>>;
+        if prices.len() > 0 {
+            if prices.len() != amounts.len() {
+                return send_order_error_reply(
+                    "Prices and amounts must have the same length".to_string(),
+                );
+            }
+
+            processed_res = process_batch_order_request(
+                self.order_books.get(&market_id).clone().unwrap(),
+                limit_order.clone(),
+                side,
+                signature.clone(),
+                prices,
+                amounts,
+                user_id,
+            )
+            .await;
+        } else {
+            processed_res = process_limit_order_request(
+                self.order_books.get(&market_id).clone().unwrap(),
+                limit_order.clone(),
+                side,
+                signature.clone(),
+                user_id,
+                is_market,
+                false,
+                0,
+                0,
+                None,
+            )
+            .await;
+        }
 
         // This matches the orders and creates the swaps that can be executed
         let handles;
@@ -224,9 +246,6 @@ impl Engine for EngineService {
         };
 
         // this executes the swaps in parallel
-
-        // let l = handles.len();
-
         let retry_messages;
         match await_swap_handles(
             &self.ws_connections,
@@ -262,14 +281,6 @@ impl Engine for EngineService {
                 return send_order_error_reply(e);
             }
         }
-
-        // if l > 0 {
-        //     println!(
-        //         "spot swap_handles took: {:?} for {} swaps",
-        //         now.elapsed(),
-        //         l
-        //     );
-        // }
 
         store_output_json(&self.swap_output_json, &self.main_storage);
 
@@ -599,7 +610,10 @@ impl Engine for EngineService {
                     };
                 } else {
                     let mut partial_fill_tracker_m = self.partial_fill_tracker.lock();
-                    let pfr_info = partial_fill_tracker_m.remove(&req.order_id);
+
+                    // println!("order id: {}", req.order_id % 2_u64.pow(32));
+
+                    let pfr_info = partial_fill_tracker_m.remove(&(req.order_id % 2_u64.pow(32)));
                     pfr_note = if pfr_info.is_some() {
                         Some(GrpcNote::from(pfr_info.unwrap().0))
                     } else {
@@ -683,7 +697,7 @@ impl Engine for EngineService {
             req.order_id,
             order_side,
             req.user_id,
-            req.new_price,
+            req.new_prices,
             req.new_expiration,
             signature.clone(),
             req.match_only,
@@ -719,7 +733,7 @@ impl Engine for EngineService {
                 &order_book_m,
                 &self.session,
                 &self.backup_storage,
-                &mut processed_res,
+                processed_res,
                 &self.ws_connections,
                 &self.privileged_ws_connections,
                 req.order_id,
@@ -1072,10 +1086,11 @@ impl Engine for EngineService {
             let wrapper_ = order_book.get_order(order_id);
 
             if let Some(wrapper) = wrapper_ {
-                let order_side = wrapper.order_side;
-                let price = wrapper.order.get_price(order_side, None);
+                let order = wrapper.order.lock();
+                let order_side = order.order_side;
+                let price = order.order.get_price(order_side, None);
                 let qty_left = wrapper.qty_left;
-                if let Order::Spot(limit_order) = wrapper.order {
+                if let Order::Spot(limit_order) = &order.order {
                     let base_asset: u64;
                     let quote_asset: u64;
                     if order_side == OBOrderSide::Bid {
@@ -1097,11 +1112,12 @@ impl Engine for EngineService {
                         qty_left,
                         notes_in: limit_order
                             .notes_in
+                            .clone()
                             .into_iter()
                             .map(|n| GrpcNote::from(n))
                             .collect(),
                         refund_note: if limit_order.refund_note.is_some() {
-                            Some(GrpcNote::from(limit_order.refund_note.unwrap()))
+                            Some(GrpcNote::from(limit_order.refund_note.clone().unwrap()))
                         } else {
                             None
                         },
@@ -1109,13 +1125,15 @@ impl Engine for EngineService {
 
                     active_orders.push(active_order);
                 }
+
+                drop(order);
             } else {
                 bad_order_ids.push(order_id);
             }
             drop(order_book);
 
             let partial_fill_tracker_m = self.partial_fill_tracker.lock();
-            let pfr_info = partial_fill_tracker_m.get(&order_id);
+            let pfr_info = partial_fill_tracker_m.get(&(order_id % 2_u64.pow(32)));
             if let Some(pfr_info) = pfr_info {
                 pfr_notes.push(pfr_info.0.clone());
             }
@@ -1139,10 +1157,11 @@ impl Engine for EngineService {
             let wrapper = order_book.get_order(order_id);
 
             if let Some(wrapper) = wrapper {
-                let order_side = wrapper.order_side;
-                let price = wrapper.order.get_price(order_side, None);
+                let order = wrapper.order.lock();
+                let order_side = order.order_side;
+                let price = order.order.get_price(order_side, None);
                 let qty_left = wrapper.qty_left;
-                if let Order::Perp(perp_order) = wrapper.order {
+                if let Order::Perp(perp_order) = &order.order {
                     let position_effect_type = match perp_order.position_effect_type {
                         PositionEffectType::Open => 0,
                         PositionEffectType::Modify => 1,
@@ -1154,7 +1173,7 @@ impl Engine for EngineService {
                     let refund_note: Option<GrpcNote>;
                     let position_address: String;
                     if position_effect_type == 0 {
-                        let open_order_fields = perp_order.open_order_fields.unwrap();
+                        let open_order_fields = perp_order.open_order_fields.clone().unwrap();
                         initial_margin = open_order_fields.initial_margin;
                         notes_in = open_order_fields
                             .notes_in
@@ -1171,8 +1190,12 @@ impl Engine for EngineService {
                         initial_margin = 0;
                         notes_in = vec![];
                         refund_note = None;
-                        position_address =
-                            perp_order.position.unwrap().position_address.to_string();
+                        position_address = perp_order
+                            .position
+                            .clone()
+                            .unwrap()
+                            .position_address
+                            .to_string();
                     }
 
                     let active_order = ActivePerpOrder {
@@ -1192,6 +1215,8 @@ impl Engine for EngineService {
 
                     active_perp_orders.push(active_order)
                 }
+
+                drop(order);
             } else {
                 bad_perp_order_ids.push(order_id);
             }

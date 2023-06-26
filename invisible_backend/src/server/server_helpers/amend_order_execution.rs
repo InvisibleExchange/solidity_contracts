@@ -18,6 +18,8 @@ use crate::matching_engine::{
     orderbook::OrderBook,
 };
 use crate::perpetual::perp_helpers::perp_rollback::PerpRollbackInfo;
+use crate::perpetual::perp_order::PerpOrder;
+use crate::transactions::limit_order::LimitOrder;
 use crate::transactions::transaction_helpers::rollbacks::RollbackInfo;
 
 use crate::utils::crypto_utils::Signature;
@@ -34,7 +36,7 @@ pub async fn execute_spot_swaps_after_amend_order(
     order_book: &Arc<TokioMutex<OrderBook>>,
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
-    processed_res: &mut Vec<std::result::Result<Success, Failed>>,
+    mut processed_res: Vec<std::result::Result<Success, Failed>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
     //
@@ -52,7 +54,7 @@ pub async fn execute_spot_swaps_after_amend_order(
         order_book,
         session,
         backup_storage,
-        processed_res,
+        &mut processed_res,
     )
     .await
     {
@@ -63,6 +65,8 @@ pub async fn execute_spot_swaps_after_amend_order(
             return Err(err);
         }
     };
+
+    
 
     let retry_messages;
     match await_swap_handles(ws_connections, privileged_ws_connections, handles, user_id).await {
@@ -79,27 +83,34 @@ pub async fn execute_spot_swaps_after_amend_order(
             return Err("Order not found".to_string());
         }
 
-        if let Order::Spot(limit_order) = order_wrapper.unwrap().order {
-            if let Err(e) = retry_failed_swaps(
-                &mpsc_tx,
-                &rollback_safeguard,
-                order_book,
-                &session,
-                &backup_storage,
-                limit_order,
-                order_side,
-                signature,
-                user_id,
-                true,
-                &ws_connections,
-                &privileged_ws_connections,
-                retry_messages,
-                None,
-            )
-            .await
-            {
-                return Err(e);
-            }
+        let w = order_wrapper.unwrap();
+        let ord = &w.order.lock().order.clone();
+        let limit_order: LimitOrder;
+        if let Order::Spot(limit_order_) = ord {
+            limit_order = limit_order_.clone();
+        } else {
+            return Err("Order not found".to_string());
+        }
+
+        if let Err(e) = retry_failed_swaps(
+            &mpsc_tx,
+            &rollback_safeguard,
+            order_book,
+            &session,
+            &backup_storage,
+            limit_order.clone(),
+            order_side,
+            signature,
+            user_id,
+            true,
+            &ws_connections,
+            &privileged_ws_connections,
+            retry_messages,
+            None,
+        )
+        .await
+        {
+            return Err(e);
         }
     }
 
@@ -154,27 +165,35 @@ pub async fn execute_perp_swaps_after_amend_order(
             return Err("Order not found".to_string());
         }
 
-        if let Order::Perp(perp_order) = order_wrapper.unwrap().order {
-            if let Err(e) = retry_failed_perp_swaps(
-                mpsc_tx,
-                perp_rollback_safeguard,
-                perp_order_book,
-                session,
-                backup_storage,
-                perp_order,
-                order_side,
-                signature,
-                user_id,
-                true,
-                ws_connections,
-                privileged_ws_connections,
-                retry_messages,
-                None,
-            )
-            .await
-            {
-                return Err(e);
-            }
+        let w = order_wrapper.unwrap();
+        let ord = &w.order.lock().order.clone();
+        let perp_order: PerpOrder;
+        if let Order::Perp(perp_order_) = ord {
+            perp_order = perp_order_.clone();
+        } else {
+            return Err("Order not found".to_string());
+        }
+        drop(ord);
+
+        if let Err(e) = retry_failed_perp_swaps(
+            mpsc_tx,
+            perp_rollback_safeguard,
+            perp_order_book,
+            session,
+            backup_storage,
+            perp_order.clone(),
+            order_side,
+            signature,
+            user_id,
+            true,
+            ws_connections,
+            privileged_ws_connections,
+            retry_messages,
+            None,
+        )
+        .await
+        {
+            return Err(e);
         }
     }
 

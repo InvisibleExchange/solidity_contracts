@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::matching_engine::orderbook::{Failed, Success};
-use crate::matching_engine::orders::new_limit_order_request;
+use crate::matching_engine::orders::{new_batch_order_request, new_limit_order_request};
 use crate::matching_engine::{
     domain::{Order, OrderSide as OBOrderSide},
     orderbook::OrderBook,
@@ -58,12 +58,13 @@ pub async fn execute_swap(
     let order_b_clone = swap.order_b.clone();
 
     let book__ = order_book.lock().await;
-    let maker_order: LimitOrder;
+
     let maker_side: OBOrderSide;
     let taker_side: OBOrderSide;
+    let maker_order_id: u64;
     let taker_order_id: u64;
     if swap.fee_taken_a == 0 {
-        maker_order = swap.order_a.clone();
+        maker_order_id = swap.order_a.order_id;
         maker_side = get_order_side(
             &book__,
             swap.order_a.token_spent,
@@ -78,7 +79,7 @@ pub async fn execute_swap(
         .unwrap();
         taker_order_id = swap.order_b.order_id;
     } else {
-        maker_order = swap.order_b.clone();
+        maker_order_id = swap.order_b.order_id;
         maker_side = get_order_side(
             &book__,
             swap.order_b.token_spent,
@@ -93,7 +94,6 @@ pub async fn execute_swap(
         .unwrap();
         taker_order_id = swap.order_a.order_id;
     };
-    let maker_order_id = maker_order.order_id;
     drop(book__);
 
     let fee_taken_a = swap.fee_taken_a;
@@ -170,10 +170,10 @@ pub async fn execute_swap(
 
                 if maker_side == OBOrderSide::Bid {
                     book.bid_queue
-                        .reduce_pending_order(maker_order.order_id, qty, false);
+                        .reduce_pending_order(maker_order_id, qty, false);
                 } else {
                     book.ask_queue
-                        .reduce_pending_order(maker_order.order_id, qty, false);
+                        .reduce_pending_order(maker_order_id, qty, false);
                 }
 
                 let swap_res = response.0.unwrap();
@@ -266,36 +266,30 @@ pub async fn execute_swap(
 
                     if let Some(invalid_order_id) = swap_execution_error.invalid_order {
                         // ? only add the order back into the orderbook if not eql invalid_order_id
-                        if maker_order.order_id.eq(&invalid_order_id) {
+                        if maker_order_id % 2_u64.pow(32) == invalid_order_id % 2_u64.pow(32) {
                             if maker_side == OBOrderSide::Bid {
-                                book.bid_queue
-                                    .reduce_pending_order(maker_order.order_id, 0, true);
+                                book.bid_queue.reduce_pending_order(maker_order_id, 0, true);
                             } else {
-                                book.ask_queue
-                                    .reduce_pending_order(maker_order.order_id, 0, true);
+                                book.ask_queue.reduce_pending_order(maker_order_id, 0, true);
                             }
                         }
                         // ? else forcefully cancel that order since it is invalid
                         else {
                             if maker_side == OBOrderSide::Bid {
-                                book.bid_queue
-                                    .restore_pending_order(Order::Spot(maker_order), qty);
+                                book.bid_queue.restore_pending_order(maker_order_id, qty);
                             } else {
-                                book.ask_queue
-                                    .restore_pending_order(Order::Spot(maker_order), qty);
+                                book.ask_queue.restore_pending_order(maker_order_id, qty);
                             }
 
-                            if taker_order_id == invalid_order_id {
+                            if taker_order_id % 2_u64.pow(32) == invalid_order_id % 2_u64.pow(32) {
                                 return (None, Some((None, 0, 0, error_message.to_owned())));
                             }
                         }
                     } else {
                         if maker_side == OBOrderSide::Bid {
-                            book.bid_queue
-                                .restore_pending_order(Order::Spot(maker_order), qty);
+                            book.bid_queue.restore_pending_order(maker_order_id, qty);
                         } else {
-                            book.ask_queue
-                                .restore_pending_order(Order::Spot(maker_order), qty);
+                            book.ask_queue.restore_pending_order(maker_order_id, qty);
                         }
 
                         maker_order_id_ = Some(maker_order_id);
@@ -330,11 +324,9 @@ pub async fn execute_swap(
 
             let mut book = order_book.lock().await;
             if maker_side == OBOrderSide::Bid {
-                book.bid_queue
-                    .restore_pending_order(Order::Spot(maker_order), qty);
+                book.bid_queue.restore_pending_order(maker_order_id, qty);
             } else {
-                book.ask_queue
-                    .restore_pending_order(Order::Spot(maker_order), qty);
+                book.ask_queue.restore_pending_order(maker_order_id, qty);
             }
 
             return (
@@ -449,6 +441,36 @@ pub async fn process_limit_order_request(
     return processed_res;
 }
 
+pub async fn process_batch_order_request(
+    order_book: &Arc<TokioMutex<OrderBook>>,
+    limit_order: LimitOrder,
+    side: OBOrderSide,
+    signature: Signature,
+    prices: Vec<f64>,
+    amounts: Vec<u64>,
+    user_id: u64,
+) -> Vec<std::result::Result<Success, Failed>> {
+    // ? Create a new OrderRequest object
+    let order_ = Order::Spot(limit_order);
+    let order_request = new_batch_order_request(
+        side,
+        order_,
+        signature,
+        prices,
+        amounts,
+        SystemTime::now(),
+        user_id,
+    );
+
+    // ? Insert the order into the book and get back the matched results if any
+    let mut order_book_m = order_book.lock().await;
+    let processed_res = order_book_m.process_order(order_request);
+
+    drop(order_book_m);
+
+    return processed_res;
+}
+
 use async_recursion::async_recursion;
 
 type SwapExecutionResultMessage = std::result::Result<
@@ -553,6 +575,7 @@ pub async fn retry_failed_swaps(
         } else {
             Vec::new()
         };
+
         if maker_order_id.is_some() {
             failed_ids.push(maker_order_id.unwrap());
         }
@@ -622,7 +645,11 @@ pub async fn retry_failed_swaps(
                 ws_connections,
                 privileged_ws_connections,
                 retry_messages,
-                None,
+                if failed_ids.len() > 0 {
+                    Some(failed_ids.clone())
+                } else {
+                    None
+                },
             )
             .await;
         }

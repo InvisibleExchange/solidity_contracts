@@ -815,6 +815,14 @@ impl PerpPosition {
             - (COLLATERAL_TOKEN_DECIMALS + LEVERAGE_DECIMALS);
         let multiplier = 10_u128.pow(decimal_conversion as u32);
 
+        if pnl < 0 && pnl.abs() as u64 > self.margin {
+            return Err(send_perp_swap_error(
+                "Position is liquidatable".to_string(),
+                None,
+                Some("position is liquidatable".to_string()),
+            ));
+        }
+
         let current_leverage: u64 = ((index_price as u128 * self.position_size as u128)
             / ((self.margin as i64 + pnl) as u128 * multiplier))
             as u64;

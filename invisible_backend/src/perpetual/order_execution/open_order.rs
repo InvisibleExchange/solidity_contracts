@@ -312,8 +312,16 @@ fn add_margin_to_position(
     let leverage = (spent_collateral as u128 * 10_u128.pow(LEVERAGE_DECIMALS as u32)
         / init_margin as u128) as u64;
 
+    position.add_margin_to_position(
+        init_margin,
+        spent_synthetic,
+        leverage,
+        fee_taken,
+        funding_idx,
+    );
+
     // ? Check that leverage is valid relative to the notional position size
-    if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
+    if get_max_leverage(order.synthetic_token, position.position_size) < leverage {
         return Err(send_perp_swap_error(
             "Leverage is too high".to_string(),
             Some(order.order_id),
@@ -325,14 +333,6 @@ fn add_margin_to_position(
             )),
         ));
     }
-
-    position.add_margin_to_position(
-        init_margin,
-        spent_synthetic,
-        leverage,
-        fee_taken,
-        funding_idx,
-    );
 
     let new_spent_sythetic = prev_spent_synthetic + spent_synthetic;
 

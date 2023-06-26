@@ -143,7 +143,25 @@ fn modify_position(
         let leverage = position.get_current_leverage(index_price)?;
 
         // ? Check that leverage is valid relative to the notional position size after increasing size
-        if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
+        if get_max_leverage(order.synthetic_token, position.position_size) < leverage {
+            
+
+            println!(
+                "Leverage would be too high {} < {} size {} price {}",
+                get_max_leverage(order.synthetic_token, position.position_size),
+                leverage,
+                position.position_size,
+                index_price
+            );
+
+
+            // Leverage would be too high 10 187803 < 10 604997 size 2282140574 price 30236250000
+//          priceWithSlippage 31741.022249999998
+//          newMaxLeverage 10.404120619140397
+//          newMaxSize 2.1626046855518846
+
+
+
             return Err(send_perp_swap_error(
                 "Leverage would be too high".to_string(),
                 Some(order.order_id),
@@ -179,11 +197,13 @@ fn modify_position(
             let leverage = position.get_current_leverage(index_price)?;
 
             // ? Check that leverage is valid relative to the notional position size after increasing size
-            if get_max_leverage(order.synthetic_token, order.synthetic_amount) < leverage {
+            if get_max_leverage(order.synthetic_token, position.position_size) < leverage {
                 println!(
-                    "Leverage would be too high {} < {}",
-                    get_max_leverage(order.synthetic_token, order.synthetic_amount),
-                    leverage
+                    "Leverage would be too high {} < {} size {} price {}",
+                    get_max_leverage(order.synthetic_token, position.position_size),
+                    leverage,
+                    position.position_size,
+                    index_price
                 );
 
                 return Err(send_perp_swap_error(

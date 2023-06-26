@@ -191,7 +191,6 @@ fn delete_position_at_address(
     idx: &str,
 ) {
     // & address is the x coordinate in string format and idx is the index in string format
-
     let delete_path = format!("positions/{}/indexes/{}", address, idx);
     let r = documents::delete(session, delete_path.as_str(), true);
     if let Err(e) = r {
@@ -200,11 +199,27 @@ fn delete_position_at_address(
                 return;
             }
         } else {
-            println!("Error deleting note from backup storage. ERROR: {:?}", e);
+            println!("Error deleting note from database: ERROR: {:?}", e);
         }
 
         let s = backup_storage.lock();
         if let Err(_e) = s.store_position_removal(u64::from_str_radix(idx, 10).unwrap(), address) {}
+    }
+
+    // ? ===================================================================
+    // ? Store the position's liquidation price in the database
+    let delete_path = format!("liquidations/{}", address.to_string() + "-" + idx);
+
+    let r = documents::delete(session, delete_path.as_str(), true);
+
+    if let Err(e) = r {
+        if let FirebaseError::APIError(numeric_code, string_code, _context) = e {
+            if string_code.starts_with("No document to update") && numeric_code == 404 {
+                return;
+            }
+        } else {
+            println!("Error deleting liquidation from database: ERROR: {:?}", e);
+        }
     }
 }
 
@@ -213,20 +228,11 @@ fn store_new_position(
     backup_storage: &Arc<Mutex<BackupStorage>>,
     position: &PerpPosition,
 ) {
+    // ? Store the position in the database
     let write_path = format!(
         "positions/{}/indexes",
         position.position_address.to_string(),
     );
-
-    // bankruptcy_price
-    // 0
-    // liquidation_price
-    // 0
-
-    // { order_side: Short, synthetic_token: 54321, collateral_token: 55555, position_size: 0, margin: 30110072246, entry_price: 1855532309, liquidation_price: 18446744073709551615,
-    //      bankruptcy_price: 18446744073709551615, allow_partial_liquidations: true,
-    //  position_address: 1684502386098572560865500250041581148646578677955444760400258625865572888023,
-    //  last_funding_idx: 0, hash: 2868264735875796266919601002856514620997277726617493209879409462261753175252, index: 0 }
 
     let _res = documents::write(
         session,
@@ -241,6 +247,30 @@ fn store_new_position(
         let s = backup_storage.lock();
         if let Err(_e) = s.store_position(position) {};
         drop(s);
+    }
+
+    // ? ===================================================================
+    // ? Store the position's liquidation price in the database
+    let write_path = format!(
+        "{}",
+        position.position_address.to_string() + "-" + position.index.to_string().as_str()
+    );
+
+    let _res = documents::write(
+        session,
+        "liquidations",
+        Some(write_path),
+        &json!({
+            "liquidation_price": &position.liquidation_price
+        }),
+        documents::WriteOptions::default(),
+    );
+
+    if let Err(e) = _res {
+        println!(
+            "Error storing liquidation price to database. ERROR: {:?}",
+            e
+        );
     }
 }
 
@@ -411,7 +441,7 @@ pub fn start_add_perp_fill_thread(
 // * FIREBASE STORAGE ===============================================================
 
 use reqwest::Client;
-use serde_json::{from_slice, to_vec, Map, Value};
+use serde_json::{from_slice, json, to_vec, Map, Value};
 
 // Define a struct to deserialize the response from the Firebase Storage API
 #[derive(Deserialize)]

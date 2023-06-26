@@ -83,7 +83,12 @@ message LimitOrderMessage {
     Signature signature = 11;
     bool is_market = 12; // true - market order, false - limit order
     uint64 user_id = 13; // used to send a response thorugh a ws
+    // for batch orders (market makers)
+    repeated double prices = 14;
+    repeated uint64 amounts = 15;
 }
+
+
 
 message OrderResponse {
     bool successful = 1;
@@ -111,7 +116,7 @@ message AmendOrderRequest {
     uint32 market_id = 1;
     uint64 order_id = 2;
     bool order_side = 3; // true-Bid, false-Ask
-    double new_price = 4;
+    repeated double new_prices = 4;
     uint64 new_expiration = 5;
     Signature signature = 6;
     uint64 user_id = 7; // used to verify that the user is the owner of the order

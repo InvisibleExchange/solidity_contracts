@@ -1,4 +1,3 @@
-use std::println;
 use std::thread::{JoinHandle, ThreadId};
 use std::time::SystemTime;
 use std::{collections::HashMap, sync::Arc};
@@ -74,22 +73,21 @@ pub async fn execute_perp_swap(
     let fee_taken_a = perp_swap.fee_taken_a;
     let fee_taken_b = perp_swap.fee_taken_b;
 
-    let maker_order: PerpOrder;
     let maker_side: OrderSide;
     let taker_side: OrderSide;
+    let maker_order_id: u64;
     let taker_order_id: u64;
     if perp_swap.fee_taken_a == 0 {
-        maker_order = perp_swap.order_a.clone();
+        maker_order_id = perp_swap.order_a.order_id;
         maker_side = perp_swap.order_a.order_side.clone();
         taker_side = perp_swap.order_b.order_side.clone();
         taker_order_id = order_b_clone.order_id;
     } else {
-        maker_order = perp_swap.order_b.clone();
+        maker_order_id = perp_swap.order_b.order_id;
         maker_side = perp_swap.order_b.order_side.clone();
         taker_side = perp_swap.order_a.order_side.clone();
         taker_order_id = order_a_clone.order_id;
     };
-    let maker_order_id: u64 = maker_order.order_id;
 
     // ? The qty being traded
     let qty = perp_swap.spent_synthetic;
@@ -133,10 +131,10 @@ pub async fn execute_perp_swap(
 
                 if maker_side == OrderSide::Long {
                     book.bid_queue
-                        .reduce_pending_order(maker_order.order_id, qty, false);
+                        .reduce_pending_order(maker_order_id, qty, false);
                 } else {
                     book.ask_queue
-                        .reduce_pending_order(maker_order.order_id, qty, false);
+                        .reduce_pending_order(maker_order_id, qty, false);
                 }
 
                 // ? Update the order positions
@@ -238,23 +236,19 @@ pub async fn execute_perp_swap(
                 let mut maker_order_id_ = None;
                 if let Some(invalid_order_id) = invalid_order {
                     // ? only add the order back into the orderbook if not eql invalid_order_id
-                    if maker_order.order_id.eq(invalid_order_id) {
+                    if maker_order_id.eq(invalid_order_id) {
                         if maker_side == OrderSide::Long {
-                            book.bid_queue
-                                .reduce_pending_order(maker_order.order_id, 0, true);
+                            book.bid_queue.reduce_pending_order(maker_order_id, 0, true);
                         } else {
-                            book.ask_queue
-                                .reduce_pending_order(maker_order.order_id, 0, true);
+                            book.ask_queue.reduce_pending_order(maker_order_id, 0, true);
                         }
                     }
                     // ? else forcefully cancel that order since it is invalid
                     else {
                         if maker_side == OrderSide::Long {
-                            book.bid_queue
-                                .restore_pending_order(Order::Perp(maker_order), qty);
+                            book.bid_queue.restore_pending_order(maker_order_id, qty);
                         } else {
-                            book.ask_queue
-                                .restore_pending_order(Order::Perp(maker_order), qty);
+                            book.ask_queue.restore_pending_order(maker_order_id, qty);
                         }
 
                         if taker_order_id == *invalid_order_id {
@@ -263,11 +257,9 @@ pub async fn execute_perp_swap(
                     }
                 } else {
                     if maker_side == OrderSide::Long {
-                        book.bid_queue
-                            .restore_pending_order(Order::Perp(maker_order), qty);
+                        book.bid_queue.restore_pending_order(maker_order_id, qty);
                     } else {
-                        book.ask_queue
-                            .restore_pending_order(Order::Perp(maker_order), qty);
+                        book.ask_queue.restore_pending_order(maker_order_id, qty);
                     }
 
                     maker_order_id_ = Some(maker_order_id);
@@ -294,11 +286,9 @@ pub async fn execute_perp_swap(
             }
 
             if maker_side == OrderSide::Long {
-                book.bid_queue
-                    .restore_pending_order(Order::Perp(maker_order), qty);
+                book.bid_queue.restore_pending_order(maker_order_id, qty);
             } else {
-                book.ask_queue
-                    .restore_pending_order(Order::Perp(maker_order), qty);
+                book.ask_queue.restore_pending_order(maker_order_id, qty);
             }
 
             return (

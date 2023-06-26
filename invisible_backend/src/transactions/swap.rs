@@ -80,6 +80,10 @@ impl Swap {
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
 
+        // ? parse order id (market makers can submit multiple orders with the same id))
+        let order_id_a = self.order_a.order_id % 2_u64.pow(32);
+        let order_id_b = self.order_b.order_id % 2_u64.pow(32);
+
         consistency_checks(
             &self.order_a,
             &self.order_b,
@@ -116,6 +120,7 @@ impl Swap {
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     &self.order_a,
+                    order_id_a,
                     &self.signature_a,
                     self.spent_amount_a,
                     self.spent_amount_b,
@@ -153,6 +158,7 @@ impl Swap {
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     &self.order_b,
+                    order_id_b,
                     &self.signature_b,
                     self.spent_amount_b,
                     self.spent_amount_a,
@@ -219,7 +225,7 @@ impl Swap {
                     &rollback_safeguard,
                     thread_id,
                     order_a_output_clone.prev_partial_fill_refund_note.is_none(),
-                    self.order_a.order_id,
+                    order_id_a,
                     &self.order_a.notes_in,
                     &self.order_a.refund_note,
                     &order_a_output_clone.swap_note,
@@ -230,7 +236,7 @@ impl Swap {
                 finalize_updates(
                     &partial_fill_tracker,
                     &blocked_order_ids,
-                    self.order_a.order_id,
+                    order_id_a,
                     &order_a_output_clone.new_partial_fill_info,
                 );
 
@@ -252,7 +258,7 @@ impl Swap {
                     &rollback_safeguard,
                     thread_id,
                     order_b_output_clone.prev_partial_fill_refund_note.is_none(),
-                    self.order_b.order_id,
+                    order_id_b,
                     &self.order_b.notes_in,
                     &self.order_b.refund_note,
                     &order_b_output_clone.swap_note,
@@ -264,7 +270,7 @@ impl Swap {
                 finalize_updates(
                     &partial_fill_tracker,
                     &blocked_order_ids,
-                    self.order_b.order_id,
+                    order_id_b,
                     &order_b_output_clone.new_partial_fill_info,
                 );
 
@@ -309,11 +315,7 @@ impl Swap {
         // ? Get the result or return the error
         let (execution_output_a, execution_output_b) = swap_execution_handle
             .or_else(|e| {
-                unblock_order(
-                    &blocked_order_ids_c,
-                    self.order_a.order_id,
-                    self.order_b.order_id,
-                );
+                unblock_order(&blocked_order_ids_c, order_id_a, order_id_b);
 
                 Err(send_swap_error(
                     "Unknow Error Occured".to_string(),
@@ -322,11 +324,7 @@ impl Swap {
                 ))
             })?
             .or_else(|err: Report<SwapThreadExecutionError>| {
-                unblock_order(
-                    &blocked_order_ids_c,
-                    self.order_a.order_id,
-                    self.order_b.order_id,
-                );
+                unblock_order(&blocked_order_ids_c, order_id_a, order_id_b);
 
                 Err(err)
             })?;

@@ -334,6 +334,38 @@ pub fn consistency_checks(
     let b2 = spent_amount_a as u128 * order_b.amount_spent as u128;
 
     if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
+        if order_a.token_spent == 55555 {
+            println!(
+                "long a real price: {}",
+                spent_amount_a as f64 / spent_amount_b as f64
+            );
+
+            println!(
+                "price a : {}",
+                order_a.amount_spent as f64 / order_a.amount_received as f64
+            );
+
+            println!(
+                "price b : {}",
+                order_b.amount_received as f64 / order_b.amount_spent as f64
+            );
+        } else {
+            println!(
+                "long b real price: {}",
+                spent_amount_b as f64 / spent_amount_a as f64
+            );
+
+            println!(
+                "price b : {}",
+                order_b.amount_spent as f64 / order_b.amount_received as f64
+            );
+
+            println!(
+                "price a : {}",
+                order_a.amount_received as f64 / order_a.amount_spent as f64
+            );
+        }
+
         return Err(send_swap_error(
             "Amount swapped ratios are inconsistent".to_string(),
             None,

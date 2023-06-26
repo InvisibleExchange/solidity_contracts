@@ -42,20 +42,24 @@ impl OrderRequestValidator {
                 order_asset,
                 price_asset,
                 side: _side,
-                price,
-                qty,
+                is_market: _,
+                prices,
+                qtys,
+                signature,
+                ts: _,
+                user_id: _,
                 order,
                 ..
             } => {
-                if *price <= 0.0 {
+                if prices[0] <= 0.0 {
                     return Err(ERR_BAD_PRICE_VALUE);
                 };
                 return self.validate_order(
                     *order_asset,
                     *price_asset,
-                    *qty,
-                    &order.order,
-                    &order.signature,
+                    qtys[0],
+                    &order,
+                    &signature,
                 );
             }
 

@@ -1,19 +1,23 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
+use std::sync::Arc;
 use std::time::{self, SystemTime};
+
+use parking_lot::Mutex;
 
 use crate::perpetual::perp_position::PerpPosition;
 use crate::utils::crypto_utils::Signature;
 
-use super::domain::{Order, OrderSide, OrderWrapper};
+use super::domain::{Order, OrderSide, OrderWrapper, SharedOrderInner};
 use super::orders::amend_inner;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct OrderIndex {
     id: u64,
     price: f64,
     timestamp: time::SystemTime,
     order_side: OrderSide,
+    order: OrderWrapper,
 }
 
 // Arrange at first by price and after that by time
@@ -54,62 +58,76 @@ impl PartialEq for OrderIndex {
 
 impl Eq for OrderIndex {}
 
-#[derive(Debug)]
 /// Public methods
 pub struct OrderQueue {
     // use Option in order to replace heap in mutable borrow
     idx_queue: Option<BinaryHeap<OrderIndex>>,
-    orders: HashMap<u64, OrderWrapper>,
-    op_counter: u64,
-    max_stalled: u64,
+    // orders: HashMap<u64, OrderWrapper>,
+    // op_counter: u64,
+    // max_stalled: u64,
     queue_side: OrderSide,
-    pending_orders: HashMap<u64, (Signature, OrderSide, u64, u64)>, // order_id => (signature, order_side, qty_left, user_id)
+    pending_orders: HashMap<u64, Vec<OrderWrapper>>,
 }
 
 impl OrderQueue {
     /// Create new order queue
     ///
     /// Queue is universal and could be used for both asks and bids
-    pub fn new(side: OrderSide, max_stalled: u64, capacity: usize) -> Self {
+    pub fn new(side: OrderSide, _max_stalled: u64, capacity: usize) -> Self {
         OrderQueue {
             idx_queue: Some(BinaryHeap::with_capacity(capacity)),
-            orders: HashMap::with_capacity(capacity),
-            op_counter: 0,
-            max_stalled,
+            // orders: HashMap::with_capacity(capacity),
+            // op_counter: 0,
+            // max_stalled,
             queue_side: side,
             pending_orders: HashMap::with_capacity(capacity),
         }
     }
 
-    pub fn peek(&mut self) -> Option<&OrderWrapper> {
+    pub fn peek(&self) -> Option<&OrderWrapper> {
         // get best order ID
-        let order_id = self.get_current_order_id()?;
+        let order_idx = self.idx_queue.as_ref()?.peek()?;
 
-        // obtain order info
-        if self.orders.contains_key(&order_id) {
-            self.orders.get(&order_id)
-        } else {
-            self.idx_queue.as_mut().unwrap().pop()?;
-            self.peek()
-        }
+        Some(&order_idx.order)
     }
 
     pub fn pop(&mut self) -> Option<(OrderWrapper, SystemTime)> {
         // remove order index from queue in any case
         let index_item = self.idx_queue.as_mut()?.pop()?;
 
-        let order_id = index_item.id;
-        let ts = index_item.timestamp;
+        Some((index_item.order, index_item.timestamp))
+    }
 
-        if self.orders.contains_key(&order_id) {
-            if let Some(ord) = self.orders.remove(&order_id) {
-                Some((ord, ts))
+    pub fn pop_with_failed_ids(
+        &mut self,
+        failed_order_ids: &Vec<u64>,
+    ) -> Vec<(OrderWrapper, SystemTime)> {
+        let mut pending_orders: Vec<(OrderWrapper, SystemTime)> = vec![];
+        let mut other_orders = vec![];
+
+        // loop over all the orders in the opposite_queue and store the orders with failed_order_ids in pending_orders
+        // and the rest in other_orders
+        loop {
+            if let Some((order, ts)) = self.pop() {
+                let ord_id = order.order.lock().order_id;
+
+                if failed_order_ids.contains(&ord_id) {
+                    pending_orders.push((order, ts));
+                } else {
+                    other_orders.push((order, ts));
+                }
             } else {
-                None
+                break;
             }
-        } else {
-            self.pop()
         }
+
+        for (order, ts) in other_orders.into_iter().rev() {
+            let ord_id = order.order.lock().order_id;
+
+            self.insert(ord_id, order.price, ts, order.clone());
+        }
+
+        pending_orders
     }
 
     // Add new limit order to the queue
@@ -118,22 +136,10 @@ impl OrderQueue {
         id: u64,
         price: f64,
         ts: time::SystemTime,
-        mut order: OrderWrapper,
+        order: OrderWrapper,
     ) -> bool {
-        if self.orders.contains_key(&id) {
-            let mut is_retry = false;
-            for x in self.idx_queue.as_mut().unwrap().iter() {
-                if x.id == id {
-                    is_retry = true;
-                    break;
-                }
-            }
-
-            // do not update existing order
-            if is_retry {
-                return false;
-            }
-        }
+        order.order.lock().order_id = id;
+        order.order.lock().order.set_id(id);
 
         // store new order
         self.idx_queue.as_mut().unwrap().push(OrderIndex {
@@ -141,12 +147,8 @@ impl OrderQueue {
             price,
             timestamp: ts,
             order_side: self.queue_side,
+            order,
         });
-
-        order.order.set_id(id);
-        order.order_id = id;
-
-        self.orders.insert(id, order);
 
         true
     }
@@ -156,43 +158,75 @@ impl OrderQueue {
         &mut self,
         id: u64,
         user_id: u64,
-        price: f64,
+        prices: &Vec<f64>,
         new_expiration: u64,
         signature: Signature,
         ts: time::SystemTime,
-    ) -> bool {
-        if self.orders.contains_key(&id) {
-            let mut wrapper = self.orders.get_mut(&id).unwrap();
+    ) -> Option<Vec<OrderWrapper>> {
+        if prices.len() == 0 {
+            return None;
+        }
 
-            if wrapper.user_id != user_id {
-                return false;
+        let mut idx_queue = self.idx_queue.as_ref().unwrap().clone().into_sorted_vec();
+        idx_queue.reverse();
+        let mut active_idxs = vec![];
+        for idx in idx_queue {
+            if idx.id == id {
+                active_idxs.push(idx)
+            }
+        }
+
+        if active_idxs.len() == 0 {
+            return None;
+        }
+
+        let wrapper = &active_idxs[0].order;
+        let mut inner_order = wrapper.order.lock();
+
+        if inner_order.user_id != user_id {
+            return None;
+        };
+        amend_inner(&mut inner_order, prices[0], new_expiration, signature);
+        drop(inner_order);
+
+        let mut new_indexes = vec![];
+        for (i, idx) in active_idxs.into_iter().enumerate() {
+            if prices.len() <= i {
+                break;
+            }
+
+            let mut wrapper = idx.order;
+            wrapper.price = prices[i];
+
+            let new_index = OrderIndex {
+                id,
+                price: prices[i],
+                timestamp: ts,
+                order_side: self.queue_side,
+                order: wrapper,
             };
 
-            amend_inner(&mut wrapper, price, new_expiration, signature);
-
-            // store new order data
-            self.rebuild_idx(id, price, ts);
-
-            true
-        } else {
-            false
+            new_indexes.push(new_index)
         }
+
+        let wrappers: Vec<OrderWrapper> = new_indexes.iter().map(|idx| idx.order.clone()).collect();
+        self.rebuild_idx(id, new_indexes);
+
+        Some(wrappers)
     }
 
-    /// This cancels an order with order_id. \
+    /// This cancels all orders with order_id. \
     /// If force is true, then order will be cancelled even if it's not owned by user_id
-    pub fn cancel(&mut self, order_id: u64, user_id: u64, force: bool) -> bool {
-        match self.orders.remove(&order_id) {
-            Some(wrapper) => {
-                // Only a user can cancel
-                if wrapper.user_id != user_id && !force {
-                    return false;
-                }
-                self.clean_check();
-                true
-            }
-            None => false,
-        }
+    pub fn cancel(&mut self, order_id: u64, user_id: u64, force: bool) {
+        //
+
+        let mut idx_queue = self.idx_queue.as_ref().unwrap().clone().into_vec();
+        idx_queue.retain(|order_ptr| {
+            order_ptr.id != order_id && (order_ptr.order.order.lock().user_id != user_id || force)
+        });
+
+        let amended_queue = BinaryHeap::from(idx_queue);
+        self.idx_queue = Some(amended_queue);
     }
 
     pub fn remove_order(
@@ -201,33 +235,50 @@ impl OrderQueue {
         user_id: u64,
         force: bool,
     ) -> Option<OrderWrapper> {
-        let wrapper = self.orders.get(&order_id)?;
+        let mut idx_queue = self.idx_queue.as_mut().unwrap().clone().into_sorted_vec();
+        idx_queue.reverse();
 
-        if (wrapper.user_id != user_id) && !force {
-            return None;
+        let mut wrapper = None;
+        if let Some(index) = idx_queue
+            .iter()
+            .position(|x| x.id == order_id && (x.order.order.lock().user_id == user_id || force))
+        {
+            wrapper = Some(idx_queue.remove(index).order);
         }
 
-        let wrapper = self.orders.remove(&order_id)?;
+        let amended_queue = BinaryHeap::from(idx_queue);
+        self.idx_queue = Some(amended_queue);
 
-        self.remove_stalled();
+        wrapper
+    }
 
-        Some(wrapper)
+    pub fn replace_order(&mut self, order_id: u64, new_wrapper: OrderWrapper) {
+        let mut idx_queue = self.idx_queue.as_mut().unwrap().clone().into_sorted_vec();
+        idx_queue.reverse();
+
+        for wrapp in idx_queue.iter_mut() {
+            if wrapp.id == order_id {
+                wrapp.price = new_wrapper.price;
+                wrapp.order = new_wrapper;
+                break;
+            }
+        }
+
+        let amended_queue = BinaryHeap::from(idx_queue);
+        self.idx_queue = Some(amended_queue);
     }
 
     /// Returns order by id
-    pub fn get_order(&self, id: u64) -> Option<&OrderWrapper> {
-        self.orders.get(&id)
-    }
+    pub fn get_order(&self, id: u64) -> Option<OrderWrapper> {
+        let mut idx_queue = self.idx_queue.as_ref().unwrap().clone().into_sorted_vec();
+        idx_queue.reverse();
+        let res = idx_queue.iter().find(|x| x.id == id);
 
-    /// Increases the quantity of the order with id by increase_qty
-    fn increase_qty(&mut self, id: u64, increase_qty: u64) {
-        if !self.orders.contains_key(&id) {
-            return;
+        if res.is_none() {
+            return None;
         }
 
-        let mut order = self.orders.get_mut(&id).unwrap();
-
-        order.qty_left += increase_qty;
+        return Some(res.unwrap().order.clone());
     }
 
     /* Internal methods */
@@ -235,49 +286,50 @@ impl OrderQueue {
     /// Used internally when current order is partially matched.
     ///
     /// Note: do not modify price or time, because index doesn't change!
-    pub fn modify_current_order(&mut self, new_order: OrderWrapper) -> bool {
-        if let Some(order_id) = self.get_current_order_id() {
-            if self.orders.contains_key(&order_id) {
-                self.orders.insert(order_id, new_order);
-                return true;
+    pub fn modify_current_order(&mut self, id: u64, new_qty: u64) {
+        let mut active_orders = self.idx_queue.as_ref().unwrap().clone().into_sorted_vec();
+        active_orders.reverse();
+        for mut ord in active_orders.iter_mut() {
+            if ord.id == id {
+                ord.order.qty_left = new_qty;
+                break;
             }
         }
-        false
+
+        let amended_queue = BinaryHeap::from(active_orders);
+        self.idx_queue = Some(amended_queue);
     }
 
-    /// Verify if queue should be cleaned
-    fn clean_check(&mut self) {
-        if self.op_counter > self.max_stalled {
-            self.op_counter = 0;
-            self.remove_stalled()
-        } else {
-            self.op_counter += 1;
-        }
-    }
+    // /// Verify if queue should be cleaned
+    // fn clean_check(&mut self) {
+    //     if self.op_counter > self.max_stalled {
+    //         self.op_counter = 0;
+    //         self.remove_stalled()
+    //     } else {
+    //         self.op_counter += 1;
+    //     }
+    // }
 
-    /// Remove dangling indices without orders from queue
-    fn remove_stalled(&mut self) {
-        if let Some(idx_queue) = self.idx_queue.take() {
-            let mut active_orders = idx_queue.into_vec();
-            active_orders.retain(|order_ptr| self.orders.contains_key(&order_ptr.id));
-            self.idx_queue = Some(BinaryHeap::from(active_orders));
-        }
-    }
+    // /// Remove dangling indices without orders from queue
+    // fn remove_stalled(&mut self) {
+    //     if let Some(idx_queue) = self.idx_queue.take() {
+    //         let mut active_orders = idx_queue.into_sorted_vec();
+    //         active_orders.retain(|order_ptr| self.orders.contains_key(&order_ptr.id));
+    //         self.idx_queue = Some(BinaryHeap::from(active_orders));
+    //     }
+    // }
 
     /// Recreate order-index queue with changed index info
-    fn rebuild_idx(&mut self, id: u64, price: f64, ts: time::SystemTime) {
+    fn rebuild_idx(&mut self, id: u64, idxs: Vec<OrderIndex>) {
         if let Some(idx_queue) = self.idx_queue.take() {
             // deconstruct queue
             let mut active_orders = idx_queue.into_vec();
             // remove old idx value
             active_orders.retain(|order_ptr| order_ptr.id != id);
             // insert new one
-            active_orders.push(OrderIndex {
-                id,
-                price,
-                timestamp: ts,
-                order_side: self.queue_side,
-            });
+            for idx in idxs {
+                active_orders.push(idx);
+            }
             // construct new queue
             let amended_queue = BinaryHeap::from(active_orders);
             self.idx_queue = Some(amended_queue);
@@ -285,27 +337,18 @@ impl OrderQueue {
     }
 
     /// Return ID of current order in queue
-    fn get_current_order_id(&self) -> Option<u64> {
-        let order_id = self.idx_queue.as_ref()?.peek()?;
-        Some(order_id.id)
-    }
+    // fn get_current_order_id(&self) -> Option<u64> {
+    //     let order_id = self.idx_queue.as_ref()?.peek()?;
+    //     Some(order_id.id)
+    // }
 
     /// Remove expired orders from the queue
     pub fn remove_expired_orders(&mut self) {
-        let mut expired_order_ids = vec![];
+        let mut active_orders = self.idx_queue.as_ref().unwrap().clone().into_vec();
+        active_orders.retain(|ord| !ord.order.order.lock().order.has_expired());
 
-        for (id, order) in self.orders.iter_mut() {
-            if order.order.has_expired() {
-                expired_order_ids.push(*id);
-            }
-        }
-
-        for id in expired_order_ids {
-            self.orders.remove(&id);
-            self.op_counter += 1;
-        }
-
-        self.clean_check();
+        let amended_queue = BinaryHeap::from(active_orders);
+        self.idx_queue = Some(amended_queue);
     }
 
     /// Returns the liquidity of the queue
@@ -320,7 +363,9 @@ impl OrderQueue {
             .iter()
             .rev()
             .filter_map(|idx| {
-                let ord = self.orders.get(&idx.id);
+                let order_ptr = idx.order.order.lock();
+                let order_id = order_ptr.order_id;
+                drop(order_ptr);
 
                 // Get the order time in seconds since UNIX_EPOCH
                 let ts = idx.timestamp;
@@ -329,15 +374,7 @@ impl OrderQueue {
                     .expect("Time went backwards")
                     .as_secs();
 
-                if let Some(ord) = ord {
-                    if ord.qty_left <= 0 {
-                        return None;
-                    }
-
-                    return Some((idx.price, ord.qty_left, timestamp, ord.order_id));
-                } else {
-                    return None;
-                }
+                return Some((idx.price, idx.order.qty_left, timestamp, order_id));
             })
             .collect::<Vec<(f64, u64, u64, u64)>>();
 
@@ -349,9 +386,13 @@ impl OrderQueue {
     /// Update the order position
     pub fn update_order_position(&mut self, user_id: u64, new_position: &Option<PerpPosition>) {
         if new_position.is_some() {
-            self.orders.iter_mut().for_each(|(_, wrapper)| {
-                if wrapper.user_id == user_id {
-                    if let Order::Perp(ord) = &mut wrapper.order {
+            let mut idx_queue = self.idx_queue.as_ref().unwrap().clone().into_vec();
+
+            idx_queue.iter_mut().for_each(|idx| {
+                let mut order_ptr = idx.order.order.lock();
+
+                if order_ptr.user_id == user_id {
+                    if let Order::Perp(ord) = &mut order_ptr.order {
                         if ord.position.is_some()
                             && ord.position.as_ref().unwrap().position_address
                                 == new_position.as_ref().unwrap().position_address
@@ -360,6 +401,8 @@ impl OrderQueue {
                         }
                     }
                 }
+
+                drop(order_ptr)
             });
         }
 
@@ -370,13 +413,12 @@ impl OrderQueue {
     pub fn get_impact_price(&self, impact_notional: u64) -> f64 {
         let mut sum = 0;
 
-        let idx_queue = self.idx_queue.as_ref().unwrap().clone();
-        // into_sorted_vec();
+        let mut idx_queue = self.idx_queue.as_ref().unwrap().clone().into_sorted_vec();
+        idx_queue.reverse();
 
         let mut price: f64 = 0.0;
-        for i in idx_queue.into_sorted_vec() {
-            let order = self.orders.get(&i.id).unwrap();
-            sum += order.qty_left;
+        for i in idx_queue {
+            sum += i.order.qty_left;
             price = i.price;
             if sum >= impact_notional {
                 break;
@@ -392,17 +434,17 @@ impl OrderQueue {
     ///
     /// Stores the signature and order_side for order_id in case that order fails and needs to
     /// be reinserted into the orderbook.
-    pub fn store_pending_order(
-        &mut self,
-        order_id: u64,
-        sig: Signature,
-        side: OrderSide,
-        qty: u64,
-        user_id: u64,
-    ) {
-        if !self.pending_orders.contains_key(&order_id) {
-            self.pending_orders
-                .insert(order_id, (sig, side, qty, user_id));
+    pub fn store_pending_order(&mut self, wrapper: OrderWrapper) {
+        let order_ptr = wrapper.order.lock();
+        let order_id = order_ptr.order_id;
+        drop(order_ptr);
+
+        if self.pending_orders.contains_key(&order_id) {
+            let current_pending = self.pending_orders.get_mut(&order_id).unwrap();
+
+            current_pending.push(wrapper);
+        } else {
+            self.pending_orders.insert(order_id, vec![wrapper]);
         }
     }
 
@@ -415,15 +457,17 @@ impl OrderQueue {
         if !self.pending_orders.contains_key(&order_id) {
             return;
         }
-        let (sig, side, qty, user_id) = self.pending_orders.remove(&order_id).unwrap();
 
-        let new_qty = qty - reduce_qty;
+        let wrapper = self.pending_orders.get_mut(&order_id).unwrap();
 
-        if new_qty <= 0 || force {
-            self.pending_orders.remove(&order_id);
-        } else {
-            self.pending_orders
-                .insert(order_id, (sig, side, new_qty, user_id));
+        wrapper[0].qty_left = wrapper[0].qty_left - reduce_qty;
+
+        if wrapper[0].qty_left <= 0 || force {
+            wrapper.remove(0);
+
+            if wrapper.len() == 0 {
+                self.pending_orders.remove(&order_id);
+            }
         }
     }
 
@@ -431,64 +475,40 @@ impl OrderQueue {
     ///
     /// Reinsert the order back into the order book with the signature, side, and qty from the pending order,
     /// or increase the qty of that order if it has already been reinserted, by another partial fill
-    pub fn restore_pending_order(&mut self, order: Order, order_qty: u64) {
-        match order {
-            Order::Spot(limit_order) => {
-                // ? If pending order was already restored increase the qty of that order in the book
-                if self.orders.contains_key(&limit_order.order_id) {
-                    self.increase_qty(limit_order.order_id, order_qty);
-                }
+    pub fn restore_pending_order(&mut self, order_id: u64, order_qty: u64) {
+        if self.pending_orders.contains_key(&order_id) {
+            let wrappers = self.pending_orders.get_mut(&order_id).unwrap();
 
-                if !self.pending_orders.contains_key(&limit_order.order_id) {
-                    return;
-                }
-                let (sig, side, _, user_id) =
-                    self.pending_orders.remove(&limit_order.order_id).unwrap();
+            let mut wrapper = wrappers.remove(0);
+            wrapper.qty_left += order_qty;
 
-                let order_id = limit_order.order_id;
-                let order__ = Order::Spot(limit_order);
-                let price = order__.get_price(side, None);
-                let ts = time::SystemTime::now();
+            let l = wrappers.len();
+            drop(wrappers);
 
-                let wrapper = OrderWrapper {
-                    order_id,
-                    order_side: side,
-                    qty_left: order_qty,
-                    signature: sig,
-                    order: order__,
-                    user_id,
-                };
-
-                self.insert(order_id, price, ts, wrapper);
+            if l == 0 {
+                self.pending_orders.remove(&order_id);
             }
-            Order::Perp(perp_order) => {
-                // ? If pending order was already restored increase the qty of that order in the book
-                if self.orders.contains_key(&perp_order.order_id) {
-                    self.increase_qty(perp_order.order_id, order_qty);
-                }
 
-                if !self.pending_orders.contains_key(&perp_order.order_id) {
-                    return;
-                }
-                let (sig, side, _, user_id) =
-                    self.pending_orders.remove(&perp_order.order_id).unwrap();
+            let ts = time::SystemTime::now();
+            self.insert(order_id, wrapper.price, ts, wrapper);
+        } else {
+            let wrapper = self.get_order(order_id);
 
-                let order_id = perp_order.order_id;
-                let order__ = Order::Perp(perp_order);
-                let price = order__.get_price(side, None);
-                let ts = time::SystemTime::now();
-
-                let wrapper = OrderWrapper {
-                    order_id,
-                    order_side: side,
-                    qty_left: order_qty,
-                    signature: sig,
-                    order: order__,
-                    user_id,
-                };
-
-                self.insert(order_id, price, ts, wrapper);
+            if let Some(wrapper) = wrapper {
+                self.modify_current_order(order_id, wrapper.qty_left + order_qty)
             }
         }
+    }
+
+    pub fn get_pending_inner_order(&self, order_id: u64) -> Option<Arc<Mutex<SharedOrderInner>>> {
+        if !self.pending_orders.contains_key(&order_id) {
+            return None;
+        }
+
+        let wrappers = self.pending_orders.get(&order_id).unwrap();
+
+        let order = wrappers[0].order.clone();
+
+        Some(order)
     }
 }

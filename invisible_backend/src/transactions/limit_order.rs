@@ -102,6 +102,7 @@ impl LimitOrder {
         self.hash = hash;
     }
 
+
     pub fn verify_order_signature(
         &self,
         signature: &Signature,

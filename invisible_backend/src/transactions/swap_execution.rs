@@ -33,16 +33,14 @@ pub fn execute_order(
     partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Note, u64)>>>,
     blocked_order_ids_m: &Arc<Mutex<HashMap<u64, bool>>>,
     order: &LimitOrder,
+    order_id: u64,
     signature: &Signature,
     spent_amount_x: u64,
     spent_amount_y: u64,
     fee_taken_x: u64,
 ) -> Result<(bool, Note, Option<(Note, u64)>, Option<Note>, u64), SwapThreadExecutionError> {
-    let partial_fill_info = block_until_prev_fill_finished(
-        partial_fill_tracker_m,
-        blocked_order_ids_m,
-        order.order_id,
-    )?;
+    let partial_fill_info =
+        block_until_prev_fill_finished(partial_fill_tracker_m, blocked_order_ids_m, order_id)?;
 
     let is_first_fill = partial_fill_info.is_none();
 

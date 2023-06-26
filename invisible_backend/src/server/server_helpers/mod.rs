@@ -235,7 +235,11 @@ pub fn proccess_spot_matching_result(
                             ));
                         }
                     }
-                    _ => return Err(send_matching_error("SOMETHING WENT WRONG".to_string())),
+                    _ => {
+                        println!("res: {:?}", res);
+
+                        return Err(send_matching_error("SOMETHING WENT WRONG".to_string()));
+                    }
                 };
             } else if let Err(e) = res {
                 return Err(handle_error(&e));
@@ -402,7 +406,11 @@ pub fn proccess_perp_matching_result(
                             ));
                         }
                     }
-                    _ => return Err(send_matching_error("SOMETHING WENT WRONG".to_string())),
+                    _ => {
+                        println!("res: {:?}", res);
+
+                        return Err(send_matching_error("SOMETHING WENT WRONG".to_string()));
+                    }
                 };
             } else if let Err(e) = res {
                 return Err(handle_error(&e));

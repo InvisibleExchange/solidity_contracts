@@ -139,7 +139,7 @@ pub fn get_cross_price(
             return price;
         }
 
-        // ? If round == true, round up else round down
+        // ? If round == true round up else round down
         if round.unwrap() {
             // round price to 3 decimals
             return (price * 1000.0).ceil() / 1000.0;
