@@ -14,7 +14,7 @@ use invisible_backend::server::{
 
 use invisible_backend::transactions::transaction_helpers::rollbacks::RollbackInfo;
 
-use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex};
+use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex, Semaphore};
 use tonic::transport::Server;
 
 use engine::engine_server::EngineServer;
@@ -84,8 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::SwapMessage => {
                     let handle = tx_batch.execute_transaction(grpc_message.swap_message.unwrap());
 
-                 
-
                     let mut grpc_res = GrpcTxResponse::new(true);
                     grpc_res.tx_handle = Some(handle);
 
@@ -97,8 +95,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let handle =
                         tx_batch.execute_transaction(grpc_message.withdrawal_message.unwrap());
 
-                    
-
                     let mut grpc_res = GrpcTxResponse::new(true);
                     grpc_res.tx_handle = Some(handle);
 
@@ -109,8 +105,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::PerpSwapMessage => {
                     let handle = tx_batch
                         .execute_perpetual_transaction(grpc_message.perp_swap_message.unwrap());
-
-              
 
                     let mut grpc_res = GrpcTxResponse::new(true);
                     grpc_res.perp_tx_handle = Some(handle);
@@ -134,8 +128,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let (notes_in, new_note, refund_note) =
                         grpc_message.split_notes_message.unwrap();
                     let zero_idxs = tx_batch.split_notes(notes_in, new_note, refund_note);
-
-                
 
                     let mut grpc_res = GrpcTxResponse::new(true);
                     grpc_res.new_idxs = Some(zero_idxs);
@@ -169,8 +161,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                 
-
                     let mut grpc_res = GrpcTxResponse::new(success);
                     grpc_res.margin_change_response = margin_change_response;
 
@@ -181,8 +171,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::Rollback => {
                     tx_batch.rollback_transaction(grpc_message.rollback_info_message.unwrap());
 
-                   
-
                     let grpc_res = GrpcTxResponse::new(true);
 
                     response
@@ -192,8 +180,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 MessageType::FundingUpdate => {
                     if let Some(funding_update) = grpc_message.funding_update_message {
                         tx_batch.per_minute_funding_updates(funding_update);
-
-                
 
                         let grpc_res = GrpcTxResponse::new(true);
 
@@ -217,9 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let updated_prices = tx_batch.update_index_prices(oracle_updates);
 
-                   
-
-                    let  grpc_res = GrpcTxResponse::new(updated_prices.is_ok());
+                    let grpc_res = GrpcTxResponse::new(updated_prices.is_ok());
 
                     response
                         .send(grpc_res)
@@ -227,7 +211,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 MessageType::FinalizeBatch => {
                     let success = tx_batch.finalize_batch().is_ok();
-
 
                     let grpc_res = GrpcTxResponse::new(success);
 
@@ -299,6 +282,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
+    // semaphore: Semaphore,
+    // is_paused: Arc<TokioMutex<bool>>,
+
     let transaction_service = EngineService {
         mpsc_tx,
         session,
@@ -315,6 +301,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         main_storage,
         backup_storage,
         swap_output_json,
+        semaphore: Semaphore::new(25),
+        is_paused: Arc::new(TokioMutex::new(false)),
     };
 
     // * =============================================================================================================================

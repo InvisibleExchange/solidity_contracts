@@ -219,7 +219,7 @@ fn open_new_position(
 
     // ? Check that leverage is valid relative to the notional position size
     let max_leverage = get_max_leverage(order.synthetic_token, spent_synthetic);
-    if max_leverage < leverage {
+    if max_leverage * 103 / 100 < leverage {
         return Err(send_perp_swap_error(
             "Leverage is too high".to_string(),
             Some(order.order_id),
@@ -321,7 +321,7 @@ fn add_margin_to_position(
     );
 
     // ? Check that leverage is valid relative to the notional position size
-    if get_max_leverage(order.synthetic_token, position.position_size) < leverage {
+    if get_max_leverage(order.synthetic_token, position.position_size) * 103 / 100 < leverage {
         return Err(send_perp_swap_error(
             "Leverage is too high".to_string(),
             Some(order.order_id),

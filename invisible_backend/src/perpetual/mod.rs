@@ -29,7 +29,7 @@ pub static LEVERAGE_BOUNDS_PER_ASSET: phf::Map<&'static str, [f32; 2]> = phf_map
 "12345" => [1.5, 30.0], // BTC
 "54321" => [15.0, 150.0], // ETH
 };
-pub const MAX_LEVERAGE: f64 = 15.5;
+pub const MAX_LEVERAGE: f64 = 15.0;
 
 // BTC - 12345
 // ETH - 54321

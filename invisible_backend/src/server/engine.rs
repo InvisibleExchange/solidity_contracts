@@ -101,7 +101,7 @@ use error_stack::Report;
 use tokio::sync::{
     mpsc::Sender as MpscSender,
     oneshot::{self, Sender as OneshotSender},
-    Mutex as TokioMutex,
+    Mutex as TokioMutex, Semaphore,
 };
 use tokio::task::JoinHandle as TokioJoinHandle;
 use tonic::{Request, Response, Status};
@@ -137,6 +137,8 @@ pub struct EngineService {
     pub ws_connections: Arc<TokioMutex<WsConnectionsMap>>,
     pub privileged_ws_connections: Arc<TokioMutex<Vec<u64>>>,
     //
+    pub semaphore: Semaphore,
+    pub is_paused: Arc<TokioMutex<bool>>,
 }
 
 // #[tokio::]
@@ -146,6 +148,11 @@ impl Engine for EngineService {
         &self,
         request: Request<LimitOrderMessage>,
     ) -> Result<Response<OrderResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         // let now = Instant::now();
@@ -302,6 +309,11 @@ impl Engine for EngineService {
         &self,
         request: Request<PerpOrderMessage>,
     ) -> Result<Response<OrderResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: PerpOrderMessage = request.into_inner();
@@ -436,6 +448,11 @@ impl Engine for EngineService {
         &self,
         request: Request<LiquidationOrderMessage>,
     ) -> Result<Response<LiquidationOrderResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: LiquidationOrderMessage = request.into_inner();
@@ -655,6 +672,11 @@ impl Engine for EngineService {
         &self,
         request: Request<AmendOrderRequest>,
     ) -> Result<Response<AmendOrderResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: AmendOrderRequest = request.into_inner();
@@ -765,6 +787,11 @@ impl Engine for EngineService {
         &self,
         request: Request<DepositMessage>,
     ) -> Result<Response<DepositResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: DepositMessage = request.into_inner();
@@ -882,6 +909,11 @@ impl Engine for EngineService {
         &self,
         request: Request<WithdrawalMessage>,
     ) -> Result<Response<SuccessResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: WithdrawalMessage = request.into_inner();
@@ -1308,6 +1340,11 @@ impl Engine for EngineService {
         &self,
         req: Request<SplitNotesReq>,
     ) -> Result<Response<SplitNotesRes>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: SplitNotesReq = req.into_inner();
@@ -1397,6 +1434,11 @@ impl Engine for EngineService {
         &self,
         req: Request<MarginChangeReq>,
     ) -> Result<Response<MarginChangeRes>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+        drop(lock);
+
         tokio::task::yield_now().await;
 
         let req: MarginChangeReq = req.into_inner();
@@ -1502,6 +1544,10 @@ impl Engine for EngineService {
         &self,
         _: Request<EmptyReq>,
     ) -> Result<Response<FinalizeBatchResponse>, Status> {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let lock = self.is_paused.lock().await;
+
         tokio::task::yield_now().await;
 
         let transaction_mpsc_tx = self.mpsc_tx.clone();
@@ -1535,6 +1581,8 @@ impl Engine for EngineService {
         } else {
             reply = FinalizeBatchResponse {};
         }
+
+        drop(lock);
 
         return Ok(Response::new(reply));
     }
@@ -1626,25 +1674,23 @@ impl Engine for EngineService {
         drop(state_tree);
         drop(perp_state_tree);
 
-        let backup_storage = self.backup_storage.lock();
-        let (failed_position_additions, _failed_position_deletions) =
-            backup_storage.read_positions();
-        println!("Failed positions: {:?}", failed_position_additions);
-        let notes = backup_storage.read_notes();
-        println!("Failed notes: {:?}", notes);
-        drop(backup_storage);
+        // let backup_storage = self.backup_storage.lock();
+        // let (failed_position_additions, _failed_position_deletions) =
+        //     backup_storage.read_positions();
+        // let notes = backup_storage.read_notes();
+        // drop(backup_storage);
 
-        let perp_state = self.perp_state_tree.lock();
-        for position in failed_position_additions {
-            let leaf_hash = perp_state.get_leaf_by_index(position.index as u64);
+        // let perp_state = self.perp_state_tree.lock();
+        // for position in failed_position_additions {
+        //     let leaf_hash = perp_state.get_leaf_by_index(position.index as u64);
 
-            if position.hash == leaf_hash {
-                if position.hash == position.hash_position() {
+        //     if position.hash == leaf_hash {
+        //         if position.hash == position.hash_position() {
 
-                    // TODO
-                }
-            }
-        }
+        //             // TODO
+        //         }
+        //     }
+        // }
 
         let reply = StateInfoRes {
             state_tree: spot_tree_leaves,
