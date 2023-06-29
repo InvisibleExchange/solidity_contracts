@@ -135,20 +135,9 @@ pub fn get_cross_price(
 
         let price = price as f64 / 10_f64.powi(*base_price_decimals as i32);
 
-        if round.is_none() {
-            return price;
-        }
-
-        // ? If round == true round up else round down
-        if round.unwrap() {
-            // round price to 3 decimals
-            return (price * 1000.0).ceil() / 1000.0;
-        } else {
-            // round price to 3 decimals
-            return (price * 1000.0).floor() / 1000.0;
-        }
+        return round_price(price, round);
     } else {
-        panic!("quote token is not a valid collateral token");
+        return 0.0;
     }
 
     // TODO: What is the quote token is not a valid collateral token?
@@ -168,8 +157,24 @@ pub fn get_cross_price(
     // let multiplier = 10_u128.pow(decimal_conversion as u32);
 
     // let price = (quote_amount as u128 * multiplier) as u64 / base_amount;
-
     // return price as f64 / 10_f64.powi(*base_price_decimals as i32);
+}
+
+pub fn round_price(price: f64, _round: Option<bool>) -> f64 {
+    return (price * 100.0).floor() / 100.0;
+
+    // if round.is_none() {
+    //     return price;
+    // }
+
+    // // ? If round == true round up else round down
+    // if round.unwrap() {
+    //     // round price to 3 decimals
+    //     return (price * 1000.0).ceil() / 1000.0;
+    // } else {
+    //     // round price to 3 decimals
+    //     return (price * 1000.0).floor() / 1000.0;
+    // }
 }
 
 pub fn calculate_quote_amount(

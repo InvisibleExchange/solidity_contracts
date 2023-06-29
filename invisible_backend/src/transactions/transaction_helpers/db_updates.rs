@@ -116,8 +116,6 @@ pub fn store_spot_fill(
     };
 
     let _handle = start_add_fill_thread(fill_info, session, backup_storage);
-
-    println!("storing spot fill");
 }
 
 // DEPOSITS -----------------------------------------------------
