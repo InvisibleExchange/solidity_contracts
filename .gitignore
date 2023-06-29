@@ -39,7 +39,7 @@ invisible_solidity/todos.txt
 
 
 relay_server/src/helpers/firebaseConnection.js
-relay_server/src/orderBooks.db
+relay_server/orderBooks.db
 relay_server/src/.env
 
 deprecated

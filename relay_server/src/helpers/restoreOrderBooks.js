@@ -14,11 +14,15 @@ const SERVER_URL = "localhost:50052";
 
 const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
-let db = new sqlite3.Database("./orderBooks.db", (err) => {
-  if (err) {
-    console.error(err.message);
+const path = require("path");
+let db = new sqlite3.Database(
+  path.join(__dirname, "../orderBooks.db"),
+  (err) => {
+    if (err) {
+      console.error(err.message);
+    }
   }
-});
+);
 
 // TODO: ONLY RESTORE THE ORDERS THAT HAVE NOT EXPIRED YET
 
@@ -133,9 +137,6 @@ async function restoreOrderbooks() {
       sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity);
     }
   });
-
-
-  
 }
 
 async function sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity) {

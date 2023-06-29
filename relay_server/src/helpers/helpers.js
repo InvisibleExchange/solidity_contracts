@@ -274,6 +274,7 @@ async function getLiquidatablePositions(db, syntheticToken, price) {
 
 // DB HELPERS ============================================================================================================================
 
+const path = require("path");
 function storeSpotOrder(db, order_id, orderObject) {
   let command =
     "INSERT OR REPLACE INTO spotOrders (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, dest_received_address, dest_received_blinding,  notes_in, refund_note, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)";
@@ -358,7 +359,7 @@ function initDb() {
   signature TEXT NOT NULL, 
   user_id INTEGER )  `;
 
-  let db = new sqlite3.Database("./orderBooks.db", (err) => {
+  let db = new sqlite3.Database( path.join(__dirname, "../orderBooks.db")  , (err) => {
     if (err) {
       console.error(err.message);
     }

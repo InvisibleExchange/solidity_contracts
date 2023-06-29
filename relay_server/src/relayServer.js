@@ -90,11 +90,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       (msg) => {
         const correlationId = msg.properties.correlationId;
 
-        console.log(
-          "correlation ID",
-          correlationId.startsWith("get_funding_info")
-        );
-
         if (correlationId.startsWith("get_funding_info")) {
           let response = JSON.parse(msg.content);
           if (response.successful) {
@@ -128,7 +123,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
 
     // * EXECUTE DEPOSIT -----------------------------------------------------------------
     app.post("/execute_deposit", (req, res) => {
-      console.log("executing");
 
       delegateRequest(
         req.body,
@@ -262,12 +256,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
 
     // * GET FUNDING INFO -----------------------------------------------------------------
     app.post("/get_market_info", (req, res) => {
-      // TODO: For testing
-      fundingRates = { 12345: [272, 103, -510], 54321: [321, -150, 283] };
-      fundingPrices = {
-        12345: [25000_000_000, 25130_000_000, 25300_000_000],
-        54321: [1500, 1600, 1700],
-      };
       res.send({
         response: {
           fundingPrices,
