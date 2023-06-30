@@ -91,7 +91,7 @@ pub async fn execute_perp_swap(
 
     // ? The qty being traded
     let qty = perp_swap.spent_synthetic;
-    let p = get_cross_price(
+    let p: f64 = get_cross_price(
         perp_swap.order_a.synthetic_token,
         VALID_COLLATERAL_TOKENS[0],
         perp_swap.spent_synthetic,

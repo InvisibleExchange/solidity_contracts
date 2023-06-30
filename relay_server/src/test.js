@@ -12,14 +12,6 @@ const SERVER_URL = "localhost:50052";
 
 const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
-client.get_state_info({}, function (err, response) {
-  if (err) {
-    console.log(err);
-  } else {
-    console.log(response);
-  }
-});
-
 // async function main() {
 //   let res = await getLastDayTrades(false);
 
@@ -27,3 +19,29 @@ client.get_state_info({}, function (err, response) {
 // }
 
 // main();
+
+async function main() {
+  client.finalize_batch({}, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(response);
+    }
+  });
+
+  // ========================
+}
+
+main();
+
+async function main2() {
+  client.get_state_info({}, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(response);
+    }
+  });
+}
+
+main2();

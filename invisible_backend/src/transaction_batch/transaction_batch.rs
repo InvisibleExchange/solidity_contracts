@@ -812,10 +812,12 @@ impl TransactionBatch {
         // & Get the merkle trees from the beginning of the batch from disk
 
         let state_tree = self.state_tree.clone();
-        let state_tree = state_tree.lock();
+        let mut state_tree = state_tree.lock();
+        state_tree.update_zero_idxs();
 
         let perpetual_state_tree = self.perpetual_state_tree.clone();
-        let perpetual_state_tree = perpetual_state_tree.lock();
+        let mut perpetual_state_tree = perpetual_state_tree.lock();
+        perpetual_state_tree.update_zero_idxs();
 
         let main_storage = self.main_storage.clone();
         let mut main_storage = main_storage.lock();

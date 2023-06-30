@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
+    matching_engine::get_quote_qty,
     perpetual::{
-        calculate_quote_amount, get_price, perp_helpers::perp_swap_helpers::get_max_leverage,
-        perp_position::PerpPosition, scale_down_price, OrderSide, LEVERAGE_DECIMALS, TOKENS,
-        VALID_COLLATERAL_TOKENS,
+        get_price, perp_helpers::perp_swap_helpers::get_max_leverage, perp_position::PerpPosition,
+        scale_down_price, OrderSide, LEVERAGE_DECIMALS, TOKENS, VALID_COLLATERAL_TOKENS,
     },
     transaction_batch::tx_batch_structs::SwapFundingInfo,
     trees::superficial_tree::SuperficialTree,
@@ -63,11 +63,12 @@ pub fn open_new_position_after_liquidation(
     let init_margin = liquidation_order.open_order_fields.initial_margin + liquidator_fee;
 
     let price = scale_down_price(market_price, liquidation_order.synthetic_token);
-    let collateral_amount = calculate_quote_amount(
-        liquidation_order.synthetic_token,
-        VALID_COLLATERAL_TOKENS[0],
+    let collateral_amount = get_quote_qty(
         liquidated_size,
         price,
+        liquidation_order.synthetic_token,
+        VALID_COLLATERAL_TOKENS[0],
+        None,
     );
 
     let leverage = (collateral_amount as u128 * 10_u128.pow(LEVERAGE_DECIMALS as u32)
@@ -192,7 +193,8 @@ pub fn liquidation_consistency_checks(
     let refund_amount = if liquidation_order.open_order_fields.refund_note.is_some() {
         liquidation_order
             .open_order_fields
-            .refund_note.as_ref()
+            .refund_note
+            .as_ref()
             .unwrap()
             .amount
     } else {

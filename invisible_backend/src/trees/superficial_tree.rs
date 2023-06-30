@@ -62,6 +62,16 @@ impl SuperficialTree {
         }
     }
 
+    pub fn update_zero_idxs(&mut self) {
+        self.zero_idxs = vec![];
+
+        for (idx, leaf) in self.leaf_nodes.iter().enumerate() {
+            if leaf.eq(&BigUint::zero()) {
+                self.zero_idxs.push(idx as u64);
+            }
+        }
+    }
+
     // -----------------------------------------------------------------
 
     pub fn from_disk(

@@ -346,10 +346,36 @@ impl OrderBook {
                 );
             }
 
-            let could_be_matched = match side {
+            let could_be_matched;
+            let opposite_price: f64;
+            match side {
                 // verify bid/ask price overlap
-                OrderSide::Bid => price >= opposite_order.price,
-                OrderSide::Ask => price <= opposite_order.price,
+                OrderSide::Bid => {
+                    if is_market_order && price >= opposite_order.price + 0.01 {
+                        could_be_matched = true;
+                        opposite_price = opposite_order.price + 0.01;
+                    } else {
+                        if price >= opposite_order.price {
+                            could_be_matched = true;
+                        } else {
+                            could_be_matched = false;
+                        }
+                        opposite_price = opposite_order.price;
+                    }
+                }
+                OrderSide::Ask => {
+                    if is_market_order && price <= opposite_order.price - 0.01 {
+                        could_be_matched = true;
+                        opposite_price = opposite_order.price - 0.01;
+                    } else {
+                        if price <= opposite_order.price {
+                            could_be_matched = true;
+                        } else {
+                            could_be_matched = false;
+                        }
+                        opposite_price = opposite_order.price;
+                    }
+                }
             };
 
             if could_be_matched {
@@ -377,7 +403,6 @@ impl OrderBook {
 
                 if is_market_order && side == OrderSide::Bid && is_spot {
                     // If its a market buy order than we take into account the base qty not the qty
-                    let opposite_price = opposite_order.price;
                     opposite_quote_qty = get_quote_qty(
                         opposite_qty,
                         opposite_price,
@@ -389,6 +414,7 @@ impl OrderBook {
                     matching_complete = self.order_matching_market_bid(
                         results,
                         opposite_order.clone(),
+                        opposite_price,
                         order_id,
                         &order,
                         OrderType::Market,
@@ -400,6 +426,7 @@ impl OrderBook {
                     matching_complete = self.order_matching(
                         results,
                         opposite_order.clone(),
+                        opposite_price,
                         order_id,
                         &order,
                         OrderType::Limit,
@@ -610,6 +637,7 @@ impl OrderBook {
         &mut self,
         results: &mut OrderProcessingResult,
         opposite_wrapper: OrderWrapper,
+        opposite_price: f64,
         _order_id: u64,
         order_wrapper: &OrderWrapper,
         order_type: OrderType,
@@ -626,9 +654,7 @@ impl OrderBook {
         if qty < opposite_wrapper.qty_left {
             let quote_qty = 0;
 
-            // TODO: ROUND PRICE
             let order_id = opposite_order.order_id;
-            let price = opposite_wrapper.price;
 
             // ? report filled new order
             results.push(Ok(Success::Filled {
@@ -636,7 +662,7 @@ impl OrderBook {
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,
@@ -650,7 +676,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: true,
@@ -686,9 +712,6 @@ impl OrderBook {
         } else if qty > opposite_wrapper.qty_left {
             // partially fill new limit order, fill opposite limit and notify to process the rest
 
-            // TODO: ROUND PRICE
-            let price = opposite_wrapper.price;
-
             let quote_qty = 0;
 
             // report new order partially filled
@@ -697,7 +720,7 @@ impl OrderBook {
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price,
+                price: opposite_price,
                 qty: opposite_wrapper.qty_left,
                 quote_qty,
                 partially_filled: true,
@@ -711,7 +734,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price,
+                price: opposite_price,
                 qty: opposite_wrapper.qty_left,
                 quote_qty,
                 partially_filled: false,
@@ -745,17 +768,7 @@ impl OrderBook {
             // matching incomplete
             return false;
         } else {
-            // let quote_qty = get_quote_qty(
-            //     qty,
-            //     opposite_order.order.get_price(opposite_order.order_side),
-            //     self.order_asset,
-            //     self.price_asset,
-            //     if is_market { Some(side) } else { None },
-            // );
             let quote_qty = 0;
-
-            // TODO: ROUND PRICE
-            let price = opposite_wrapper.price;
 
             // report filled new order
             results.push(Ok(Success::Filled {
@@ -763,7 +776,7 @@ impl OrderBook {
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,
@@ -776,7 +789,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,
@@ -816,6 +829,7 @@ impl OrderBook {
         &mut self,
         results: &mut OrderProcessingResult,
         opposite_wrapper: OrderWrapper,
+        opposite_price: f64,
         _order_id: u64,
         order_wrapper: &OrderWrapper,
         order_type: OrderType,
@@ -836,7 +850,7 @@ impl OrderBook {
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price: opposite_wrapper.price,
+                price: opposite_price,
                 qty: opposite_wrapper.qty_left,
                 quote_qty: opposite_quote_qty,
                 partially_filled: true,
@@ -850,7 +864,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price: opposite_wrapper.price,
+                price: opposite_price,
                 qty: opposite_wrapper.qty_left,
                 quote_qty: opposite_quote_qty,
                 partially_filled: false,
@@ -889,7 +903,6 @@ impl OrderBook {
             );
 
             let order_id = opposite_order.order_id;
-            let price = opposite_wrapper.price;
 
             // ? report filled new order
             results.push(Ok(Success::Filled {
@@ -897,7 +910,7 @@ impl OrderBook {
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,
@@ -911,7 +924,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: true,
@@ -952,15 +965,13 @@ impl OrderBook {
                 self.price_asset,
             );
 
-            let price = opposite_wrapper.price;
-
             // report filled new order
             results.push(Ok(Success::Filled {
                 order: current_order.order.clone(),
                 signature: current_order.signature.clone(),
                 side,
                 order_type,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,
@@ -973,7 +984,7 @@ impl OrderBook {
                 signature: opposite_order.signature.clone(),
                 side: opposite_order.order_side,
                 order_type: OrderType::Limit,
-                price,
+                price: opposite_price,
                 qty,
                 quote_qty,
                 partially_filled: false,

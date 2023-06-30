@@ -128,12 +128,11 @@ pub fn get_cross_price(
     // Price of two tokens in terms of each other (possible to get ETH/BTC price)
 
     if VALID_COLLATERAL_TOKENS.contains(&quote_token) {
-        let base_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(base_token.to_string().as_str())
-            .unwrap();
-        let price = get_price(base_token, quote_amount, base_amount);
+        let base_decimals = DECIMALS_PER_ASSET[&base_token.to_string()];
+        let quote_decimals = DECIMALS_PER_ASSET[&quote_token.to_string()];
 
-        let price = price as f64 / 10_f64.powi(*base_price_decimals as i32);
+        let price = (quote_amount as f64 / 10_f64.powi(quote_decimals as i32))
+            / (base_amount as f64 / 10_f64.powi(base_decimals as i32));
 
         return round_price(price, round);
     } else {
@@ -175,33 +174,6 @@ pub fn round_price(price: f64, _round: Option<bool>) -> f64 {
     //     // round price to 3 decimals
     //     return (price * 1000.0).floor() / 1000.0;
     // }
-}
-
-pub fn calculate_quote_amount(
-    base_token: u64,
-    quote_token: u64,
-    base_amount: u64,
-    base_price: f64,
-) -> u64 {
-    let base_decimals: &u8 = DECIMALS_PER_ASSET
-        .get(base_token.to_string().as_str())
-        .unwrap();
-    let base_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-        .get(base_token.to_string().as_str())
-        .unwrap();
-
-    if !VALID_COLLATERAL_TOKENS.contains(&quote_token) {
-        panic!("quote token is not a valid collateral token");
-    }
-
-    let base_price = base_price * 10_f64.powi(*base_price_decimals as i32);
-
-    let decimal_conversion = *base_decimals + *base_price_decimals - 6;
-    let multiplier = 10_u128.pow(decimal_conversion as u32);
-
-    let quote_amount = (base_amount as u128 * base_price as u128) / multiplier;
-
-    return quote_amount as u64;
 }
 
 pub fn scale_up_price(price: f64, token: u64) -> u64 {

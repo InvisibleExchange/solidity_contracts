@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
+use num_traits::Pow;
 use phf::phf_map;
 use serde_json::{from_str, Value};
 use tokio::net::TcpStream;
@@ -11,9 +12,10 @@ use tokio::sync::Mutex as TokioMutex;
 use error_stack::{Report, Result};
 use tokio_tungstenite::WebSocketStream;
 
+use crate::matching_engine::get_quote_qty;
 use crate::perpetual::perp_order::PerpOrder;
 use crate::perpetual::perp_swap::PerpSwap;
-use crate::perpetual::{calculate_quote_amount, VALID_COLLATERAL_TOKENS};
+use crate::perpetual::{COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET, VALID_COLLATERAL_TOKENS};
 use crate::utils::crypto_utils::Signature;
 use crate::{
     matching_engine::{
@@ -176,6 +178,7 @@ pub fn proccess_spot_matching_result(
             return Err(handle_error(e));
         }
 
+        let mut prices: Vec<f64> = Vec::new();
         let mut a_orders: Vec<(LimitOrder, Signature, u64, u64, bool)> = Vec::new(); // Vec<(order, sig, spent_amount, user_id, take_fee?)>
         let mut b_orders: Vec<(LimitOrder, Signature, u64, u64, bool)> = Vec::new(); // Vec<(order, sig, spent_amount, user_id, take_fee?)>
 
@@ -203,11 +206,19 @@ pub fn proccess_spot_matching_result(
                                 // He is selling the base asset and buying the quote(price) asset
                                 let spent_amount = qty;
 
+                                if spent_amount > lim_order.amount_spent {
+                                    println!(
+                                        "ask spent_amount: {}, > lim_order.amount_spent: {}",
+                                        spent_amount, lim_order.amount_spent
+                                    )
+                                }
+
                                 let spent_amount = min(spent_amount, lim_order.amount_spent);
 
                                 let b_order_tup =
                                     (lim_order, signature, spent_amount, user_id, is_taker);
                                 b_orders.push(b_order_tup);
+                                prices.push(price);
                             } else {
                                 // transactions are ordered as [(taker,maker), (taker,maker), ...]
                                 let is_taker = i % 2 == 0;
@@ -216,13 +227,21 @@ pub fn proccess_spot_matching_result(
                                 let spent_amount = if quote_qty > 0 {
                                     quote_qty
                                 } else {
-                                    calculate_quote_amount(
-                                        lim_order.token_received,
-                                        lim_order.token_spent,
+                                    get_quote_qty(
                                         qty,
                                         price,
+                                        lim_order.token_received,
+                                        lim_order.token_spent,
+                                        None,
                                     )
                                 };
+
+                                if spent_amount > lim_order.amount_spent {
+                                    println!(
+                                        "bid spent_amount: {}, > lim_order.amount_spent: {}",
+                                        spent_amount, lim_order.amount_spent
+                                    )
+                                }
                                 let spent_amount = min(spent_amount, lim_order.amount_spent);
 
                                 let a_order_tup =
@@ -235,11 +254,7 @@ pub fn proccess_spot_matching_result(
                             ));
                         }
                     }
-                    _ => {
-                        println!("res: {:?}", res);
-
-                        return Err(send_matching_error("SOMETHING WENT WRONG".to_string()));
-                    }
+                    _ => return Err(send_matching_error("SOMETHING WENT WRONG".to_string())),
                 };
             } else if let Err(e) = res {
                 return Err(handle_error(&e));
@@ -249,9 +264,28 @@ pub fn proccess_spot_matching_result(
         let mut swaps: Vec<(Swap, u64, u64)> = Vec::new(); // Vec<(swap, user_id_a, user_id_b)>
 
         // ? Build swaps from a_orders and b_orders vecs
-        for (a, b) in a_orders.into_iter().zip(b_orders.into_iter()) {
+        for ((a, b), price) in a_orders.into_iter().zip(b_orders).zip(prices) {
             let (order_a, signature_a, spent_amount_a, user_id_a, take_fee_a) = a;
             let (order_b, signature_b, spent_amount_b, user_id_b, take_fee_b) = b;
+
+            let quote_decimals = DECIMALS_PER_ASSET[&order_a.token_spent.to_string()];
+            let base_decimals = DECIMALS_PER_ASSET[&order_a.token_received.to_string()];
+
+            // a is bid - spent = quote
+            let spent_b_: f64 =
+                (spent_amount_a as f64 / price as f64 / 10_f64.pow(quote_decimals as i32)).ceil();
+            let spent_amount_b = min(
+                spent_amount_b,
+                (spent_b_ * 10_f64.pow(base_decimals)) as u64,
+            );
+
+            // b is ask - spent = base
+            let spent_a_: f64 =
+                (spent_amount_b as f64 * price as f64 / 10_f64.pow(base_decimals as i32)).ceil();
+            let spent_amount_a = min(
+                spent_amount_a,
+                (spent_a_ * 10_f64.pow(quote_decimals)) as u64,
+            );
 
             let fee_taken_a = if take_fee_a {
                 (spent_amount_b as f64 * 0.0005) as u64
@@ -346,6 +380,7 @@ pub fn proccess_perp_matching_result(
             return Err(handle_error(e));
         }
 
+        let mut prices: Vec<f64> = Vec::new();
         let mut a_orders: Vec<(PerpOrder, Signature, u64, u64, bool)> = Vec::new(); // Vec<(order, sig, spent_synthetic, user_id, take_fee?)>
         let mut b_orders: Vec<(PerpOrder, Signature, u64, u64, bool)> = Vec::new(); // Vec<(order, sig, spent_collateral, user_id, take_fee?)>
 
@@ -369,6 +404,14 @@ pub fn proccess_perp_matching_result(
                             if side == OBOrderSide::Ask {
                                 // The synthetic exchnaged in the swap
                                 let spent_synthetic = qty;
+
+                                if spent_synthetic > perp_order.synthetic_amount {
+                                    println!(
+                                        "spent_synthetic: {}, > perp_order.synthetic_amount: {}",
+                                        spent_synthetic, perp_order.synthetic_amount
+                                    )
+                                }
+
                                 let spent_synthetic =
                                     min(spent_synthetic, perp_order.synthetic_amount);
 
@@ -378,18 +421,27 @@ pub fn proccess_perp_matching_result(
                                 let b_order_tup =
                                     (perp_order, signature, spent_synthetic, user_id, take_fee);
                                 b_orders.push(b_order_tup);
+                                prices.push(price);
                             } else {
                                 // The collateral exchnaged in the swap
                                 let collateral_spent = if quote_qty > 0 {
                                     quote_qty
                                 } else {
-                                    calculate_quote_amount(
-                                        perp_order.synthetic_token,
-                                        VALID_COLLATERAL_TOKENS[0],
+                                    get_quote_qty(
                                         qty,
                                         price,
+                                        perp_order.synthetic_token,
+                                        VALID_COLLATERAL_TOKENS[0],
+                                        None,
                                     )
                                 };
+
+                                if collateral_spent > perp_order.collateral_amount {
+                                    println!(
+                                        "collateral_spent: {}, < perp_order.collateral_amount: {}",
+                                        collateral_spent, perp_order.collateral_amount
+                                    )
+                                }
                                 let collateral_spent =
                                     min(collateral_spent, perp_order.collateral_amount);
 
@@ -420,9 +472,27 @@ pub fn proccess_perp_matching_result(
         let mut swaps: Vec<(PerpSwap, u64, u64)> = Vec::new(); // Vec<(swap, user_id_a, user_id_b)>
 
         // ? Build swaps from a_orders and b_orders vecs
-        for (a, b) in a_orders.into_iter().zip(b_orders.into_iter()) {
+        for ((a, b), price) in a_orders.into_iter().zip(b_orders).zip(prices) {
             let (order_a, signature_a, spent_collateral, user_id_a, take_fee_a) = a;
             let (order_b, signature_b, spent_synthetic, user_id_b, take_fee_b) = b;
+
+            let synthetic_decimals: u8 = DECIMALS_PER_ASSET[&order_a.synthetic_token.to_string()];
+
+            let synthetic_: f64 = (spent_collateral as f64
+                / price as f64
+                / 10_f64.pow(COLLATERAL_TOKEN_DECIMALS as i32))
+            .ceil();
+            let spent_synthetic = min(
+                spent_synthetic,
+                (synthetic_ * 10_f64.pow(synthetic_decimals)) as u64,
+            );
+
+            let collateral_ =
+                spent_synthetic as f64 * price as f64 / 10_f64.pow(synthetic_decimals);
+            let spent_collateral = min(
+                spent_collateral,
+                (collateral_ * 10_f64.pow(COLLATERAL_TOKEN_DECIMALS as i32)) as u64,
+            );
 
             let fee_taken_a = if take_fee_a {
                 (spent_collateral as f64 * 0.0005) as u64

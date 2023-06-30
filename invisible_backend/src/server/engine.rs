@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     sync::Arc,
     thread::{JoinHandle, ThreadId},
+    time::Instant,
 };
 use tokio_tungstenite::tungstenite::Message;
 
@@ -672,11 +673,6 @@ impl Engine for EngineService {
         &self,
         request: Request<AmendOrderRequest>,
     ) -> Result<Response<AmendOrderResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
         tokio::task::yield_now().await;
 
         let req: AmendOrderRequest = request.into_inner();
@@ -1548,6 +1544,8 @@ impl Engine for EngineService {
 
         let lock = self.is_paused.lock().await;
 
+        let now = Instant::now();
+
         tokio::task::yield_now().await;
 
         let transaction_mpsc_tx = self.mpsc_tx.clone();
@@ -1569,6 +1567,8 @@ impl Engine for EngineService {
         });
 
         let reply: FinalizeBatchResponse;
+
+        println!("time: {:?}", now.elapsed());
 
         if let Ok(res) = res.await {
             if res.successful {
