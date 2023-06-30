@@ -123,7 +123,6 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
 
     // * EXECUTE DEPOSIT -----------------------------------------------------------------
     app.post("/execute_deposit", (req, res) => {
-
       delegateRequest(
         req.body,
         "deposit",
@@ -242,11 +241,35 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       );
     });
 
-    // * GET ORDERS ---------------------------------------------------------------------
+    // * GET ORDERS ------------------------------------------------------------------------
     app.post("/get_orders", (req, res) => {
       delegateRequest(
         req.body,
         "get_orders",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // * UPDATE INDEX PRICE ---------------------------------------------------------------
+    app.post("/update_index_price", (req, res) => {
+      delegateRequest(
+        req.body,
+        "update_index_price",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // * FINALIZE TRANSACTION BATCH  -------------------------------------------------------
+    app.post("/finalize_batch", (req, res) => {
+      delegateRequest(
+        req.body,
+        "finalize_batch",
         channel,
         res,
         queue,
@@ -268,48 +291,7 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       });
     });
 
-    // // ===================================================================
-
-    // // * FINALIZE TRANSACTION BATCH
-    // // app.post("/finalize_batch", (req, res) => {
-    // //   console.log("finalize_batch");
-
-    // //   client.finalize_batch(req.body, function (err, response) {
-    // //     if (err) {
-    // //       console.log(err);
-    // //     } else {
-    // //       res.send({ response: response });
-    // //     }
-    // //   });
-    // // });
-
-    // // ===================================================================
-
-    // // * APPLY FUNDING UPDATE
-    // app.post("/start_funding", (req, res) => {
-    //   client.start_funding(req.body, function (err, response) {
-    //     if (err) {
-    //       console.log(err);
-    //     } else {
-    //       res.send({ response: response });
-    //     }
-    //   });
-    // });
-
-    // // ===================================================================
-
-    // // * UPDATE INDEX PRICE
-    // app.post("/update_index_price", (req, res) => {
-    //   console.log("update_index_price");
-
-    //   client.update_index_price(req.body, function (err, response) {
-    //     if (err) {
-    //       console.log(err);
-    //     } else {
-    //       res.send({ response: response });
-    //     }
-    //   });
-    // });
+    //
   });
 });
 

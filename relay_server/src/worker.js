@@ -87,65 +87,75 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
 
 // PROCESS ORDER ==================================================================
 
-async function processOrder(correlationId, order) {
+async function processOrder(correlationId, message) {
   if (correlationId.startsWith("deposit")) {
     // Execute deposit in the backend engine
-    let res = await callDepositRpcWithPromise(order);
+    let res = await callDepositRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("withdrawal")) {
     // Execute withdrawal in the backend engine
-    let res = await callWithdrawalRpcWithPromise(order);
+    let res = await callWithdrawalRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("spot_order")) {
     // Execute order in the backend engine
-    let res = await callSpotOrderRpcWithPromise(order);
+    let res = await callSpotOrderRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("perp_order")) {
     // Execute order in the backend engine
-    let res = await callPerpOrderRpcWithPromise(order);
+    let res = await callPerpOrderRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("liquidation_order")) {
     // Execute order in the backend engine
-    let res = await callLiquidationOrderRpcWithPromise(order);
+    let res = await callLiquidationOrderRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("cancel")) {
     // Cancels order in the backend engine
-    let res = await callCancelRpcWithPromise(order);
+    let res = await callCancelRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("amend")) {
     // Cancels order in the backend engine
-    let res = await callAmendRpcWithPromise(order);
+    let res = await callAmendRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("split_notes")) {
     // restructures notes in the backend engine
-    let res = await callSplitNotesRpcWithPromise(order);
+    let res = await callSplitNotesRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("change_margin")) {
     // changes the margin for a position in the backend engine
-    let res = await callChangeMarginRpcWithPromise(order);
+    let res = await callChangeMarginRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("get_orders")) {
     // gets all orders for a user in the backend engine
-    let res = await callGetOrderRpcWithPromise(order);
+    let res = await callGetOrderRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("get_liquidity")) {
     // gets all liquidity for a user in the backend engine
-    let res = await callGetLiquidityRpcWithPromise(order);
+    let res = await callGetLiquidityRpcWithPromise(message);
 
     return res;
   } else if (correlationId.startsWith("get_funding_info")) {
     // gets all liquidity for a user in the backend engine
     let res = await callGetFundingInfoRpcWithPromise();
+
+    return res;
+  } else if (correlationId.startsWith("update_index_price")) {
+    // gets all liquidity for a user in the backend engine
+    let res = await callUpdateIndexPriceRpcWithPromise(message);
+
+    return res;
+  } else if (correlationId.startsWith("finalize_batch")) {
+    // gets all liquidity for a user in the backend engine
+    let res = await callFinalizeBatchRpcWithPromise();
 
     return res;
   }
@@ -302,6 +312,30 @@ function callGetLiquidityRpcWithPromise(liquidityReq) {
 function callGetFundingInfoRpcWithPromise() {
   return new Promise((resolve, reject) => {
     client.get_funding_info({}, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callUpdateIndexPriceRpcWithPromise(indexPriceReq) {
+  return new Promise((resolve, reject) => {
+    client.update_index_price(indexPriceReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callFinalizeBatchRpcWithPromise() {
+  return new Promise((resolve, reject) => {
+    client.finalize_batch(req.body, function (err, response) {
       if (err) {
         reject(err);
       } else {
