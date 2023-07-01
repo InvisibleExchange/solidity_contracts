@@ -8,6 +8,7 @@ const {
   storeSpotOrder,
   storePerpOrder,
   getLiquidatablePositions,
+  initLiquidity,
 } = require("./helpers/helpers");
 
 const grpc = require("@grpc/grpc-js");
@@ -34,6 +35,7 @@ const SERVER_URL = "localhost:50052";
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
 const db = initDb();
+initLiquidity(db);
 
 let spot24hVolumes = {};
 let spot24hTrades = {};
@@ -58,7 +60,6 @@ initServer(db, updateSpot24hInfo, updatePerp24hInfo);
 initFundingInfo(client, updateFundingInfo);
 
 /// =============================================================================
-
 
 // * EXECUTE DEPOSIT -----------------------------------------------------------------
 app.post("/execute_deposit", (req, res) => {

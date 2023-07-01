@@ -1039,6 +1039,7 @@ impl OrderBook {
                 <= order.order.as_ref().unwrap().amount_received
                     - DUST_AMOUNT_PER_ASSET
                         [&order.order.as_ref().unwrap().token_received.to_string()]
+                || self.bid_queue.get_order(order.order_id).is_some()
             {
                 continue;
             };
@@ -1056,6 +1057,7 @@ impl OrderBook {
             if order.amount
                 <= order.order.as_ref().unwrap().amount_spent
                     - DUST_AMOUNT_PER_ASSET[&order.order.as_ref().unwrap().token_spent.to_string()]
+                || self.ask_queue.get_order(order.order_id).is_some()
             {
                 continue;
             };
@@ -1086,6 +1088,7 @@ impl OrderBook {
                 <= order.order.as_ref().unwrap().synthetic_amount
                     - DUST_AMOUNT_PER_ASSET
                         [&order.order.as_ref().unwrap().synthetic_token.to_string()]
+                || self.bid_queue.get_order(order.order_id).is_some()
             {
                 continue;
             };
@@ -1104,6 +1107,7 @@ impl OrderBook {
                 <= order.order.as_ref().unwrap().synthetic_amount
                     - DUST_AMOUNT_PER_ASSET
                         [&order.order.as_ref().unwrap().synthetic_token.to_string()]
+                || self.ask_queue.get_order(order.order_id).is_some()
             {
                 continue;
             };

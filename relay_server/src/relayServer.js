@@ -5,7 +5,7 @@ const port = 4000;
 const amqp = require("amqplib/callback_api");
 
 const cors = require("cors");
-const { initDb } = require("./helpers/helpers");
+const { initDb, initLiquidity } = require("./helpers/helpers");
 const { initServer, initFundingInfoInterval } = require("./helpers/initServer");
 
 const corsOptions = {
@@ -18,6 +18,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 const db = initDb();
+initLiquidity(db);
 
 const SERVER_URL = "54.212.28.196";
 

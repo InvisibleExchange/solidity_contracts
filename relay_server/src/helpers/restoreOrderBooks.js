@@ -1,11 +1,9 @@
-const sqlite3 = require("sqlite3").verbose();
-const axios = require("axios");
-
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 
+const path = require("path");
 const packageDefinition = protoLoader.loadSync(
-  "../../../invisible_backend/proto/engine.proto",
+  path.join(__dirname, "../../../invisible_backend/proto/engine.proto"),
   { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
@@ -14,19 +12,19 @@ const SERVER_URL = "localhost:50052";
 
 const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
-const path = require("path");
-let db = new sqlite3.Database(
-  path.join(__dirname, "../orderBooks.db"),
-  (err) => {
-    if (err) {
-      console.error(err.message);
-    }
-  }
-);
+// const path = require("path");
+// let db = new sqlite3.Database(
+//   path.join(__dirname, "../orderBooks.db"),
+//   (err) => {
+//     if (err) {
+//       console.error(err.message);
+//     }
+//   }
+// );
 
 // TODO: ONLY RESTORE THE ORDERS THAT HAVE NOT EXPIRED YET
 
-async function restoreOrderbooks() {
+async function restoreOrderbooks(db) {
   let completedCount = 0;
 
   let spotOrders = {}; // {orderId: orderObject}
@@ -105,13 +103,15 @@ async function restoreOrderbooks() {
       console.error(err.message);
     }
 
-    rows.forEach((row) => {
-      let market_id = row.market_id;
-      let bidQueue = JSON.parse(row.bidQueue);
-      let askQueue = JSON.parse(row.askQueue);
+    if (rows && rows.length > 0) {
+      rows.forEach((row) => {
+        let market_id = row.market_id;
+        let bidQueue = JSON.parse(row.bidQueue);
+        let askQueue = JSON.parse(row.askQueue);
 
-      spotLiquidity[market_id] = { bidQueue, askQueue };
-    });
+        spotLiquidity[market_id] = { bidQueue, askQueue };
+      });
+    }
 
     completedCount += 1;
     if (completedCount == 4) {
@@ -124,13 +124,15 @@ async function restoreOrderbooks() {
       console.error(err.message);
     }
 
-    rows.forEach((row) => {
-      let market_id = row.market_id;
-      let bidQueue = JSON.parse(row.bidQueue);
-      let askQueue = JSON.parse(row.askQueue);
+    if (rows && rows.length > 0) {
+      rows.forEach((row) => {
+        let market_id = row.market_id;
+        let bidQueue = JSON.parse(row.bidQueue);
+        let askQueue = JSON.parse(row.askQueue);
 
-      perpLiquidity[market_id] = { bidQueue, askQueue };
-    });
+        perpLiquidity[market_id] = { bidQueue, askQueue };
+      });
+    }
 
     completedCount += 1;
     if (completedCount == 4) {
@@ -260,4 +262,6 @@ async function sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity) {
   });
 }
 
-restoreOrderbooks();
+module.exports = {
+  restoreOrderbooks,
+};

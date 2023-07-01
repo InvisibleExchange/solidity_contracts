@@ -275,6 +275,7 @@ async function getLiquidatablePositions(db, syntheticToken, price) {
 // DB HELPERS ============================================================================================================================
 
 const path = require("path");
+const { restoreOrderbooks } = require("./restoreOrderBooks");
 function storeSpotOrder(db, order_id, orderObject) {
   let command =
     "INSERT OR REPLACE INTO spotOrders (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, dest_received_address, dest_received_blinding,  notes_in, refund_note, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)";
@@ -359,12 +360,15 @@ function initDb() {
   signature TEXT NOT NULL, 
   user_id INTEGER )  `;
 
-  let db = new sqlite3.Database( path.join(__dirname, "../orderBooks.db")  , (err) => {
-    if (err) {
-      console.error(err.message);
+  let db = new sqlite3.Database(
+    path.join(__dirname, "../orderBooks.db"),
+    (err) => {
+      if (err) {
+        console.error(err.message);
+      }
+      console.log("Connected to the orderBook database.");
     }
-    console.log("Connected to the orderBook database.");
-  });
+  );
 
   db.run(createSpotTableCommand);
   db.run(createPerpTableCommand);
@@ -382,7 +386,6 @@ function initDb() {
       if (err) {
         console.log(err);
       }
-      initLiquidity(db);
     });
   });
 
@@ -409,6 +412,10 @@ function initLiquidity(db) {
     ETHUSD: 22,
   };
 
+  // & Restore liquidity from database
+  restoreOrderbooks(db);
+
+  // & Create liquidity if it does not exist
   for (let marketId of Object.values(SPOT_MARKET_IDS)) {
     // Check if liquidity already exists
     const query = `SELECT * FROM spotLiquidity WHERE market_id = ${marketId}`;
@@ -485,4 +492,5 @@ module.exports = {
   storePerpOrder,
   initDb,
   initOrderBooks,
+  initLiquidity,
 };
