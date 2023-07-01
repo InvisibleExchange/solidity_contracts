@@ -100,6 +100,9 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
               prices[fundingInfo.token] = fundingInfo.funding_prices;
             }
 
+            console.log("Funding info updated");
+            console.log(rates);
+            console.log(prices);
             updateFundingInfo(rates, prices);
           }
         } else {

@@ -218,6 +218,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .send(grpc_res)
                         .expect("failed sending back the TxResponse in finalize batch");
                 }
+
                 MessageType::Undefined => {
                     println!("Undefined message type");
                 }

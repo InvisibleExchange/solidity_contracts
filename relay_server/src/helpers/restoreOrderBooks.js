@@ -5,7 +5,7 @@ const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 
 const packageDefinition = protoLoader.loadSync(
-  "../../invisible_backend/proto/engine.proto",
+  "../../../invisible_backend/proto/engine.proto",
   { keepCase: true, longs: String, enums: String, defaults: true, oneofs: true }
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;

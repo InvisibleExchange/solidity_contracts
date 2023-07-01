@@ -11,7 +11,6 @@ use crate::perpetual::IMPACT_NOTIONAL_PER_ASSET;
 use crate::server::grpc::{FundingUpdateMessage, GrpcMessage, GrpcTxResponse, MessageType};
 use crate::server::server_helpers::broadcast_message;
 use crate::trees::superficial_tree::SuperficialTree;
-use crate::utils::errors::send_funding_error_reply;
 use crate::utils::firestore::{create_session, retry_failed_updates};
 use crate::utils::storage::BackupStorage;
 
@@ -44,7 +43,7 @@ pub async fn start_periodic_updates(
     // * UPDATE FUNDING RATES EVERY 60 SECONDS
     let mut interval = time::interval(time::Duration::from_secs(60));
     tokio::spawn(async move {
-        loop {
+        'outer: loop {
             interval.tick().await;
 
             let mut impact_prices: HashMap<u64, (u64, u64)> = HashMap::new();
@@ -56,8 +55,8 @@ pub async fn start_periodic_updates(
                     .unwrap();
 
                 let res = book.get_impact_prices(impact_notional);
-                if let Err(e) = res {
-                    return send_funding_error_reply(e);
+                if let Err(_e) = res {
+                    continue 'outer;
                 }
 
                 let (impact_bid_price, impact_ask_price) = res.unwrap();
