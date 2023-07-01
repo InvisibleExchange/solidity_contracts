@@ -5,7 +5,6 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
-    path::Path,
     println,
     str::FromStr,
     sync::Arc,
@@ -30,7 +29,7 @@ use crate::{
     transaction_batch::tx_batch_helpers::_calculate_funding_rates,
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
-    utils::firestore::{start_add_note_thread, start_add_position_thread},
+    utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -824,7 +823,7 @@ impl TransactionBatch {
         let latest_output_json = self.swap_output_json.clone();
         let latest_output_json = latest_output_json.lock();
 
-        // let current_batch_index = main_storage.latest_batch;
+        let current_batch_index = main_storage.latest_batch;
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
@@ -911,19 +910,19 @@ impl TransactionBatch {
             perpetual_preimage_json,
         );
 
-        // Todo: This is for testing only ----------------------------
-        let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
-        std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
-        // Todo: This is for testing only ----------------------------
+        // // Todo: This is for testing only ----------------------------
+        // let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
+        // std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
+        // // Todo: This is for testing only ----------------------------
 
         // & Write transaction batch json to database
-        // let _handle = tokio::spawn(async move {
-        //     if let Err(e) =
-        //         upload_file_to_storage(current_batch_index.to_string(), output_json).await
-        //     {
-        //         println!("Error uploading file to storage: {:?}", e);
-        //     }
-        // });
+        let _handle = tokio::spawn(async move {
+            if let Err(e) =
+                upload_file_to_storage(current_batch_index.to_string(), output_json).await
+            {
+                println!("Error uploading file to storage: {:?}", e);
+            }
+        });
 
         println!("Transaction batch finalized successfully!");
 
@@ -1197,7 +1196,8 @@ impl TransactionBatch {
 
         self.current_funding_count += 1;
 
-        if self.current_funding_count == 480 {
+        if self.current_funding_count == 60 {
+            // Do we want 1 or 8 hours
             let fundings = _calculate_funding_rates(&mut self.running_funding_tick_sums);
 
             for (token, funding) in fundings.iter() {

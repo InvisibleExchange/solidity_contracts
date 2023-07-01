@@ -458,7 +458,7 @@ pub async fn upload_file_to_storage(
 ) -> Result<(), Box<dyn std::error::Error>> {
     //
 
-    let access_token = get_access_token()?;
+    let (access_token, storage_bucket_url) = get_access_token()?;
 
     // Create a reqwest client
     let client = Client::new();
@@ -466,12 +466,12 @@ pub async fn upload_file_to_storage(
     let serialized_data = to_vec(&value).expect("Serialization failed");
 
     // Make a POST request to upload the file
+    let url = format!(
+        "https://firebasestorage.googleapis.com/v0/b/{}/o?name={}",
+        storage_bucket_url, file_name
+    );
     let response = client
-        .post(
-            "https://firebasestorage.googleapis.com/v0/b/testing-1b2fb.appspot.com/o?name="
-                .to_string()
-                + &file_name,
-        )
+        .post(url)
         .header("Content-Type", "application/octet-stream")
         .header("Authorization", "Bearer ".to_owned() + &access_token)
         .body(serialized_data)
@@ -495,14 +495,16 @@ pub async fn read_file_from_storage(
     // Create a reqwest client
     let client = Client::new();
 
-    let access_token = get_access_token()?;
+    let (access_token, storage_bucket_url) = get_access_token()?;
 
     // Make a GET request to download the file
+
+    let url = format!(
+        "https://firebasestorage.googleapis.com/v0/b/{}/o/{}?alt=media",
+        storage_bucket_url, file_name
+    );
     let response = client
-        .get(&format!(
-            "https://firebasestorage.googleapis.com/v0/b/testing-1b2fb.appspot.com/o/{}?alt=media",
-            file_name
-        ))
+        .get(url)
         .header("Authorization", "Bearer ".to_string() + &access_token)
         .send()
         .await?;
@@ -530,9 +532,11 @@ struct ServiceAccount {
     client_email: String,
     #[serde(rename = "client_id")]
     client_id: String,
+    #[serde(rename = "storage_url")]
+    storage_url: String,
 }
 
-fn get_access_token() -> Result<String, Box<dyn std::error::Error>> {
+fn get_access_token() -> Result<(String, String), Box<dyn std::error::Error>> {
     // Read the service account file
     let mut file = File::open("firebase-service-account.json").expect("Unable to open the file");
     let mut contents = String::new();
@@ -566,7 +570,7 @@ fn get_access_token() -> Result<String, Box<dyn std::error::Error>> {
     let token = encode(&header, &claims, &private_key).expect("Unable to encode JWT");
 
     // Return the access token
-    Ok(token)
+    Ok((token, service_account.storage_url))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
