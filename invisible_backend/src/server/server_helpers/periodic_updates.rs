@@ -41,7 +41,7 @@ pub async fn start_periodic_updates(
     let mpsc_tx = mpsc_tx.clone();
 
     // * UPDATE FUNDING RATES EVERY 60 SECONDS
-    let mut interval = time::interval(time::Duration::from_secs(60));
+    let mut interval = time::interval(time::Duration::from_secs(20));
     tokio::spawn(async move {
         'outer: loop {
             interval.tick().await;
@@ -56,12 +56,16 @@ pub async fn start_periodic_updates(
 
                 let res = book.get_impact_prices(impact_notional);
                 if let Err(_e) = res {
-                    continue 'outer;
+                    continue;
                 }
 
                 let (impact_bid_price, impact_ask_price) = res.unwrap();
 
                 impact_prices.insert(book.order_asset, (impact_ask_price, impact_bid_price));
+            }
+
+            if impact_prices.is_empty() {
+                continue 'outer;
             }
 
             let transaction_mpsc_tx = mpsc_tx.clone();

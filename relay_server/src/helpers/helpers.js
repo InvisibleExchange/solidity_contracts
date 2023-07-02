@@ -213,8 +213,6 @@ function compileLiqUpdateMessage(orderBooks) {
     let { bidQueue, askQueue, isBidQueueSame, isAskQueueSame } =
       book.updateAndCompare();
 
-    // console.log("isBidQueueSame", isBidQueueSame);
-    // console.log("isAskQueueSame", isAskQueueSame);
 
     if (!isBidQueueSame || !isAskQueueSame) {
       updates.push(
@@ -229,47 +227,6 @@ function compileLiqUpdateMessage(orderBooks) {
   }
 
   return updates;
-}
-
-async function getLiquidatablePositions(db, syntheticToken, price) {
-  // (position_index INTEGER PRIMARY KEY NOT NULL, position_address TEXT NOT NULL, synthetic_token INTEGER NOT NULL, order_side BIT NOT NULL, liquidation_price INTEGER NOT NULL)
-
-  let completedCount = 0;
-  let liquidatablePositions = [];
-
-  return new Promise((resolve, reject) => {
-    const longLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${1} AND liquidation_price >= ${price}`;
-    db.all(longLiquidatableQuery, [], (err, rows) => {
-      if (err) {
-        console.error(err.message);
-      }
-
-      for (const row of rows) {
-        liquidatablePositions.push(row);
-      }
-
-      completedCount++;
-      if (completedCount == 2) {
-        resolve(liquidatablePositions);
-      }
-    });
-
-    const shortLiquidatableQuery = `SELECT * FROM liquidations WHERE synthetic_token = ${syntheticToken} AND order_side = ${0} AND liquidation_price <= ${price}`;
-    db.all(shortLiquidatableQuery, [], (err, rows) => {
-      if (err) {
-        console.error(err.message);
-      }
-
-      for (const row of rows) {
-        liquidatablePositions.push(row);
-      }
-
-      completedCount++;
-      if (completedCount == 2) {
-        resolve(liquidatablePositions);
-      }
-    });
-  });
 }
 
 // DB HELPERS ============================================================================================================================
@@ -371,6 +328,7 @@ function initDb() {
   );
 
   db.run(createSpotTableCommand);
+
   db.run(createPerpTableCommand);
 
   const createSpotLiquidityTableCommand =
@@ -382,6 +340,7 @@ function initDb() {
     if (err) {
       console.log(err);
     }
+
     db.run(createPerpLiquidityTableCommand, (res, err) => {
       if (err) {
         console.log(err);
@@ -422,6 +381,7 @@ function initLiquidity(db) {
     db.all(query, [], (err, rows) => {
       if (err) {
         console.error(err.message);
+        return;
       }
 
       if (rows && rows.length == 0) {
@@ -440,6 +400,7 @@ function initLiquidity(db) {
     db.all(query, [], (err, rows) => {
       if (err) {
         console.error(err.message);
+        return;
       }
 
       if (rows && rows.length == 0) {
@@ -487,7 +448,6 @@ Object.defineProperty(Array.prototype, "equals", { enumerable: false });
 module.exports = {
   listenToLiquidityUpdates,
   compileLiqUpdateMessage,
-  getLiquidatablePositions,
   storeSpotOrder,
   storePerpOrder,
   initDb,

@@ -109,7 +109,6 @@ impl PerpPosition {
         added_size: u64,
         added_leverage: u64,
         fee_taken: u64,
-        funding_idx: u32,
     ) {
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
@@ -164,7 +163,7 @@ impl PerpPosition {
             average_entry_price as u64,
             new_liquidation_price,
             &self.position_address,
-            funding_idx,
+            self.last_funding_idx,
             self.allow_partial_liquidations,
         );
 
@@ -174,7 +173,6 @@ impl PerpPosition {
         self.entry_price = average_entry_price as u64;
         self.liquidation_price = new_liquidation_price;
         self.bankruptcy_price = new_bankruptcy_price;
-        self.last_funding_idx = funding_idx;
         self.hash = new_hash;
     }
 
@@ -186,8 +184,13 @@ impl PerpPosition {
         added_size: u64,
         added_price: u64,
         fee_taken: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
         funding_idx: u32,
     ) {
+        // &apply funding
+        self.apply_funding(funding_rates, prices, funding_idx);
+
         let prev_nominal_usd = self.position_size as u128 * self.entry_price as u128;
         let added_nominal_usd = added_size as u128 * added_price as u128;
 
@@ -242,8 +245,13 @@ impl PerpPosition {
         reduction_size: u64,
         price: u64,
         fee_taken: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
         funding_idx: u32,
     ) {
+        // & apply funding
+        self.apply_funding(funding_rates, prices, funding_idx);
+
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
             .unwrap();
@@ -319,8 +327,13 @@ impl PerpPosition {
         reduction_size: u64,
         price: u64,
         fee_taken: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
         funding_idx: u32,
     ) {
+        // & apply funding
+        self.apply_funding(funding_rates, prices, funding_idx);
+
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
             .unwrap();
@@ -398,8 +411,13 @@ impl PerpPosition {
         reduction_size: u64,
         close_price: u64,
         fee_taken: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
         funding_idx: u32,
     ) -> Result<u64, PerpSwapExecutionError> {
+        // & apply funding
+        self.apply_funding(funding_rates, prices, funding_idx);
+
         // & closes part of a position while keeping the liquidation price the same
         // & returns part of the collateral and pnl
 
@@ -469,7 +487,12 @@ impl PerpPosition {
         &mut self,
         price: u64,
         fee_taken: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
+        funding_idx: u32,
     ) -> Result<u64, PerpSwapExecutionError> {
+        self.apply_funding(funding_rates, prices, funding_idx);
+
         let margin: u64 = self.margin;
 
         let pnl = self.get_pnl(price);
@@ -550,6 +573,9 @@ impl PerpPosition {
         &mut self,
         market_price: u64,
         index_price: u64,
+        funding_rates: Vec<i64>,
+        prices: Vec<u64>,
+        funding_idx: u32,
     ) -> Result<(u64, u64, i64, bool), PerpSwapExecutionError> {
         // & if market_price is greater than the bankruptcy price, the leftover collateral goes to the insurance fund
         if (self.order_side == OrderSide::Long && index_price > self.liquidation_price)
@@ -561,6 +587,9 @@ impl PerpPosition {
                 None,
             ));
         }
+
+        // & apply funding
+        self.apply_funding(funding_rates, prices, funding_idx);
 
         if self.allow_partial_liquidations
             && self.position_size
@@ -830,10 +859,14 @@ impl PerpPosition {
         return Ok(current_leverage);
     }
 
-    pub fn apply_funding(&mut self, funding_rates: Vec<i64>, prices: Vec<u64>) {
+    fn apply_funding(&mut self, funding_rates: Vec<i64>, prices: Vec<u64>, funding_idx: u32) {
         // & Funding rate are the funding rate percentages that keep the market price close to the index price
 
         // Cairo input - array of funding indexes starting at the minimal one
+
+        if funding_idx <= self.last_funding_idx {
+            return;
+        }
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
             .get(self.synthetic_token.to_string().as_str())
@@ -866,30 +899,9 @@ impl PerpPosition {
             (self.margin as i128 + funding_sum) as u128
         }; // Todo: check which is correct + or - depending on order_side
 
-        // & bankruptcy_price = entry_price +/- margin/(amount+new_amount)
-        // & liquidation_price = bankruptcy_price -/+ maintnance_margin/(amount+new_amount)
-        let new_bankruptcy_price: u64 = _get_bankruptcy_price(
-            self.entry_price,
-            margin_after_funding as u64,
-            self.position_size,
-            &self.order_side,
-            self.synthetic_token,
-        );
-        let new_liquidation_price: u64 = _get_liquidation_price(
-            self.entry_price,
-            margin_after_funding as u64,
-            self.position_size,
-            &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
-        );
-
-        // ! Funding is always applied just before modifying the position, therefore we don't modify the hash
-
         // ? Make updates to the position
         self.margin = margin_after_funding as u64;
-        self.liquidation_price = new_liquidation_price;
-        self.bankruptcy_price = new_bankruptcy_price;
+        self.last_funding_idx = funding_idx;
     }
 
     //  -----------------------------------------------------------------------

@@ -33,7 +33,7 @@ async function main() {
   // ========================
 }
 
-main();
+// main();
 
 async function main2() {
   client.get_state_info({}, function (err, response) {
@@ -53,7 +53,7 @@ async function main3() {
     if (err) {
       console.log(err);
     } else {
-      console.log(response);
+      console.log(response.fundings);
     }
   });
 }

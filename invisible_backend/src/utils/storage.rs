@@ -227,25 +227,25 @@ impl MainStorage {
         String,
     > {
         let funding_rates = self
-            .price_db
+            .funding_db
             .get("funding_rates")
             .unwrap()
-            .ok_or("not found in storage")?;
+            .ok_or("funding rates not found in storage")?;
         let funding_prices = self
-            .price_db
+            .funding_db
             .get("funding_prices")
             .unwrap()
-            .ok_or("not found in storage")?;
+            .ok_or("funding prices  not found in storage")?;
         let current_funding_idx = self
-            .price_db
+            .funding_db
             .get("current_funding_idx")
             .unwrap()
-            .ok_or("not found in storage")?;
+            .ok_or("current funding index  not found in storage")?;
         let min_funding_idx = self
-            .price_db
+            .funding_db
             .get("min_funding_idx")
             .unwrap()
-            .ok_or("not found in storage")?;
+            .ok_or("min_funding_idx not found in storage")?;
 
         let funding_rates: HashMap<u64, Vec<i64>> =
             serde_json::from_slice(&funding_rates.to_vec()).unwrap();

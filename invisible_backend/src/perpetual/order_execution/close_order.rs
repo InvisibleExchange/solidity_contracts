@@ -156,14 +156,14 @@ fn close_position(
         let applicable_funding_rates = &swap_funding_info.swap_funding_rates[idx_diff as usize..];
         let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
-        // ? Apply funding to position
-        position.apply_funding(
+        // ! close position fully
+        collateral_returned = position.close_position(
+            close_price,
+            fee_taken,
             applicable_funding_rates.to_vec(),
             applicable_funding_prices.to_vec(),
-        );
-
-        // ! close position fully
-        collateral_returned = position.close_position(close_price, fee_taken)?;
+            swap_funding_info.current_funding_idx,
+        )?;
 
         return Ok((
             collateral_returned,
@@ -177,17 +177,13 @@ fn close_position(
         let applicable_funding_rates = &swap_funding_info.swap_funding_rates[idx_diff as usize..];
         let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
-        // ? Apply funding to position
-        position.apply_funding(
-            applicable_funding_rates.to_vec(),
-            applicable_funding_prices.to_vec(),
-        );
-
         // ! close position partially
         collateral_returned = position.close_position_partialy(
             spent_synthetic,
             close_price,
             fee_taken,
+            applicable_funding_rates.to_vec(),
+            applicable_funding_prices.to_vec(),
             swap_funding_info.current_funding_idx,
         )?;
 

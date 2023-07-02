@@ -35,26 +35,31 @@ async function restoreOrderbooks(db) {
   db.all("SELECT * FROM spotOrders", [], (err, rows) => {
     if (err) {
       console.error(err.message);
+      completedCount += 1;
+      return;
     }
-    rows.forEach((row) => {
-      let orderObject = {
-        expiration_timestamp: row.expiration_timestamp,
-        token_spent: row.token_spent,
-        token_received: row.token_received,
-        amount_spent: row.amount_spent,
-        amount_received: row.amount_received,
-        fee_limit: row.fee_limit,
-        dest_received_address: JSON.parse(row.dest_received_address),
-        dest_received_blinding: row.dest_received_blinding,
-        dest_spent_blinding: row.dest_spent_blinding,
-        notes_in: JSON.parse(row.notes_in),
-        refund_note: JSON.parse(row.refund_note),
-        signature: JSON.parse(row.signature),
-        user_id: row.user_id,
-      };
 
-      spotOrders[row.order_id] = orderObject;
-    });
+    if (rows && rows.length > 0) {
+      rows.forEach((row) => {
+        let orderObject = {
+          expiration_timestamp: row.expiration_timestamp,
+          token_spent: row.token_spent,
+          token_received: row.token_received,
+          amount_spent: row.amount_spent,
+          amount_received: row.amount_received,
+          fee_limit: row.fee_limit,
+          dest_received_address: JSON.parse(row.dest_received_address),
+          dest_received_blinding: row.dest_received_blinding,
+          dest_spent_blinding: row.dest_spent_blinding,
+          notes_in: JSON.parse(row.notes_in),
+          refund_note: JSON.parse(row.refund_note),
+          signature: JSON.parse(row.signature),
+          user_id: row.user_id,
+        };
+
+        spotOrders[row.order_id] = orderObject;
+      });
+    }
 
     completedCount += 1;
     if (completedCount == 4) {
@@ -65,32 +70,36 @@ async function restoreOrderbooks(db) {
   db.all("SELECT * FROM perpOrders", [], (err, rows) => {
     if (err) {
       console.error(err.message);
+      completedCount += 1;
+      return;
     }
 
-    rows.forEach((row) => {
-      let orderObject = {
-        expiration_timestamp: row.expiration_timestamp,
-        position: row.position ? JSON.parse(row.position) : null,
-        position_effect_type: row.position_effect_type,
-        order_side: row.order_side,
-        synthetic_token: row.synthetic_token,
-        collateral_token: row.collateral_token,
-        synthetic_amount: row.synthetic_amount,
-        collateral_amount: row.collateral_amount,
-        fee_limit: row.fee_limit,
-        open_order_fields: row.open_order_fields
-          ? JSON.parse(row.open_order_fields)
-          : null,
-        close_order_fields: row.close_order_fields
-          ? JSON.parse(row.close_order_fields)
-          : null,
-        signature: JSON.parse(row.signature),
-        is_market: row.is_market,
-        user_id: row.user_id,
-      };
+    if (rows && rows.length > 0) {
+      rows.forEach((row) => {
+        let orderObject = {
+          expiration_timestamp: row.expiration_timestamp,
+          position: row.position ? JSON.parse(row.position) : null,
+          position_effect_type: row.position_effect_type,
+          order_side: row.order_side,
+          synthetic_token: row.synthetic_token,
+          collateral_token: row.collateral_token,
+          synthetic_amount: row.synthetic_amount,
+          collateral_amount: row.collateral_amount,
+          fee_limit: row.fee_limit,
+          open_order_fields: row.open_order_fields
+            ? JSON.parse(row.open_order_fields)
+            : null,
+          close_order_fields: row.close_order_fields
+            ? JSON.parse(row.close_order_fields)
+            : null,
+          signature: JSON.parse(row.signature),
+          is_market: row.is_market,
+          user_id: row.user_id,
+        };
 
-      perpOrders[row.order_id] = orderObject;
-    });
+        perpOrders[row.order_id] = orderObject;
+      });
+    }
 
     completedCount += 1;
     if (completedCount == 4) {
@@ -101,6 +110,8 @@ async function restoreOrderbooks(db) {
   db.all("SELECT * FROM spotLiquidity", [], (err, rows) => {
     if (err) {
       console.error(err.message);
+      completedCount += 1;
+      return;
     }
 
     if (rows && rows.length > 0) {
@@ -122,6 +133,8 @@ async function restoreOrderbooks(db) {
   db.all("SELECT * FROM perpLiquidity", [], (err, rows) => {
     if (err) {
       console.error(err.message);
+      completedCount += 1;
+      return;
     }
 
     if (rows && rows.length > 0) {
@@ -251,13 +264,10 @@ async function sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity) {
     perp_order_restore_messages,
   };
 
-  console.log(restoreOrderBookMessage);
-
   client.restore_orderbook(restoreOrderBookMessage, function (err, response) {
     if (err) {
       console.log(err);
     } else {
-      console.log(response);
     }
   });
 }

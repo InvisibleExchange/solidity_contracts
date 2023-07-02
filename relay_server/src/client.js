@@ -7,7 +7,6 @@ const {
   initDb,
   storeSpotOrder,
   storePerpOrder,
-  getLiquidatablePositions,
   initLiquidity,
 } = require("./helpers/helpers");
 
@@ -35,7 +34,9 @@ const SERVER_URL = "localhost:50052";
 let client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
 const db = initDb();
+
 initLiquidity(db);
+
 
 let spot24hVolumes = {};
 let spot24hTrades = {};
@@ -121,12 +122,12 @@ app.post("/submit_liquidation_order", (req, res) => {
 });
 
 // * GET LIQUIDATABLE POSITIONS -----------------------------------------------------------
-app.post("/get_liquidatable_positions", (req, res) => {
-  let { token, price } = req.body;
-  getLiquidatablePositions(db, token, price).then((response) => {
-    res.send({ response: response });
-  });
-});
+// app.post("/get_liquidatable_positions", (req, res) => {
+//   let { token, price } = req.body;
+//   getLiquidatablePositions(db, token, price).then((response) => {
+//     res.send({ response: response });
+//   });
+// });
 
 // * CANCEL ORDER ---------------------------------------------------------------------
 app.post("/cancel_order", (req, res) => {

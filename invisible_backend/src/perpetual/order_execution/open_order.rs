@@ -177,7 +177,6 @@ pub fn execute_open_order(
             order,
             init_margin,
             fee_taken,
-            funding_idx,
             spent_synthetic,
             spent_collateral,
         )?;
@@ -261,7 +260,6 @@ fn add_margin_to_position(
     order: &PerpOrder,
     init_margin: u64,
     fee_taken: u64,
-    funding_idx: u32,
     spent_synthetic: u64,
     spent_collateral: u64,
 ) -> Result<(PerpPosition, PerpPosition, u64), PerpSwapExecutionError> {
@@ -312,13 +310,7 @@ fn add_margin_to_position(
     let leverage = (spent_collateral as u128 * 10_u128.pow(LEVERAGE_DECIMALS as u32)
         / init_margin as u128) as u64;
 
-    position.add_margin_to_position(
-        init_margin,
-        spent_synthetic,
-        leverage,
-        fee_taken,
-        funding_idx,
-    );
+    position.add_margin_to_position(init_margin, spent_synthetic, leverage, fee_taken);
 
     // ? Check that leverage is valid relative to the notional position size
     if get_max_leverage(order.synthetic_token, position.position_size) * 103 / 100 < leverage {

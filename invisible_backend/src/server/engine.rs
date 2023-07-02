@@ -1294,7 +1294,6 @@ impl Engine for EngineService {
             if let Some(order_book) = order_book_ {
                 let mut order_book = order_book.lock().await;
 
-                println!("restoring orderbook for market {}", market_id);
                 order_book.restore_spot_order_book(
                     bid_order_restore_messages,
                     ask_order_restore_messages,

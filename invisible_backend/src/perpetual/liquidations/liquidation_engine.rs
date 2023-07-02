@@ -63,7 +63,7 @@ impl LiquidationSwap {
         perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         insurance_fund: Arc<Mutex<i64>>,
         //
-        index_price_: u64,
+        index_price: u64,
         min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
         swap_funding_info: SwapFundingInfo,
         //
@@ -73,7 +73,7 @@ impl LiquidationSwap {
         //
 
         // TODO: This is only for testing purposes -- remove after
-        let index_price = self.market_price;
+        // let index_price = self.market_price;
 
         // ? Execute orders in parallel ===========================================================
 

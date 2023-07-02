@@ -5,7 +5,6 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
-    println,
     str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle, ThreadId},
@@ -228,14 +227,22 @@ impl TransactionBatch {
     pub fn init(&mut self) {
         let storage = self.main_storage.lock();
         if !storage.funding_db.is_empty() {
+            if let Err(e) = storage.read_funding_info() {
+                println!("error: {:?}", e);
+            }
+
             if let Ok((funding_rates, funding_prices, funding_idx, min_funding_idxs)) =
                 storage.read_funding_info()
             {
+                println!("Funding rates: {:?}", funding_rates);
+
                 self.funding_rates = funding_rates;
                 self.funding_prices = funding_prices;
                 self.current_funding_idx = funding_idx;
                 self.min_funding_idxs = Arc::new(Mutex::new(min_funding_idxs));
             }
+        } else {
+            println!("Funding DB is empty")
         }
 
         if !storage.funding_db.is_empty() {
@@ -1187,6 +1194,10 @@ impl TransactionBatch {
 
         for (token, sum) in running_sums {
             let index_price = self.latest_index_price.get(&token).unwrap().clone();
+
+            if !funding_update.impact_prices.contains_key(&token) {
+                continue;
+            };
             let (impact_bid, impact_ask) = funding_update.impact_prices.get(&token).unwrap();
             let new_sum =
                 _per_minute_funding_update_inner(*impact_bid, *impact_ask, sum, index_price);
@@ -1197,6 +1208,7 @@ impl TransactionBatch {
         self.current_funding_count += 1;
 
         if self.current_funding_count == 60 {
+            // 60{}
             // Do we want 1 or 8 hours
             let fundings = _calculate_funding_rates(&mut self.running_funding_tick_sums);
 

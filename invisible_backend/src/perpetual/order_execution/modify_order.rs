@@ -123,20 +123,15 @@ fn modify_position(
         let idx_diff = position.last_funding_idx - swap_funding_info.min_swap_funding_idx;
 
         let applicable_funding_rates = &swap_funding_info.swap_funding_rates[idx_diff as usize..];
-        let applicable_funding_prices =
-            &swap_funding_info.swap_funding_prices[position.last_funding_idx as usize..];
-
-        // ? Apply funding to position
-        position.apply_funding(
-            applicable_funding_rates.to_vec(),
-            applicable_funding_prices.to_vec(),
-        );
+        let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
         // & Increasing the position size
         position.increase_position_size(
             spent_synthetic,
             price,
             fee_taken,
+            applicable_funding_rates.to_vec(),
+            applicable_funding_prices.to_vec(),
             swap_funding_info.current_funding_idx,
         );
 
@@ -156,12 +151,6 @@ fn modify_position(
         let applicable_funding_rates = &swap_funding_info.swap_funding_rates[idx_diff as usize..];
         let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
-        // ? Apply funding to position
-        position.apply_funding(
-            applicable_funding_rates.to_vec(),
-            applicable_funding_prices.to_vec(),
-        );
-
         if spent_synthetic
             >= position
                 .position_size
@@ -173,6 +162,8 @@ fn modify_position(
                 spent_synthetic,
                 price,
                 fee_taken,
+                applicable_funding_rates.to_vec(),
+                applicable_funding_prices.to_vec(),
                 swap_funding_info.current_funding_idx,
             );
 
@@ -194,6 +185,8 @@ fn modify_position(
                 spent_synthetic,
                 price,
                 fee_taken,
+                applicable_funding_rates.to_vec(),
+                applicable_funding_prices.to_vec(),
                 swap_funding_info.current_funding_idx,
             );
         }

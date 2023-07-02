@@ -31,16 +31,16 @@ pub fn execute_liquidation(
     let applicable_funding_rates = &swap_funding_info.swap_funding_rates[idx_diff as usize..];
     let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
-    // ? Apply funding to position
-    liquidated_position.apply_funding(
-        applicable_funding_rates.to_vec(),
-        applicable_funding_prices.to_vec(),
-    );
-
     is_position_liquidatable(liquidation_order, market_price, index_price)?;
 
     let (liquidated_size, liquidator_fee, leftover_collateral, is_partial_liquidation) =
-        liquidated_position.liquidate_position(market_price, index_price)?;
+        liquidated_position.liquidate_position(
+            market_price,
+            index_price,
+            applicable_funding_rates.to_vec(),
+            applicable_funding_prices.to_vec(),
+            swap_funding_info.current_funding_idx,
+        )?;
 
     Ok((
         liquidated_size,

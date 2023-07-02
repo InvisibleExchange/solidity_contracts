@@ -54,6 +54,7 @@ pub fn verify_position_existence(
     perp_state_tree: &Arc<Mutex<SuperficialTree>>,
 ) -> Result<(), String> {
     if position.hash != position.hash_position() {
+
         return Err("Position hash not valid".to_string());
     }
 
@@ -62,6 +63,7 @@ pub fn verify_position_existence(
     let leaf_hash = tree.get_leaf_by_index(position.index as u64);
 
     if leaf_hash != position.hash {
+
         return Err("Position does not exist".to_string());
     }
 
