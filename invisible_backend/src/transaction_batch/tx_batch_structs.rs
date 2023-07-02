@@ -284,13 +284,20 @@ impl SwapFundingInfo {
                 prev_funding_idx_b.unwrap_or(u32::MAX),
             );
 
-            swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()
-                [min_swap_funding_idx as usize..]
+            let max_ = std::cmp::max(
+                min_swap_funding_idx,
+                funding_rates.get(&synthetic_token).unwrap().len() as u32,
+            );
+            let max_ = std::cmp::max(
+                max_,
+                funding_prices.get(&synthetic_token).unwrap().len() as u32,
+            );
+
+            swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()[max_ as usize..]
                 .to_vec()
                 .clone();
 
-            swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()
-                [min_swap_funding_idx as usize..]
+            swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()[max_ as usize..]
                 .to_vec()
                 .clone();
         };

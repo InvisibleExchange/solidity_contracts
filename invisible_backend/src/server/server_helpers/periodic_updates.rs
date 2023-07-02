@@ -41,7 +41,7 @@ pub async fn start_periodic_updates(
     let mpsc_tx = mpsc_tx.clone();
 
     // * UPDATE FUNDING RATES EVERY 60 SECONDS
-    let mut interval = time::interval(time::Duration::from_secs(20));
+    let mut interval = time::interval(time::Duration::from_secs(60));
     tokio::spawn(async move {
         'outer: loop {
             interval.tick().await;

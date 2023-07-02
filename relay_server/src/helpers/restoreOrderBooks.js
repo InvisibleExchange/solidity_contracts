@@ -267,7 +267,6 @@ async function sendOrder(spotOrders, perpOrders, spotLiquidity, perpLiquidity) {
   client.restore_orderbook(restoreOrderBookMessage, function (err, response) {
     if (err) {
       console.log(err);
-    } else {
     }
   });
 }

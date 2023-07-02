@@ -1208,7 +1208,6 @@ impl TransactionBatch {
         self.current_funding_count += 1;
 
         if self.current_funding_count == 60 {
-            // 60{}
             // Do we want 1 or 8 hours
             let fundings = _calculate_funding_rates(&mut self.running_funding_tick_sums);
 
