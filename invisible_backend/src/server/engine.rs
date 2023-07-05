@@ -21,7 +21,8 @@ use super::{
             execute_perp_swaps_after_amend_order, execute_spot_swaps_after_amend_order,
         },
         engine_helpers::{
-            handle_margin_change_repsonse, handle_split_notes_repsonse, store_output_json,
+            handle_cancel_order_repsonse, handle_deposit_repsonse, handle_margin_change_repsonse,
+            handle_split_notes_repsonse, handle_withdrawal_repsonse, store_output_json,
         },
         perp_swap_execution::{
             process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
@@ -80,12 +81,8 @@ use crate::{
     perpetual::{perp_helpers::perp_rollback::PerpRollbackInfo, perp_order::PerpOrder},
 };
 
-use crate::server::grpc::RollbackMessage;
 use crate::transactions::{
-    deposit::Deposit,
-    limit_order::LimitOrder,
-    swap::SwapResponse,
-    transaction_helpers::rollbacks::{initiate_rollback, RollbackInfo},
+    deposit::Deposit, limit_order::LimitOrder, transaction_helpers::rollbacks::RollbackInfo,
     withdrawal::Withdrawal,
 };
 use crate::utils::crypto_utils::Signature;
@@ -93,7 +90,7 @@ use crate::utils::{
     errors::{
         send_cancel_order_error_reply, send_deposit_error_reply, send_liquidity_error_reply,
         send_margin_change_error_reply, send_oracle_update_error_reply, send_order_error_reply,
-        send_split_notes_error_reply, send_withdrawal_error_reply, TransactionExecutionError,
+        send_split_notes_error_reply, send_withdrawal_error_reply,
     },
     notes::Note,
 };
@@ -612,57 +609,13 @@ impl Engine for EngineService {
 
         let res = order_book.process_order(cancel_request);
 
-        match &res[0] {
-            Ok(Success::Cancelled { .. }) => {
-                let pfr_note: Option<GrpcNote>;
-                if req.is_perp {
-                    let mut perpetual_partial_fill_tracker_m =
-                        self.perpetual_partial_fill_tracker.lock();
-
-                    let pfr_info = perpetual_partial_fill_tracker_m.remove(&req.order_id);
-
-                    pfr_note = if pfr_info.is_some() && pfr_info.as_ref().unwrap().0.is_some() {
-                        Some(GrpcNote::from(pfr_info.unwrap().0.unwrap()))
-                    } else {
-                        None
-                    };
-                } else {
-                    let mut partial_fill_tracker_m = self.partial_fill_tracker.lock();
-
-                    // println!("order id: {}", req.order_id % 2_u64.pow(32));
-
-                    let pfr_info = partial_fill_tracker_m.remove(&(req.order_id % 2_u64.pow(32)));
-                    pfr_note = if pfr_info.is_some() {
-                        Some(GrpcNote::from(pfr_info.unwrap().0))
-                    } else {
-                        None
-                    };
-                }
-
-                let reply: CancelOrderResponse = CancelOrderResponse {
-                    successful: true,
-                    pfr_note,
-                    error_message: "".to_string(),
-                };
-
-                return Ok(Response::new(reply));
-            }
-            Err(Failed::OrderNotFound(_)) => {
-                // println!("order not found: {:?}", id);
-
-                return send_cancel_order_error_reply("Order not found".to_string());
-            }
-            Err(Failed::ValidationFailed(err)) => {
-                println!("validation failed: {:?}", err);
-
-                return send_cancel_order_error_reply("Validation failes".to_string());
-            }
-            _ => {
-                println!("unknown cancel err");
-
-                return send_cancel_order_error_reply("Unknown error".to_string());
-            }
-        }
+        return handle_cancel_order_repsonse(
+            &res[0],
+            req.is_perp,
+            req.order_id,
+            &self.partial_fill_tracker,
+            &self.perpetual_partial_fill_tracker,
+        );
     }
 
     //
@@ -790,108 +743,49 @@ impl Engine for EngineService {
 
         tokio::task::yield_now().await;
 
-        let req: DepositMessage = request.into_inner();
-
-        let deposit: Deposit;
-        match Deposit::try_from(req) {
-            Ok(d) => deposit = d,
-            Err(_e) => {
-                return send_deposit_error_reply(
-                    "Erroc unpacking the swap message (verify the format is correct)".to_string(),
-                );
-            }
-        };
-
         let transaction_mpsc_tx = self.mpsc_tx.clone();
+        let swap_output_json = self.swap_output_json.clone();
+        let main_storage = self.main_storage.clone();
 
-        let handle: TokioJoinHandle<
-            JoinHandle<
-                Result<(Option<SwapResponse>, Option<Vec<u64>>), Report<TransactionExecutionError>>,
-            >,
-        > = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let req: DepositMessage = request.into_inner();
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::DepositMessage;
-            grpc_message.deposit_message = Some(deposit);
+            let deposit: Deposit;
+            match Deposit::try_from(req) {
+                Ok(d) => deposit = d,
+                Err(_e) => {
+                    return send_deposit_error_reply(
+                        "Erroc unpacking the swap message (verify the format is correct)"
+                            .to_string(),
+                    );
+                }
+            };
 
-            transaction_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
-            let res = resp_rx.await.unwrap();
+            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
 
-            return res.tx_handle.unwrap();
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::DepositMessage;
+                grpc_message.deposit_message = Some(deposit);
+
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                return resp_rx.await.unwrap();
+            });
+
+            return handle_deposit_repsonse(handle, &swap_output_json, &main_storage).await;
         });
 
-        let deposit_handle = handle.await.unwrap();
-
-        let thread_id = deposit_handle.thread().id();
-
-        let deposit_response = deposit_handle.join();
-
-        match deposit_response {
-            Ok(res1) => match res1 {
-                Ok(response) => {
-                    store_output_json(&self.swap_output_json, &self.main_storage);
-
-                    let reply = DepositResponse {
-                        successful: true,
-                        zero_idxs: response.1.unwrap(),
-                        error_message: "".to_string(),
-                    };
-
-                    return Ok(Response::new(reply));
-                }
-                Err(err) => {
-                    println!("\n{:?}", err);
-
-                    let should_rollback = self.rollback_safeguard.lock().contains_key(&thread_id);
-
-                    if should_rollback {
-                        let transaction_mpsc_tx = self.mpsc_tx.clone();
-
-                        let rollback_message = RollbackMessage {
-                            tx_type: "deposit".to_string(),
-                            notes_in_a: (0, None),
-                            notes_in_b: (0, None),
-                        };
-
-                        initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-                    }
-
-                    let error_message_response: String;
-                    if let TransactionExecutionError::Deposit(deposit_execution_error) =
-                        err.current_context()
-                    {
-                        error_message_response = deposit_execution_error.err_msg.clone();
-                    } else {
-                        error_message_response = err.current_context().to_string();
-                    }
-
-                    return send_deposit_error_reply(error_message_response);
-                }
-            },
+        match handle.await {
+            Ok(res) => {
+                return res;
+            }
             Err(_e) => {
-                println!("Unknown Error in deposit execution");
-
-                let should_rollback = self.rollback_safeguard.lock().contains_key(&thread_id);
-
-                if should_rollback {
-                    let transaction_mpsc_tx = self.mpsc_tx.clone();
-
-                    let rollback_message = RollbackMessage {
-                        tx_type: "deposit".to_string(),
-                        notes_in_a: (0, None),
-                        notes_in_b: (0, None),
-                    };
-
-                    initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-                }
-
                 return send_deposit_error_reply(
-                    "Unknown Error occured in the deposit execution".to_string(),
+                    "Unknown Error occured in the withdrawal execution".to_string(),
                 );
             }
         }
@@ -930,14 +824,7 @@ impl Engine for EngineService {
                 }
             };
 
-            let handle: TokioJoinHandle<
-                JoinHandle<
-                    Result<
-                        (Option<SwapResponse>, Option<Vec<u64>>),
-                        Report<TransactionExecutionError>,
-                    >,
-                >,
-            > = tokio::spawn(async move {
+            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
                 let (resp_tx, resp_rx) = oneshot::channel();
 
                 let mut grpc_message = GrpcMessage::new();
@@ -949,51 +836,10 @@ impl Engine for EngineService {
                     .await
                     .ok()
                     .unwrap();
-                let res = resp_rx.await.unwrap();
-
-                return res.tx_handle.unwrap();
+                return resp_rx.await.unwrap();
             });
 
-            let withdrawl_handle = handle.await.unwrap();
-
-            let withdrawal_response = withdrawl_handle.join();
-
-            match withdrawal_response {
-                Ok(res) => match res {
-                    Ok(_res) => {
-                        store_output_json(&swap_output_json, &main_storage);
-
-                        let reply = SuccessResponse {
-                            successful: true,
-                            error_message: "".to_string(),
-                        };
-
-                        return Ok(Response::new(reply));
-                    }
-                    Err(err) => {
-                        println!("\n{:?}", err);
-
-                        // let should_rollback =
-                        //  self.rollback_safeguard.lock().contains_key(&thread_id);
-
-                        let error_message_response: String;
-                        if let TransactionExecutionError::Withdrawal(withdrawal_execution_error) =
-                            err.current_context()
-                        {
-                            error_message_response = withdrawal_execution_error.err_msg.clone();
-                        } else {
-                            error_message_response = err.current_context().to_string();
-                        }
-
-                        return send_withdrawal_error_reply(error_message_response);
-                    }
-                },
-                Err(_e) => {
-                    return send_withdrawal_error_reply(
-                        "Unknown Error occured in the withdrawal execution".to_string(),
-                    );
-                }
-            }
+            return handle_withdrawal_repsonse(handle, &swap_output_json, &main_storage).await;
         });
 
         match handle.await {

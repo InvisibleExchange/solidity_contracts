@@ -8,15 +8,22 @@ use tokio_tungstenite::tungstenite::Message;
 use tonic::{Response, Status};
 
 use crate::{
-    matching_engine::orderbook::OrderBook,
+    matching_engine::orderbook::{Failed, OrderBook, Success},
     perpetual::{perp_position::PerpPosition, OrderSide},
     server::grpc::{
-        engine::{MarginChangeRes, Signature as GrpcSignature, SplitNotesRes},
+        engine::{
+            CancelOrderResponse, DepositResponse, GrpcNote, MarginChangeRes,
+            Signature as GrpcSignature, SplitNotesRes, SuccessResponse,
+        },
         ChangeMarginMessage, GrpcTxResponse,
     },
     trees::superficial_tree::SuperficialTree,
     utils::{
-        errors::{send_margin_change_error_reply, send_split_notes_error_reply},
+        errors::{
+            send_cancel_order_error_reply, send_deposit_error_reply,
+            send_margin_change_error_reply, send_split_notes_error_reply,
+            send_withdrawal_error_reply, TransactionExecutionError,
+        },
         storage::MainStorage,
     },
 };
@@ -216,85 +223,7 @@ pub async fn handle_split_notes_repsonse(
     }
 }
 
-
-
-
-
-
-
-#[derive(Clone)]
-pub struct SwapFundingInfo {
-    pub current_funding_idx: u32,      // current funding index
-    pub swap_funding_rates: Vec<i64>,  // funding rates aplicable to positions in the swap
-    pub swap_funding_prices: Vec<u64>, // funding prices aplicable to positions in the swap
-    pub min_swap_funding_idx: u32, // min last_modified funding index of the positions for the swap
-}
-
-// impl SwapFundingInfo {
-//     pub fn new(
-//         funding_rates: &HashMap<u64, Vec<i64>>,
-//         funding_prices: &HashMap<u64, Vec<u64>>,
-//         current_funding_idx: u32,
-//         synthetic_token: u64,
-//         position_a: &Option<PerpPosition>,
-//         position_b: &Option<PerpPosition>,
-//     ) -> SwapFundingInfo {
-//         let mut prev_funding_idx_a: Option<u32> = None;
-//         if let Some(position) = position_a.as_ref() {
-//             prev_funding_idx_a = Some(position.last_funding_idx);
-//         }
-
-//         let mut prev_funding_idx_b: Option<u32> = None;
-//         if let Some(position) = position_b.as_ref() {
-//             prev_funding_idx_b = Some(position.last_funding_idx);
-//         }
-
-//         let swap_funding_rates: Vec<i64>;
-//         let swap_funding_prices: Vec<u64>;
-//         let min_swap_funding_idx: u32;
-//         if prev_funding_idx_a.is_none() && prev_funding_idx_b.is_none() {
-//             min_swap_funding_idx = 0;
-
-//             swap_funding_rates = Vec::new();
-//             swap_funding_prices = Vec::new();
-//         } else {
-//             min_swap_funding_idx = std::cmp::min(
-//                 prev_funding_idx_a.unwrap_or(u32::MAX),
-//                 prev_funding_idx_b.unwrap_or(u32::MAX),
-//             );
-
-//             swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()
-//                 [min_swap_funding_idx as usize..]
-//                 .to_vec()
-//                 .clone();
-
-//             swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()
-//                 [min_swap_funding_idx as usize..]
-//                 .to_vec()
-//                 .clone();
-//         };
-
-//         let swap_funding_info = SwapFundingInfo {
-//             current_funding_idx,
-//             swap_funding_rates,
-//             swap_funding_prices,
-//             min_swap_funding_idx,
-//         };
-
-//         return swap_funding_info;
-//     }
-// }
-
-
-
-
-
-
-
-
-
-
-
+// & MARGIN CHANGE  ——————————————————————————————————————————————————————————-
 pub async fn handle_margin_change_repsonse(
     handle: TokioJoinHandle<GrpcTxResponse>,
     user_id: u64,
@@ -365,5 +294,153 @@ pub async fn handle_margin_change_repsonse(
         return send_margin_change_error_reply(
             "Unexpected error occured updating margin".to_string(),
         );
+    }
+}
+
+// & WITHDRAWALS ——————————————————————————————————————————————————————————-
+pub async fn handle_withdrawal_repsonse(
+    handle: TokioJoinHandle<GrpcTxResponse>,
+    swap_output_json: &Arc<Mutex<Vec<Map<String, Value>>>>,
+    main_storage: &Arc<Mutex<MainStorage>>,
+) -> Result<Response<SuccessResponse>, Status> {
+    let withdrawl_handle = handle.await.unwrap();
+
+    let withdrawal_response = withdrawl_handle.tx_handle.unwrap().join();
+
+    match withdrawal_response {
+        Ok(res) => match res {
+            Ok(_res) => {
+                store_output_json(&swap_output_json, &main_storage);
+
+                let reply = SuccessResponse {
+                    successful: true,
+                    error_message: "".to_string(),
+                };
+
+                return Ok(Response::new(reply));
+            }
+            Err(err) => {
+                println!("\n{:?}", err);
+
+                // let should_rollback =
+                //  self.rollback_safeguard.lock().contains_key(&thread_id);
+
+                let error_message_response: String;
+                if let TransactionExecutionError::Withdrawal(withdrawal_execution_error) =
+                    err.current_context()
+                {
+                    error_message_response = withdrawal_execution_error.err_msg.clone();
+                } else {
+                    error_message_response = err.current_context().to_string();
+                }
+
+                return send_withdrawal_error_reply(error_message_response);
+            }
+        },
+        Err(_e) => {
+            return send_withdrawal_error_reply(
+                "Unknown Error occured in the withdrawal execution".to_string(),
+            );
+        }
+    }
+}
+
+// & DEPOSITS  ——————————————————————————————————————————————————————————-
+pub async fn handle_deposit_repsonse(
+    handle: TokioJoinHandle<GrpcTxResponse>,
+    swap_output_json: &Arc<Mutex<Vec<Map<String, Value>>>>,
+    main_storage: &Arc<Mutex<MainStorage>>,
+) -> Result<Response<DepositResponse>, Status> {
+    let deposit_handle = handle.await.unwrap();
+
+    let deposit_response = deposit_handle.tx_handle.unwrap().join();
+
+    match deposit_response {
+        Ok(res1) => match res1 {
+            Ok(response) => {
+                store_output_json(&swap_output_json, &main_storage);
+
+                let reply = DepositResponse {
+                    successful: true,
+                    zero_idxs: response.1.unwrap(),
+                    error_message: "".to_string(),
+                };
+
+                return Ok(Response::new(reply));
+            }
+            Err(err) => {
+                println!("\n{:?}", err);
+
+                let error_message_response: String;
+                if let TransactionExecutionError::Deposit(deposit_execution_error) =
+                    err.current_context()
+                {
+                    error_message_response = deposit_execution_error.err_msg.clone();
+                } else {
+                    error_message_response = err.current_context().to_string();
+                }
+
+                return send_deposit_error_reply(error_message_response);
+            }
+        },
+        Err(_e) => {
+            return send_deposit_error_reply(
+                "Unknown Error occured in the deposit execution".to_string(),
+            );
+        }
+    }
+}
+
+// & CANCEL ORDER  ——————————————————————————————————————————————————————————-
+pub fn handle_cancel_order_repsonse(
+    res: &Result<Success, Failed>,
+    is_perp: bool,
+    order_id: u64,
+    partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+    perpetual_partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
+) -> Result<Response<CancelOrderResponse>, Status> {
+    match &res {
+        Ok(Success::Cancelled { .. }) => {
+            let pfr_note: Option<GrpcNote>;
+            if is_perp {
+                let mut perpetual_partial_fill_tracker_m = perpetual_partial_fill_tracker.lock();
+
+                let pfr_info = perpetual_partial_fill_tracker_m.remove(&order_id);
+
+                pfr_note = if pfr_info.is_some() && pfr_info.as_ref().unwrap().0.is_some() {
+                    Some(GrpcNote::from(pfr_info.unwrap().0.unwrap()))
+                } else {
+                    None
+                };
+            } else {
+                let mut partial_fill_tracker_m = partial_fill_tracker.lock();
+
+                let pfr_info = partial_fill_tracker_m.remove(&(order_id));
+                pfr_note = if pfr_info.is_some() {
+                    Some(GrpcNote::from(pfr_info.unwrap().0))
+                } else {
+                    None
+                };
+            }
+
+            let reply: CancelOrderResponse = CancelOrderResponse {
+                successful: true,
+                pfr_note,
+                error_message: "".to_string(),
+            };
+
+            return Ok(Response::new(reply));
+        }
+        Err(Failed::OrderNotFound(_)) => {
+            // println!("order not found: {:?}", id);
+
+            return send_cancel_order_error_reply("Order not found".to_string());
+        }
+        Err(Failed::ValidationFailed(err)) => {
+            return send_cancel_order_error_reply("Validation failed: ".to_string() + err);
+        }
+        _ => {
+            return send_cancel_order_error_reply("Unknown error".to_string());
+        }
     }
 }
