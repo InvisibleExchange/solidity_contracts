@@ -1,9 +1,8 @@
 use parking_lot::Mutex;
 use serde_json::json;
-use std::println;
-use std::thread::{self};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
+use std::{println, thread};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::matching_engine::orderbook::OrderBook;
@@ -70,7 +69,9 @@ pub async fn start_periodic_updates(
 
             let transaction_mpsc_tx = mpsc_tx.clone();
 
-            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+            let handle: TokioJoinHandle<
+                Result<GrpcTxResponse, tokio::sync::oneshot::error::RecvError>,
+            > = tokio::spawn(async move {
                 let (resp_tx, resp_rx) = oneshot::channel();
 
                 let mut grpc_message = GrpcMessage::new();
@@ -83,11 +84,15 @@ pub async fn start_periodic_updates(
                     .ok()
                     .unwrap();
 
-                return resp_rx.await.unwrap();
+                return resp_rx.await;
             });
 
             if let Ok(grpc_res) = handle.await {
-                if !grpc_res.successful {
+                if let Ok(grpc_res) = grpc_res {
+                    if !grpc_res.successful {
+                        println!("Failed applying funding update\n");
+                    }
+                } else {
                     println!("Failed applying funding update\n");
                 }
             } else {

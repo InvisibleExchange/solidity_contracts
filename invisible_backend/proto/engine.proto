@@ -132,12 +132,13 @@ message AmendOrderResponse {
 // ------ WITHDRAWAL --------------
 
 message WithdrawalMessage {
-    uint64 withdrawal_token = 1;
-    uint64 withdrawal_amount = 2;
-    string stark_key = 3;
-    repeated GrpcNote notes_in = 4;
-    GrpcNote refund_note = 5;
-    Signature signature = 6;
+    uint32 withdrawal_chain_id = 1;
+    uint64 withdrawal_token = 2;
+    uint64 withdrawal_amount = 3;
+    string stark_key = 4;
+    repeated GrpcNote notes_in = 5;
+    GrpcNote refund_note = 6;
+    Signature signature = 7;
 } 
 
 

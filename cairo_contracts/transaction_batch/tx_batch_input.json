@@ -13,7 +13,12 @@
         "n_output_positions": 0,
         "n_empty_positions": 0,
         "n_deposits": 0,
-        "n_withdrawals": 0
+        "n_withdrawals": 0,
+        "chain_ids": [
+            9090909,
+            7878787,
+            5656565
+        ] 
     },
     "global_config": {
         "assets": [
@@ -1994,5 +1999,13 @@
             "1995416433354716455920946744571034657883516352106604508579791875989229713832"
         ]
     },
-    "perpetual_preimage": {}
+    "perpetual_preimage": {},
+    "txs": {
+        "deposits": [],
+        "withdrawals": [],
+        "spot_swaps": [],
+        "perpetual_swaps": [],
+        "note_splits": [],
+        "margin_change": []
+    }
 }

@@ -2,7 +2,10 @@ use num_bigint::{BigInt, BigUint, Sign};
 use num_integer::Integer;
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use crate::{perpetual::OrderSide, transaction_batch::tx_batch_structs::GlobalDexState};
+use crate::{
+    perpetual::OrderSide,
+    transaction_batch::{tx_batch_structs::GlobalDexState, CHAIN_IDS},
+};
 
 const DEPOSIT_OUTPUT_SIZE: usize = 2;
 const WITHDRAW_OUTPUT_SIZE: usize = 2;
@@ -13,6 +16,7 @@ const ZERO_OUTPUT_SIZE: usize = 1;
 #[derive(Debug, Clone)]
 pub struct ProgramOutput {
     pub dex_state: GlobalDexState,
+    pub accumulated_hashes: Vec<AccumulatedHashesOutput>,
     pub deposit_outputs: Vec<DepositOutput>,
     pub withdrawal_outputs: Vec<WithdrawalOutput>,
     pub position_outputs: Vec<PerpPositionOutput>,
@@ -23,7 +27,7 @@ pub struct ProgramOutput {
 
 pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
     // & cairo_output structure:
-    // 0: dex_state
+    // 0: dex_state + accumulated_hashes
     // 1: deposits
     // 2: withdrawals
     // 3: positions
@@ -36,8 +40,12 @@ pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
     // ? Parse dex state
     let dex_state: GlobalDexState = parse_dex_state(&cairo_output[0..14]);
 
-    // ? Parse deposits
+    // ? Parse accumulated hashes
     let cairo_output = &cairo_output[14..];
+    let accumulated_hashes = parse_accumulated_hashes_outputs(&cairo_output, CHAIN_IDS.len());
+
+    // ? Parse deposits
+    let cairo_output = &cairo_output[(CHAIN_IDS.len() * 3)..];
     let deposit_outputs = parse_deposit_outputs(cairo_output, dex_state.n_deposits);
 
     // ? Parse withdrawals
@@ -63,6 +71,7 @@ pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
 
     let program_output = ProgramOutput {
         dex_state,
+        accumulated_hashes,
         deposit_outputs,
         withdrawal_outputs,
         position_outputs,
@@ -109,7 +118,46 @@ fn parse_dex_state(output: &[BigUint]) -> GlobalDexState {
         n_empty_positions,
         n_deposits,
         n_withdrawals,
+        CHAIN_IDS.to_vec(),
     )
+}
+
+// * =====================================================================================
+
+// struct AccumulatedHashesOutput {
+//     chain_id: felt,
+//     deposit_hash: felt,
+//     withdrawal_hash: felt,
+// }
+
+#[derive(Debug, Clone)]
+pub struct AccumulatedHashesOutput {
+    pub chain_id: u32,
+    pub deposit_hash: BigUint,
+    pub withdrawal_hash: BigUint,
+}
+
+fn parse_accumulated_hashes_outputs(
+    output: &[BigUint],
+    num_chain_ids: usize,
+) -> Vec<AccumulatedHashesOutput> {
+    let mut hashes: Vec<AccumulatedHashesOutput> = Vec::new();
+
+    for i in 0..num_chain_ids {
+        let chain_id = output[(i * 3) as usize].clone();
+        let deposit_hash = output[(i * 3 + 1) as usize].clone();
+        let withdrawal_hash = output[(i * 3 + 2) as usize].clone();
+
+        let hash = AccumulatedHashesOutput {
+            chain_id: chain_id.to_u32().unwrap(),
+            deposit_hash,
+            withdrawal_hash,
+        };
+
+        hashes.push(hash);
+    }
+
+    return hashes;
 }
 
 // * =====================================================================================

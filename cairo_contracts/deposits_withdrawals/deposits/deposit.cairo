@@ -39,6 +39,7 @@ func verify_deposit{
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
     deposit_output_ptr: DepositTransactionOutput*,
+    accumulated_deposit_hashes: DictAccess*,
     note_dict: DictAccess*,
 }() {
     alloc_locals;

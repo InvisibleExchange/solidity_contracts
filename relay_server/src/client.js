@@ -37,7 +37,6 @@ const db = initDb();
 
 initLiquidity(db);
 
-
 let spot24hVolumes = {};
 let spot24hTrades = {};
 function updateSpot24hInfo(volumes, trades) {

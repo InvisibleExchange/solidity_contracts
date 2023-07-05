@@ -41,6 +41,7 @@ from rollup.output_structs import (
     write_note_dict_to_output,
     write_position_dict_to_output,
     init_output_structs,
+    AccumulatedHashesOutput,
 )
 from rollup.global_config import GlobalConfig, init_global_config
 
@@ -65,23 +66,30 @@ func main{
 
     // * INITIALIZE DICTIONARIES ******************************************************
 
-    local note_dict: DictAccess*;
-    local fee_tracker_dict: DictAccess*;
-    local position_dict: DictAccess*;
+    local note_dict: DictAccess*;  // Dictionary of updated notes (idx -> note)
+    local fee_tracker_dict: DictAccess*;  // Dictionary of fees collected (token -> fees collected)
+    local position_dict: DictAccess*;  // Dictionary of updated positions (idx -> position)
+    local accumulated_deposit_hashes: DictAccess*;  // Dictionary of the accumulated deposit hashes (chain id -> hash)
+    local accumulated_withdrawal_hashes: DictAccess*;  // Dictionary of the accumulated withdrawal hashes (chain id -> hash)
     %{
         ids.note_dict = segments.add()
         ids.fee_tracker_dict = segments.add()
         ids.position_dict = segments.add()
+        ids.accumulated_deposit_hashes = segments.add()
+        ids.accumulated_withdrawal_hashes = segments.add()
     %}
     let note_dict_start = note_dict;
     let fee_tracker_dict_start = fee_tracker_dict;
     let position_dict_start = position_dict;
+    let accumulated_deposit_hashes_start = accumulated_deposit_hashes;
+    let accumulated_withdrawal_hashes_start = accumulated_withdrawal_hashes;
 
     local global_config: GlobalConfig*;
     %{ ids.global_config = segments.add() %}
     init_global_config(global_config);
 
     // * SPLIT OUTPUT SECTIONS ******************************************************
+    local n_chains: felt;
     local n_deposits: felt;
     local n_withdrawals: felt;
     local n_output_positions: felt;
@@ -89,6 +97,7 @@ func main{
     local n_output_notes: felt;
     local global_config_len: felt;
     %{
+        ids.n_chains = len(program_input["global_dex_state"]["chain_ids"]) * ids.AccumulatedHashesOutput.SIZE
         ids.n_deposits = int(program_input["global_dex_state"]["n_deposits"]) *  ids.DepositTransactionOutput.SIZE
         ids.n_withdrawals = int(program_input["global_dex_state"]["n_withdrawals"]) * ids.WithdrawalTransactionOutput.SIZE
         ids.n_output_positions = int(program_input["global_dex_state"]["n_output_positions"]) * ids.PerpPositionOutput.SIZE
@@ -102,8 +111,12 @@ func main{
     %}
 
     local dex_state_ptr: GlobalDexState* = cast(output_ptr, GlobalDexState*);
+    local accumulated_hashes: AccumulatedHashesOutput* = cast(
+        output_ptr + GlobalDexState.SIZE + global_config_len, AccumulatedHashesOutput*
+    );
+
     local deposit_output_ptr: DepositTransactionOutput* = cast(
-        output_ptr + GlobalDexState.SIZE + global_config_len, DepositTransactionOutput*
+        accumulated_hashes + n_chains, DepositTransactionOutput*
     );
     local withdraw_output_ptr: WithdrawalTransactionOutput* = cast(
         deposit_output_ptr + n_deposits, WithdrawalTransactionOutput*
@@ -120,16 +133,6 @@ func main{
     );
     // indexes of notes to be removed
     local zero_note_output_ptr: ZeroOutput* = cast(note_output_ptr + n_output_notes, ZeroOutput*);
-
-    // %{
-    //     print("dex_state_ptr", ids.dex_state_ptr.address_)
-    //     print("deposit_output_ptr", ids.deposit_output_ptr.address_)
-    //     print("withdraw_output_ptr", ids.withdraw_output_ptr.address_)
-    //     print("position_output_ptr", ids.position_output_ptr.address_)
-    //     print("empty_position_output_ptr", ids.empty_position_output_ptr.address_)
-    //     print("note_output_ptr", ids.note_output_ptr.address_)
-    //     print("zero_note_output_ptr", ids.zero_note_output_ptr.address_)
-    // %}
 
     // Initialize output sections
     init_output_structs(dex_state_ptr);
@@ -154,7 +157,9 @@ func main{
         fee_tracker_dict=fee_tracker_dict,
         position_dict=position_dict,
         deposit_output_ptr=deposit_output_ptr,
+        accumulated_deposit_hashes=accumulated_deposit_hashes,
         withdraw_output_ptr=withdraw_output_ptr,
+        accumulated_withdrawal_hashes=accumulated_withdrawal_hashes,
         empty_position_output_ptr=empty_position_output_ptr,
         zero_note_output_ptr=zero_note_output_ptr,
         funding_info=funding_info,
@@ -166,6 +171,26 @@ func main{
     %}
 
     // * Squash dictionaries =========================================================
+
+    local squashed_deposit_hashes_dict: DictAccess*;
+    %{ ids.squashed_deposit_hashes_dict = segments.add() %}
+    let (squashed_deposit_hashes_dict_end) = squash_dict(
+        dict_accesses=accumulated_deposit_hashes_start,
+        dict_accesses_end=accumulated_deposit_hashes,
+        squashed_dict=squashed_deposit_hashes_dict,
+    );
+
+    // ------------------------------------------------------------------------------
+
+    local squashed_withdrawal_hashes_dict: DictAccess*;
+    %{ ids.squashed_withdrawal_hashes_dict = segments.add() %}
+    let (squashed_withdrawal_hashes_dict_end) = squash_dict(
+        dict_accesses=accumulated_withdrawal_hashes_start,
+        dict_accesses_end=accumulated_withdrawal_hashes,
+        squashed_dict=squashed_withdrawal_hashes_dict,
+    );
+
+    // ------------------------------------------------------------------------------
 
     local squashed_note_dict: DictAccess*;
     %{ ids.squashed_note_dict = segments.add() %}
@@ -225,6 +250,13 @@ func main{
         empty_position_output_ptr=empty_position_output_ptr,
     }(squashed_position_dict, squashed_position_dict_len);
 
+    write_accumulated_hashes_to_output{accumulated_hashes_ptr=accumulated_hashes}(
+        squashed_deposit_hashes_dict,
+        squashed_deposit_hashes_dict_len,
+        squashed_deposit_withdrawal_dict,
+        squashed_deposit_withdrawal_dict_len,
+    );
+
     // local note_dict_len = (note_dict - note_dict_start) / DictAccess.SIZE;
     // %{
     //     for i in range(ids.squashed_note_dict_len):
@@ -260,7 +292,9 @@ func execute_transactions{
     fee_tracker_dict: DictAccess*,
     position_dict: DictAccess*,
     deposit_output_ptr: DepositTransactionOutput*,
+    accumulated_deposit_hashes: DictAccess*,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
+    accumulated_withdrawal_hashes: DictAccess*,
     empty_position_output_ptr: ZeroOutput*,
     zero_note_output_ptr: ZeroOutput*,
     funding_info: FundingInfo*,

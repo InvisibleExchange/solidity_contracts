@@ -1,13 +1,12 @@
 use firestore_db_and_auth::ServiceSession;
 use parking_lot::Mutex;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Arc,
     thread::{JoinHandle, ThreadId},
     time::Instant,
 };
-use tokio_tungstenite::tungstenite::Message;
 
 use super::{
     grpc::engine::{
@@ -21,11 +20,12 @@ use super::{
         amend_order_execution::{
             execute_perp_swaps_after_amend_order, execute_spot_swaps_after_amend_order,
         },
-        engine_helpers::store_output_json,
+        engine_helpers::{
+            handle_margin_change_repsonse, handle_split_notes_repsonse, store_output_json,
+        },
         perp_swap_execution::{
             process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
         },
-        send_to_relay_server,
         swap_execution::{
             await_swap_handles, process_and_execute_spot_swaps, process_batch_order_request,
             process_limit_order_request, retry_failed_swaps,
@@ -60,7 +60,7 @@ use crate::{
             liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
             liquidation_output::LiquidationResponse,
         },
-        OrderSide, PositionEffectType,
+        PositionEffectType,
     },
     transaction_batch::tx_batch_structs::OracleUpdate,
     trees::superficial_tree::SuperficialTree,
@@ -912,106 +912,95 @@ impl Engine for EngineService {
 
         tokio::task::yield_now().await;
 
-        let req: WithdrawalMessage = request.into_inner();
-
-        let withdrawal: Withdrawal;
-        match Withdrawal::try_from(req) {
-            Ok(w) => withdrawal = w,
-            Err(_e) => {
-                return send_withdrawal_error_reply(
-                    "Erroc unpacking the withdrawal message (verify the format is correct)"
-                        .to_string(),
-                );
-            }
-        };
-
-        let notes_in: (u64, Option<Vec<Note>>) = (0, Some(withdrawal.notes_in.clone()));
-
         let transaction_mpsc_tx = self.mpsc_tx.clone();
+        let swap_output_json = self.swap_output_json.clone();
+        let main_storage = self.main_storage.clone();
 
-        let handle: TokioJoinHandle<
-            JoinHandle<
-                Result<(Option<SwapResponse>, Option<Vec<u64>>), Report<TransactionExecutionError>>,
-            >,
-        > = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let req: WithdrawalMessage = request.into_inner();
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::WithdrawalMessage;
-            grpc_message.withdrawal_message = Some(withdrawal);
-
-            transaction_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
-            let res = resp_rx.await.unwrap();
-
-            return res.tx_handle.unwrap();
-        });
-
-        let withdrawl_handle = handle.await.unwrap();
-
-        let thread_id = withdrawl_handle.thread().id();
-
-        let withdrawal_response = withdrawl_handle.join();
-
-        match withdrawal_response {
-            Ok(res) => match res {
-                Ok(_res) => {
-                    store_output_json(&self.swap_output_json, &self.main_storage);
-
-                    let reply = SuccessResponse {
-                        successful: true,
-                        error_message: "".to_string(),
-                    };
-
-                    return Ok(Response::new(reply));
+            let withdrawal: Withdrawal;
+            match Withdrawal::try_from(req) {
+                Ok(w) => withdrawal = w,
+                Err(_e) => {
+                    return send_withdrawal_error_reply(
+                        "Erroc unpacking the withdrawal message (verify the format is correct)"
+                            .to_string(),
+                    );
                 }
-                Err(err) => {
-                    println!("\n{:?}", err);
+            };
 
-                    let should_rollback = self.rollback_safeguard.lock().contains_key(&thread_id);
+            let handle: TokioJoinHandle<
+                JoinHandle<
+                    Result<
+                        (Option<SwapResponse>, Option<Vec<u64>>),
+                        Report<TransactionExecutionError>,
+                    >,
+                >,
+            > = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
 
-                    if should_rollback {
-                        let transaction_mpsc_tx = self.mpsc_tx.clone();
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::WithdrawalMessage;
+                grpc_message.withdrawal_message = Some(withdrawal);
 
-                        let rollback_message = RollbackMessage {
-                            tx_type: "withdrawal".to_string(),
-                            notes_in_a: notes_in,
-                            notes_in_b: (0, None),
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                let res = resp_rx.await.unwrap();
+
+                return res.tx_handle.unwrap();
+            });
+
+            let withdrawl_handle = handle.await.unwrap();
+
+            let withdrawal_response = withdrawl_handle.join();
+
+            match withdrawal_response {
+                Ok(res) => match res {
+                    Ok(_res) => {
+                        store_output_json(&swap_output_json, &main_storage);
+
+                        let reply = SuccessResponse {
+                            successful: true,
+                            error_message: "".to_string(),
                         };
 
-                        initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
+                        return Ok(Response::new(reply));
                     }
+                    Err(err) => {
+                        println!("\n{:?}", err);
 
-                    let error_message_response: String;
-                    if let TransactionExecutionError::Withdrawal(withdrawal_execution_error) =
-                        err.current_context()
-                    {
-                        error_message_response = withdrawal_execution_error.err_msg.clone();
-                    } else {
-                        error_message_response = err.current_context().to_string();
+                        // let should_rollback =
+                        //  self.rollback_safeguard.lock().contains_key(&thread_id);
+
+                        let error_message_response: String;
+                        if let TransactionExecutionError::Withdrawal(withdrawal_execution_error) =
+                            err.current_context()
+                        {
+                            error_message_response = withdrawal_execution_error.err_msg.clone();
+                        } else {
+                            error_message_response = err.current_context().to_string();
+                        }
+
+                        return send_withdrawal_error_reply(error_message_response);
                     }
-
-                    return send_withdrawal_error_reply(error_message_response);
+                },
+                Err(_e) => {
+                    return send_withdrawal_error_reply(
+                        "Unknown Error occured in the withdrawal execution".to_string(),
+                    );
                 }
-            },
+            }
+        });
+
+        match handle.await {
+            Ok(res) => {
+                return res;
+            }
             Err(_e) => {
-                let should_rollback = self.rollback_safeguard.lock().contains_key(&thread_id);
-
-                if should_rollback {
-                    let transaction_mpsc_tx = self.mpsc_tx.clone();
-
-                    let rollback_message = RollbackMessage {
-                        tx_type: "withdrawal".to_string(),
-                        notes_in_a: notes_in,
-                        notes_in_b: (0, None),
-                    };
-
-                    initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-                }
-
                 return send_withdrawal_error_reply(
                     "Unknown Error occured in the withdrawal execution".to_string(),
                 );
@@ -1345,82 +1334,74 @@ impl Engine for EngineService {
 
         tokio::task::yield_now().await;
 
-        let req: SplitNotesReq = req.into_inner();
-
-        let mut notes_in: Vec<Note> = Vec::new();
-        for n in req.notes_in.iter() {
-            let note = Note::try_from(n.clone());
-
-            if let Ok(n) = note {
-                notes_in.push(n);
-            } else {
-                return send_split_notes_error_reply("Invalid note".to_string());
-            }
-        }
-        let new_note: Note;
-        let mut refund_note: Option<Note> = None;
-        if req.note_out.is_some() {
-            let note_out = Note::try_from(req.note_out.unwrap());
-
-            if let Ok(n) = note_out {
-                new_note = n;
-            } else {
-                return send_split_notes_error_reply("Invalid note".to_string());
-            }
-        } else {
-            return send_split_notes_error_reply("Invalid note".to_string());
-        }
-        if req.refund_note.is_some() {
-            let refund_note_ = Note::try_from(req.refund_note.unwrap());
-
-            if let Ok(n) = refund_note_ {
-                refund_note = Some(n);
-            } else {
-                return send_split_notes_error_reply("Invalid note".to_string());
-            }
-        }
-
         let control_mpsc_tx = self.mpsc_tx.clone();
+        let swap_output_json = self.swap_output_json.clone();
+        let main_storage = self.main_storage.clone();
 
-        let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let req: SplitNotesReq = req.into_inner();
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::SplitNotes;
-            grpc_message.split_notes_message = Some((notes_in, new_note, refund_note));
+            let mut notes_in: Vec<Note> = Vec::new();
+            for n in req.notes_in.iter() {
+                let note = Note::try_from(n.clone());
 
-            control_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
+                if let Ok(n) = note {
+                    notes_in.push(n);
+                } else {
+                    return send_split_notes_error_reply("Invalid note".to_string());
+                }
+            }
+            let new_note: Note;
+            let mut refund_note: Option<Note> = None;
+            if req.note_out.is_some() {
+                let note_out = Note::try_from(req.note_out.unwrap());
 
-            return resp_rx.await.unwrap();
+                if let Ok(n) = note_out {
+                    new_note = n;
+                } else {
+                    return send_split_notes_error_reply("Invalid note".to_string());
+                }
+            } else {
+                return send_split_notes_error_reply("Invalid note".to_string());
+            }
+            if req.refund_note.is_some() {
+                let refund_note_ = Note::try_from(req.refund_note.unwrap());
+
+                if let Ok(n) = refund_note_ {
+                    refund_note = Some(n);
+                } else {
+                    return send_split_notes_error_reply("Invalid note".to_string());
+                }
+            }
+
+            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
+
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::SplitNotes;
+                grpc_message.split_notes_message = Some((notes_in, new_note, refund_note));
+
+                control_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+
+                return resp_rx.await.unwrap();
+            });
+
+            return handle_split_notes_repsonse(handle, &swap_output_json, &main_storage).await;
         });
 
-        if let Ok(grpc_res) = handle.await {
-            match grpc_res.new_idxs.unwrap() {
-                Ok(zero_idxs) => {
-                    store_output_json(&self.swap_output_json, &self.main_storage);
-
-                    let reply = SplitNotesRes {
-                        successful: true,
-                        error_message: "".to_string(),
-                        zero_idxs,
-                    };
-
-                    return Ok(Response::new(reply));
-                }
-                Err(e) => {
-                    return send_split_notes_error_reply(e.to_string());
-                }
+        match handle.await {
+            Ok(res) => {
+                return res;
             }
-        } else {
-            println!("Unknown error in split_notes, this should have been bypassed");
-
-            return send_split_notes_error_reply(
-                "Unexpected error occured splitting notes".to_string(),
-            );
+            Err(_e) => {
+                return send_split_notes_error_reply(
+                    "Unexpected error occured splitting notes".to_string(),
+                );
+            }
         }
     }
 
@@ -1439,98 +1420,61 @@ impl Engine for EngineService {
 
         tokio::task::yield_now().await;
 
-        let req: MarginChangeReq = req.into_inner();
-
-        let change_margin_message = ChangeMarginMessage::try_from(req).ok();
-
-        if change_margin_message.is_none() {
-            return send_margin_change_error_reply("Invalid change margin message".to_string());
-        }
-
-        let user_id = change_margin_message.as_ref().unwrap().user_id;
         let control_mpsc_tx = self.mpsc_tx.clone();
+        let swap_output_json = self.swap_output_json.clone();
+        let main_storage = self.main_storage.clone();
+        let perp_order_books = self.perp_order_books.clone();
+        let ws_connections = self.ws_connections.clone();
 
-        let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+        let handle = tokio::spawn(async move {
+            let req: MarginChangeReq = req.into_inner();
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::MarginChange;
-            grpc_message.change_margin_message = change_margin_message;
+            let change_margin_message = ChangeMarginMessage::try_from(req).ok();
 
-            control_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
+            if change_margin_message.is_none() {
+                return send_margin_change_error_reply("Invalid change margin message".to_string());
+            }
 
-            return resp_rx.await.unwrap();
+            let user_id = change_margin_message.as_ref().unwrap().user_id;
+
+            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
+
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::MarginChange;
+                grpc_message.change_margin_message = change_margin_message;
+
+                control_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+
+                return resp_rx.await.unwrap();
+            });
+
+            return handle_margin_change_repsonse(
+                handle,
+                user_id,
+                &swap_output_json,
+                &main_storage,
+                &perp_order_books,
+                &ws_connections,
+            )
+            .await;
         });
 
-        if let Ok(grpc_res) = handle.await {
-            match grpc_res.margin_change_response {
-                Some((margin_change_response_, err_msg)) => {
-                    let reply: MarginChangeRes;
-                    if let Some(margin_change_response) = margin_change_response_ {
-                        //
-
-                        let market_id = PERP_MARKET_IDS
-                            .get(&margin_change_response.position.synthetic_token.to_string())
-                            .unwrap();
-                        let mut perp_book =
-                            self.perp_order_books.get(market_id).unwrap().lock().await;
-                        perp_book.update_order_positions(
-                            user_id,
-                            &Some(margin_change_response.position.clone()),
-                        );
-                        drop(perp_book);
-
-                        store_output_json(&self.swap_output_json, &self.main_storage);
-
-                        let pos = Some((
-                            margin_change_response.position.position_address.to_string(),
-                            margin_change_response.position.index,
-                            margin_change_response.position.synthetic_token,
-                            margin_change_response.position.order_side == OrderSide::Long,
-                            margin_change_response.position.liquidation_price,
-                        ));
-                        let msg = json!({
-                            "message_id": "NEW_POSITIONS",
-                            "position1":  pos,
-                            "position2":  null
-                        });
-                        let msg = Message::Text(msg.to_string());
-
-                        if let Err(_) = send_to_relay_server(&self.ws_connections, msg).await {
-                            println!("Error sending perp swap fill update message")
-                        };
-
-                        reply = MarginChangeRes {
-                            successful: true,
-                            error_message: "".to_string(),
-                            return_collateral_index: margin_change_response.new_note_idx,
-                        };
-                    } else {
-                        reply = MarginChangeRes {
-                            successful: false,
-                            error_message: err_msg,
-                            return_collateral_index: 0,
-                        };
-                    }
-
-                    return Ok(Response::new(reply));
-                }
-                None => {
-                    return send_margin_change_error_reply(
-                        "Unknown error in split_notes, this should have been bypassed".to_string(),
-                    );
-                }
+        match handle.await {
+            Ok(res) => {
+                return res;
             }
-        } else {
-            println!("Unknown error in split_notes, this should have been bypassed");
+            Err(_e) => {
+                println!("Unexpected error occured updating margin");
 
-            return send_margin_change_error_reply(
-                "Unexpected error occured updating margin".to_string(),
-            );
+                return send_margin_change_error_reply(
+                    "Unexpected error occured updating margin".to_string(),
+                );
+            }
         }
     }
 
@@ -1551,42 +1495,48 @@ impl Engine for EngineService {
         tokio::task::yield_now().await;
 
         let transaction_mpsc_tx = self.mpsc_tx.clone();
+        let handle = tokio::spawn(async move {
+            let res: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
 
-        let res: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::FinalizeBatch;
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::FinalizeBatch;
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                let res = resp_rx.await.unwrap();
 
-            transaction_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
-            let res = resp_rx.await.unwrap();
+                return res;
+            });
 
-            return res;
-        });
+            println!("time: {:?}", now.elapsed());
 
-        let reply: FinalizeBatchResponse;
+            if let Ok(res) = res.await {
+                if res.successful {
+                    // OK
 
-        println!("time: {:?}", now.elapsed());
-
-        if let Ok(res) = res.await {
-            if res.successful {
-                // OK
-
-                reply = FinalizeBatchResponse {};
+                    println!("batch finalized sucessfuly");
+                } else {
+                    println!("batch finalization failed");
+                }
             } else {
-                reply = FinalizeBatchResponse {};
+                println!("batch finalization failed");
             }
-        } else {
-            reply = FinalizeBatchResponse {};
-        }
+        });
 
         drop(lock);
 
-        return Ok(Response::new(reply));
+        match handle.await {
+            Ok(_) => {
+                return Ok(Response::new(FinalizeBatchResponse {}));
+            }
+            Err(_e) => {
+                return Ok(Response::new(FinalizeBatchResponse {}));
+            }
+        }
     }
 
     //
@@ -1599,39 +1549,40 @@ impl Engine for EngineService {
     ) -> Result<Response<SuccessResponse>, Status> {
         tokio::task::yield_now().await;
 
-        let req: OracleUpdateReq = request.into_inner();
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
+        let handle = tokio::spawn(async move {
+            let req: OracleUpdateReq = request.into_inner();
 
-        let mut oracle_updates: Vec<OracleUpdate> = Vec::new();
-        for update in req.oracle_price_updates {
-            match OracleUpdate::try_from(update) {
-                Ok(oracle_update) => oracle_updates.push(oracle_update),
-                Err(_) => {
-                    return send_oracle_update_error_reply(
-                        "Error occurred while parsing the oracle update".to_string(),
-                    );
+            let mut oracle_updates: Vec<OracleUpdate> = Vec::new();
+            for update in req.oracle_price_updates {
+                match OracleUpdate::try_from(update) {
+                    Ok(oracle_update) => oracle_updates.push(oracle_update),
+                    Err(err) => {
+                        return send_oracle_update_error_reply(format!(
+                            "Error occurred while parsing the oracle update: {:?}",
+                            err.current_context()
+                        ));
+                    }
                 }
             }
-        }
 
-        let transaction_mpsc_tx = self.mpsc_tx.clone();
+            let execution_handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
 
-        let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::IndexPriceUpdate;
+                grpc_message.price_update_message = Some(oracle_updates);
 
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::IndexPriceUpdate;
-            grpc_message.price_update_message = Some(oracle_updates);
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
 
-            transaction_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
+                return resp_rx.await.unwrap();
+            });
 
-            return resp_rx.await.unwrap();
-        });
-
-        if let Ok(grpc_res) = handle.await {
+            let grpc_res = execution_handle.await.unwrap();
             if grpc_res.successful {
                 let reply = SuccessResponse {
                     successful: true,
@@ -1646,12 +1597,19 @@ impl Engine for EngineService {
                     "Error occurred while updating index price ".to_string(),
                 );
             }
-        } else {
-            println!("Error updating the index price");
+        });
 
-            return send_oracle_update_error_reply(
-                "Unknown Error occurred while updating index price".to_string(),
-            );
+        match handle.await {
+            Ok(res) => {
+                return res;
+            }
+            Err(_e) => {
+                println!("Unknown Error in update index price");
+
+                return send_oracle_update_error_reply(
+                    "Unknown Error occurred while updating index price".to_string(),
+                );
+            }
         }
     }
 

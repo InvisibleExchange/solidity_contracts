@@ -1,6 +1,6 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin, BitwiseBuiltin
 from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.math import split_felt
+from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.bitwise import bitwise_xor, bitwise_and
 
@@ -42,15 +42,22 @@ struct NoteDiffOutput {
 // Represents the struct of data written to the program output for each Deposit.
 struct DepositTransactionOutput {
     // & batched_note_info format: | deposit_id (64 bits) | token (64 bits) | amount (64 bits) |
+    // & deposit_id: | chain id (32 bits) | identifier (32 bits) |
     batched_deposit_info: felt,
     stark_key: felt,
 }
 
 // Represents the struct of data written to the program output for each Withdrawal.
 struct WithdrawalTransactionOutput {
-    // & batched_note_info format: | token (64 bits) | amount (64 bits) |
+    // & batched_note_info format: | withdrawal_chain_id (32 bits) | token (64 bits) | amount (64 bits) |
     batched_withdraw_info: felt,
     withdraw_address: felt,  // This should be the eth address to withdraw from
+}
+
+struct AccumulatedHashesOutput {
+    chain_id: felt,
+    deposit_hash: felt,
+    withdrawal_hash: felt,
 }
 
 // Represents the struct of data written to the program output for each perpetual position Modifictaion.
@@ -70,7 +77,7 @@ struct ZeroOutput {
     index: felt,
 }
 
-// =======================================================
+// * Notes ======================================================================
 
 func write_new_note_to_output{
     pedersen_ptr: HashBuiltin*, bitwise_ptr: BitwiseBuiltin*, note_output_ptr: NoteDiffOutput*
@@ -160,40 +167,213 @@ func write_note_dict_to_output{
     return write_note_dict_to_output(note_dict_ptr, n_output_notes - 1);
 }
 
-// =======================================================
+// * Deposits/Withdrawals  =======================================================
 
 func write_deposit_info_to_output{
-    pedersen_ptr: HashBuiltin*, deposit_output_ptr: DepositTransactionOutput*
+    pedersen_ptr: HashBuiltin*,
+    deposit_output_ptr: DepositTransactionOutput*,
+    accumulated_deposit_hashes: DictAccess*,
 }(deposit: Deposit) {
     alloc_locals;
 
-    let output: DepositTransactionOutput* = deposit_output_ptr;
+    let (chain_id: felt, _) = unsigned_div_rem(deposit.deposit_id, 32);
 
+    // & Write the deposit to the output --------------------------------------------
+    let output: DepositTransactionOutput* = deposit_output_ptr;
     assert output.batched_deposit_info = ((deposit.deposit_id * 2 ** 64) + deposit.token) * 2 **
         64 + deposit.amount;
     assert output.stark_key = deposit.deposit_address;
 
     let deposit_output_ptr = deposit_output_ptr + DepositTransactionOutput.SIZE;
 
+    // & Update the accumulated deposit hashes --------------------------------------
+    // ? Get the previous accumulated hash
+    local prev_hash: felt;
+    %{ ids.prev_hash = accumulated_deposit_hashes[ids.chain_id] %}
+    // ? The hash of the current deposit
+    let (current_hash: felt) = hash2{hash_ptr=pedersen_ptr}(
+        output.batched_deposit_info, output.stark_key
+    );
+    // ? hash the previous accumulated hash with the current deposit hash to get the new accumulated hash
+    let (new_hash: felt) = hash2{hash_ptr=pedersen_ptr}(prev_hash, current_hash);
+
+    let accumulated_deposit_hashes_ptr = accumulated_deposit_hashes;
+    assert accumulated_deposit_hashes_ptr.key = chain_id;
+    assert accumulated_deposit_hashes_ptr.prev_value = prev_hash;
+    assert accumulated_deposit_hashes_ptr.new_value = new_hash;
+
+    let accumulated_deposit_hashes = accumulated_deposit_hashes + DictAccess.SIZE;
+
     return ();
 }
 
 func write_withdrawal_info_to_output{
-    pedersen_ptr: HashBuiltin*, withdraw_output_ptr: WithdrawalTransactionOutput*, range_check_ptr
+    range_check_ptr,
+    pedersen_ptr: HashBuiltin*,
+    withdraw_output_ptr: WithdrawalTransactionOutput*,
+    accumulated_withdrawal_hashes: DictAccess*,
 }(withdrawal: Withdrawal) {
     alloc_locals;
 
+    // & Write the withdrawal to the output --------------------------------------------
     let output: WithdrawalTransactionOutput* = withdraw_output_ptr;
 
-    assert output.batched_withdraw_info = (withdrawal.token) * 2 ** 64 + withdrawal.amount;
+    assert output.batched_withdraw_info = (
+        (withdrawal.withdrawal_id * 2 ** 32) + withdrawal.token
+    ) * 2 ** 64 + withdrawal.amount;
     assert output.withdraw_address = withdrawal.withdrawal_address;
 
     let withdraw_output_ptr = withdraw_output_ptr + WithdrawalTransactionOutput.SIZE;
 
+    // & Update the accumulated withdrawal hashes ----------------------------------------
+    // ? Get the previous accumulated hash
+    local prev_hash: felt;
+    %{ ids.prev_hash = accumulated_withdrawal_hashes[ids.withdrawal.withdrawal_chain] %}
+    // ? The hash of the current withdrawal
+    let (current_hash: felt) = hash2{hash_ptr=pedersen_ptr}(
+        output.batched_withdraw_info, output.withdraw_address
+    );
+    // ? hash the previous accumulated hash with the current withdrawal hash to get the new accumulated hash
+    let (new_hash: felt) = hash2{hash_ptr=pedersen_ptr}(prev_hash, current_hash);
+
+    let accumulated_withdrawal_hashes_ptr = accumulated_withdrawal_hashes;
+    assert accumulated_withdrawal_hashes_ptr.key = withdrawal.withdrawal_chain;
+    assert accumulated_withdrawal_hashes_ptr.prev_value = prev_hash;
+    assert accumulated_withdrawal_hashes_ptr.new_value = new_hash;
+
+    let accumulated_withdrawal_hashes = accumulated_withdrawal_hashes + DictAccess.SIZE;
+
     return ();
 }
 
-// =======================================================
+func write_accumulated_deposit_hashes_to_output{accumulated_hashes_ptr: AccumulatedHashesOutput*}(
+    squashed_deposit_hashes_dict: DictAccess*, squashed_deposit_withdrawal_dict: DictAccess*
+) {
+    local arr_len: felt;
+    local arr: felt*;
+    %{
+        chain_ids = program_input["global_dex_state"]["chain_ids"]
+
+        ids.arr_len = len(chain_ids)
+
+        memory[ids.arr] = chain_ids_addr = segments.add()
+        for i, cid in enumerate(chain_ids):
+            memory[chain_ids_addr + i] = int(cid)
+    %}
+
+    return write_accumulated_deposit_hashes_to_output_inner(
+        squashed_deposit_hashes_dict, squashed_deposit_withdrawal_dict, len
+    );
+}
+
+func write_accumulated_deposit_hashes_to_output_inner{
+    accumulated_hashes_ptr: AccumulatedHashesOutput*
+}(
+    squashed_deposit_hashes_dict: DictAccess*,
+    squashed_deposit_withdrawal_dict: DictAccess*,
+    chain_ids_len: felt,
+    chain_ids: felt*,
+) {
+    if (chain_ids_len == 0) {
+        return ();
+    }
+
+    let chain_id: felt = chain_ids[0];
+
+    let deposit_chain_id = squashed_deposit_hashes_dict.key;
+    let withdrawal_chain_id = squashed_deposit_withdrawal_dict.key;
+
+    // let deposit_match = deposit_chain_id == chain_id;
+    // let withdrawal_match = withdrawal_chain_id == chain_id;
+
+    if (deposit_chain_id == chain_id) {
+        // both deposit and withdrawal hashes match chain_id
+        if (withdrawal_chain_id == chain_id) {
+            let output: AccumulatedHashesOutput* = accumulated_hashes_ptr;
+
+            let deposit_hash: felt = squashed_deposit_hashes_dict.new_value;
+            let withdrawal_hash: felt = squashed_deposit_withdrawal_dict.new_value;
+
+            assert output.chain_id = chain_id;
+            assert output.deposit_hash = deposit_hash;
+            assert output.withdrawal_hash = withdrawal_hash;
+
+            let accumulated_hashes_ptr = accumulated_hashes_ptr + AccumulatedHashesOutput.SIZE;
+
+            return write_accumulated_deposit_hashes_to_output_inner(
+                squashed_deposit_hashes_dict + DictAccess.SIZE,
+                squashed_deposit_withdrawal_dict + DictAccess.SIZE,
+                chain_ids_len - 1,
+                &chain_ids[1],
+            );
+        } else {
+            // only deposit hash matches chain_id
+
+            let output: AccumulatedHashesOutput* = accumulated_hashes_ptr;
+
+            let deposit_hash: felt = squashed_deposit_hashes_dict.new_value;
+            let withdrawal_hash: felt = 0;
+
+            assert output.chain_id = chain_id;
+            assert output.deposit_hash = deposit_hash;
+            assert output.withdrawal_hash = withdrawal_hash;
+
+            let accumulated_hashes_ptr = accumulated_hashes_ptr + AccumulatedHashesOutput.SIZE;
+
+            return write_accumulated_deposit_hashes_to_output_inner(
+                squashed_deposit_hashes_dict + DictAccess.SIZE,
+                squashed_deposit_withdrawal_dict,
+                chain_ids_len - 1,
+                &chain_ids[1],
+            );
+        }
+    }
+
+    if (withdrawal_chain_id == chain_id) {
+        // both deposit and withdrawal hashes match chain_id
+        if (deposit_chain_id == chain_id) {
+            let output: AccumulatedHashesOutput* = accumulated_hashes_ptr;
+
+            let deposit_hash: felt = squashed_deposit_hashes_dict.new_value;
+            let withdrawal_hash: felt = squashed_deposit_withdrawal_dict.new_value;
+
+            assert output.chain_id = chain_id;
+            assert output.deposit_hash = deposit_hash;
+            assert output.withdrawal_hash = withdrawal_hash;
+
+            let accumulated_hashes_ptr = accumulated_hashes_ptr + AccumulatedHashesOutput.SIZE;
+
+            return write_accumulated_deposit_hashes_to_output_inner(
+                squashed_deposit_hashes_dict + DictAccess.SIZE,
+                squashed_deposit_withdrawal_dict + DictAccess.SIZE,
+                chain_ids_len - 1,
+                &chain_ids[1],
+            );
+        } else {
+            // only withdrawal hash matches chain_id
+
+            let output: AccumulatedHashesOutput* = accumulated_hashes_ptr;
+
+            let deposit_hash: felt = 0;
+            let withdrawal_hash: felt = squashed_deposit_withdrawal_dict.new_value;
+
+            assert output.chain_id = chain_id;
+            assert output.deposit_hash = deposit_hash;
+            assert output.withdrawal_hash = withdrawal_hash;
+
+            let accumulated_hashes_ptr = accumulated_hashes_ptr + AccumulatedHashesOutput.SIZE;
+
+            return write_accumulated_deposit_hashes_to_output_inner(
+                squashed_deposit_hashes_dict,
+                squashed_deposit_withdrawal_dict + DictAccess.SIZE,
+                chain_ids_len - 1,
+                &chain_ids[1],
+            );
+        }
+    }
+}
+
+// * Positions  =======================================================
 
 func write_position_info_to_output{
     position_output_ptr: PerpPositionOutput*, pedersen_ptr: HashBuiltin*

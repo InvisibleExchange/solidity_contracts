@@ -16,7 +16,7 @@ use crate::utils::storage::BackupStorage;
 use crossbeam::thread;
 use error_stack::{Report, Result};
 use num_bigint::BigUint;
-use num_traits::Zero;
+use num_traits::{FromPrimitive, Zero};
 use serde_json::Value;
 
 use super::transaction_helpers::db_updates::update_db_after_withdrawal;
@@ -29,6 +29,7 @@ use crate::utils::notes::Note;
 
 pub struct Withdrawal {
     pub transaction_type: String,
+    pub withdrawal_chain_id: u32,
     pub withdrawal_token: u64,
     pub withdrawal_amount: u64,
     pub stark_key: BigUint,
@@ -172,8 +173,10 @@ impl Withdrawal {
             &z
         };
 
-        note_hashes.insert(0, &refund_note_hash);
-        note_hashes.insert(0, &self.stark_key);
+        note_hashes.push(&refund_note_hash);
+        note_hashes.push(&self.stark_key);
+        let chain_id = BigUint::from_u32(self.withdrawal_chain_id).unwrap();
+        note_hashes.push(&chain_id);
 
         let withdrawal_hash = pedersen_on_vec(&note_hashes);
 

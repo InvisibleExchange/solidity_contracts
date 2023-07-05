@@ -20,6 +20,7 @@ from helpers.signatures.signatures import sum_pub_keys
 
 // & This is the public output sent on-chain
 struct Withdrawal {
+    withdrawal_chain: felt, // the chain to withdraw to
     token: felt,
     amount: felt,
     withdrawal_address: felt,  // This should be the eth address to withdraw from
@@ -89,6 +90,7 @@ func withdraw_tx_hash{pedersen_ptr: HashBuiltin*}(
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, withdrawal.withdrawal_chain);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, withdrawal.withdrawal_address);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, refund_hash);
         let (hash_state_ptr) = hash_update(hash_state_ptr, note_hashes, note_hashes_len);

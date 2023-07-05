@@ -8,6 +8,7 @@ use std::{
     str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle, ThreadId},
+    time::SystemTime,
 };
 
 use error_stack::Result;
@@ -23,9 +24,9 @@ use crate::{
         },
         perp_position::PerpPosition,
         perp_swap::PerpSwap,
-        DUST_AMOUNT_PER_ASSET, VALID_COLLATERAL_TOKENS,
+        DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
     },
-    transaction_batch::tx_batch_helpers::_calculate_funding_rates,
+    transaction_batch::{tx_batch_helpers::_calculate_funding_rates, CHAIN_IDS},
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
     utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
@@ -118,6 +119,7 @@ pub struct TransactionBatch {
     pub funding_rates: HashMap<u64, Vec<i64>>, // maps asset id to an array of funding rates (not reset at new batch)
     pub funding_prices: HashMap<u64, Vec<u64>>, // maps asset id to an array of funding prices (corresponding to the funding rates) (not reset at new batch)
     pub current_funding_idx: u32, // the current index of the funding rates and prices arrays
+    pub funding_idx_shift: HashMap<u64, u32>, // maps asset id to an funding idx shift
     pub min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>, // the min funding index of a position being updated in this batch for each asset
     //
     pub n_deposits: u32,    // number of deposits in this batch
@@ -161,6 +163,7 @@ impl TransactionBatch {
         let mut funding_rates: HashMap<u64, Vec<i64>> = HashMap::new();
         let mut funding_prices: HashMap<u64, Vec<u64>> = HashMap::new();
         let mut min_funding_idxs: HashMap<u64, u32> = HashMap::new();
+        let mut funding_idx_shift: HashMap<u64, u32> = HashMap::new();
 
         let session = create_session();
         let session = Arc::new(Mutex::new(session));
@@ -172,11 +175,12 @@ impl TransactionBatch {
         _init_empty_tokens_map::<i64>(&mut running_funding_tick_sums);
         _init_empty_tokens_map::<Vec<i64>>(&mut funding_rates);
         _init_empty_tokens_map::<Vec<u64>>(&mut funding_prices);
+        _init_empty_tokens_map::<u32>(&mut funding_idx_shift);
         _init_empty_tokens_map::<u32>(&mut min_funding_idxs);
 
         // TODO: For testing only =================================================
-        latest_index_price.insert(54321, 1000 * 10u64.pow(6));
-        latest_index_price.insert(12345, 10000 * 10u64.pow(6));
+        latest_index_price.insert(54321, 2000 * 10u64.pow(6));
+        latest_index_price.insert(12345, 30000 * 10u64.pow(6));
         // TODO: For testing only =================================================
 
         let tx_batch = TransactionBatch {
@@ -204,6 +208,7 @@ impl TransactionBatch {
             funding_rates,
             funding_prices,
             current_funding_idx: 0,
+            funding_idx_shift,
             min_funding_idxs: Arc::new(Mutex::new(min_funding_idxs)),
             //
             n_deposits: 0,
@@ -234,15 +239,22 @@ impl TransactionBatch {
             if let Ok((funding_rates, funding_prices, funding_idx, min_funding_idxs)) =
                 storage.read_funding_info()
             {
-                println!("Funding rates: {:?}", funding_rates);
+                let mut funding_idx_shift = HashMap::new();
+                for t in TOKENS {
+                    let rates_arr_len = funding_rates.get(&t).unwrap_or(&vec![]).len();
+
+                    let shift = funding_idx - rates_arr_len as u32;
+
+                    funding_idx_shift.insert(t, shift);
+                }
 
                 self.funding_rates = funding_rates;
                 self.funding_prices = funding_prices;
                 self.current_funding_idx = funding_idx;
+                self.funding_idx_shift = funding_idx_shift;
+
                 self.min_funding_idxs = Arc::new(Mutex::new(min_funding_idxs));
             }
-        } else {
-            println!("Funding DB is empty")
         }
 
         if !storage.funding_db.is_empty() {
@@ -359,6 +371,7 @@ impl TransactionBatch {
             &self.funding_rates,
             &self.funding_prices,
             self.current_funding_idx,
+            &self.funding_idx_shift,
             transaction.order_a.synthetic_token,
             &transaction.order_a.position,
             &transaction.order_b.position,
@@ -423,6 +436,7 @@ impl TransactionBatch {
             &self.funding_rates,
             &self.funding_prices,
             self.current_funding_idx,
+            &self.funding_idx_shift,
             liquidation_transaction.liquidation_order.synthetic_token,
             &Some(liquidation_transaction.liquidation_order.position.clone()),
             &None,
@@ -884,6 +898,10 @@ impl TransactionBatch {
         ) = self.update_trees(updated_note_hashes, perpetual_updated_position_hashes)?;
 
         // ? Construct the global state and config
+        let global_expiration_timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs() as u32;
         let global_dex_state: GlobalDexState = GlobalDexState::new(
             1234, // todo: Could be a version code and a tx_batch count
             &prev_spot_root,
@@ -892,13 +910,14 @@ impl TransactionBatch {
             &new_perp_root,
             Self::TREE_DEPTH,
             Self::TREE_DEPTH,
-            1_000_000, // Todo
+            global_expiration_timestamp,
             num_output_notes,
             num_zero_notes,
             num_output_positions,
             num_empty_positions,
             n_deposits,
             n_withdrawals,
+            CHAIN_IDS.to_vec(),
         );
 
         let global_config: GlobalConfig = GlobalConfig::new();

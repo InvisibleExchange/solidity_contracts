@@ -256,6 +256,7 @@ impl SwapFundingInfo {
         funding_rates: &HashMap<u64, Vec<i64>>,
         funding_prices: &HashMap<u64, Vec<u64>>,
         current_funding_idx: u32,
+        funding_idx_shift: &HashMap<u64, u32>,
         synthetic_token: u64,
         position_a: &Option<PerpPosition>,
         position_b: &Option<PerpPosition>,
@@ -284,17 +285,26 @@ impl SwapFundingInfo {
                 prev_funding_idx_b.unwrap_or(u32::MAX),
             );
 
-            if min_swap_funding_idx == 0 {
-                swap_funding_rates = Vec::new();
-                swap_funding_prices = Vec::new();
+            let shift: u32 = *funding_idx_shift.get(&synthetic_token).unwrap_or(&0);
+            let arr_start_idx = min_swap_funding_idx - shift;
+
+            if arr_start_idx == 0 {
+                swap_funding_rates = funding_rates
+                    .get(&synthetic_token)
+                    .unwrap_or(&vec![])
+                    .clone();
+                swap_funding_prices = funding_prices
+                    .get(&synthetic_token)
+                    .unwrap_or(&vec![])
+                    .clone();
             } else {
                 swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()
-                    [min_swap_funding_idx as usize - 1..]
+                    [arr_start_idx as usize - 1..]
                     .to_vec()
                     .clone();
 
                 swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()
-                    [min_swap_funding_idx as usize - 1..]
+                    [arr_start_idx as usize - 1..]
                     .to_vec()
                     .clone();
             }
@@ -380,6 +390,7 @@ pub struct GlobalDexState {
     pub n_empty_positions: u32,
     pub n_deposits: u32,
     pub n_withdrawals: u32,
+    pub chain_ids: Vec<u32>,
 }
 
 impl GlobalDexState {
@@ -398,6 +409,7 @@ impl GlobalDexState {
         n_empty_positions: u32,
         n_deposits: u32,
         n_withdrawals: u32,
+        chain_ids: Vec<u32>,
     ) -> GlobalDexState {
         let init_state_root = init_state_root.to_string();
         let final_state_root = final_state_root.to_string();
@@ -419,6 +431,7 @@ impl GlobalDexState {
             n_empty_positions,
             n_deposits,
             n_withdrawals,
+            chain_ids,
         }
     }
 }
@@ -429,20 +442,6 @@ impl GlobalDexState {
 // - assets: [token1, token2, ...]
 // - observers : [observer1, observer2, ...]
 // - everything else: [token1, value1, token2, value2, ...]
-
-// assets_len: felt,
-// assets: felt*,
-// decimals_per_asset: felt*,
-// price_decimals_per_asset: felt*,
-// leverage_decimals: felt,
-// leverage_bounds_per_asset: felt*,
-// dust_amount_per_asset: felt*,
-// observers_len: felt,
-// observers: felt*,
-
-// TODO: Add this to GlobalDexState:
-// Todo: LEVERAGE_BOUNDS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS, DECIMALS_PER_ASSET, LEVERAGE_DECIMALS
-// Todo: PRICE_DECIMALS_PER_ASSET, IMPACT_NOTIONAL_PER_ASSET, DUST_AMOUNT_PER_ASSET, COLLATERAL_TOKEN_DECIMALS
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalConfig {

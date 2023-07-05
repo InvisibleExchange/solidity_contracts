@@ -139,6 +139,7 @@ impl TryFrom<WithdrawalMessage> for Withdrawal {
 
         let withdrawal = Withdrawal {
             transaction_type: "withdrawal".to_string(),
+            withdrawal_chain_id: req.withdrawal_chain_id,
             withdrawal_token: req.withdrawal_token,
             withdrawal_amount: req.withdrawal_amount,
             notes_in,

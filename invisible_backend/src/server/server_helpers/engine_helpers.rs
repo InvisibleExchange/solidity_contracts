@@ -1,20 +1,33 @@
 use num_bigint::BigUint;
 use num_traits::{FromPrimitive, Zero};
 use parking_lot::Mutex;
-use serde_json::Value;
+use serde_json::{json, Map, Value};
 use starknet::curve::AffinePoint;
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
+use tokio_tungstenite::tungstenite::Message;
+use tonic::{Response, Status};
 
 use crate::{
-    perpetual::perp_position::PerpPosition,
-    server::grpc::{engine::Signature as GrpcSignature, ChangeMarginMessage},
+    matching_engine::orderbook::OrderBook,
+    perpetual::{perp_position::PerpPosition, OrderSide},
+    server::grpc::{
+        engine::{MarginChangeRes, Signature as GrpcSignature, SplitNotesRes},
+        ChangeMarginMessage, GrpcTxResponse,
+    },
     trees::superficial_tree::SuperficialTree,
-    utils::storage::MainStorage,
+    utils::{
+        errors::{send_margin_change_error_reply, send_split_notes_error_reply},
+        storage::MainStorage,
+    },
 };
+use tokio::sync::Mutex as TokioMutex;
+use tokio::task::JoinHandle as TokioJoinHandle;
 
 use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 
 use crate::utils::notes::Note;
+
+use super::{send_to_relay_server, WsConnectionsMap, PERP_MARKET_IDS};
 
 pub fn verify_signature_format(sig: &Option<GrpcSignature>) -> Result<Signature, String> {
     // ? Verify the signature is defined and has a valid format
@@ -54,7 +67,6 @@ pub fn verify_position_existence(
     perp_state_tree: &Arc<Mutex<SuperficialTree>>,
 ) -> Result<(), String> {
     if position.hash != position.hash_position() {
-
         return Err("Position hash not valid".to_string());
     }
 
@@ -63,7 +75,6 @@ pub fn verify_position_existence(
     let leaf_hash = tree.get_leaf_by_index(position.index as u64);
 
     if leaf_hash != position.hash {
-
         return Err("Position does not exist".to_string());
     }
 
@@ -170,5 +181,189 @@ pub fn store_output_json(
         drop(main_storage);
     } else {
         drop(swap_output_json);
+    }
+}
+
+// * ===========================================================================================================================0
+// * HANDLE GRPC_TX RESPONSE
+
+pub async fn handle_split_notes_repsonse(
+    handle: TokioJoinHandle<GrpcTxResponse>,
+    swap_output_json: &Arc<Mutex<Vec<Map<String, Value>>>>,
+    main_storage: &Arc<Mutex<MainStorage>>,
+) -> Result<Response<SplitNotesRes>, Status> {
+    if let Ok(grpc_res) = handle.await {
+        match grpc_res.new_idxs.unwrap() {
+            Ok(zero_idxs) => {
+                store_output_json(swap_output_json, main_storage);
+
+                let reply = SplitNotesRes {
+                    successful: true,
+                    error_message: "".to_string(),
+                    zero_idxs,
+                };
+
+                return Ok(Response::new(reply));
+            }
+            Err(e) => {
+                return send_split_notes_error_reply(e.to_string());
+            }
+        }
+    } else {
+        return send_split_notes_error_reply(
+            "Unexpected error occured splitting notes".to_string(),
+        );
+    }
+}
+
+
+
+
+
+
+
+#[derive(Clone)]
+pub struct SwapFundingInfo {
+    pub current_funding_idx: u32,      // current funding index
+    pub swap_funding_rates: Vec<i64>,  // funding rates aplicable to positions in the swap
+    pub swap_funding_prices: Vec<u64>, // funding prices aplicable to positions in the swap
+    pub min_swap_funding_idx: u32, // min last_modified funding index of the positions for the swap
+}
+
+// impl SwapFundingInfo {
+//     pub fn new(
+//         funding_rates: &HashMap<u64, Vec<i64>>,
+//         funding_prices: &HashMap<u64, Vec<u64>>,
+//         current_funding_idx: u32,
+//         synthetic_token: u64,
+//         position_a: &Option<PerpPosition>,
+//         position_b: &Option<PerpPosition>,
+//     ) -> SwapFundingInfo {
+//         let mut prev_funding_idx_a: Option<u32> = None;
+//         if let Some(position) = position_a.as_ref() {
+//             prev_funding_idx_a = Some(position.last_funding_idx);
+//         }
+
+//         let mut prev_funding_idx_b: Option<u32> = None;
+//         if let Some(position) = position_b.as_ref() {
+//             prev_funding_idx_b = Some(position.last_funding_idx);
+//         }
+
+//         let swap_funding_rates: Vec<i64>;
+//         let swap_funding_prices: Vec<u64>;
+//         let min_swap_funding_idx: u32;
+//         if prev_funding_idx_a.is_none() && prev_funding_idx_b.is_none() {
+//             min_swap_funding_idx = 0;
+
+//             swap_funding_rates = Vec::new();
+//             swap_funding_prices = Vec::new();
+//         } else {
+//             min_swap_funding_idx = std::cmp::min(
+//                 prev_funding_idx_a.unwrap_or(u32::MAX),
+//                 prev_funding_idx_b.unwrap_or(u32::MAX),
+//             );
+
+//             swap_funding_rates = funding_rates.get(&synthetic_token).unwrap()
+//                 [min_swap_funding_idx as usize..]
+//                 .to_vec()
+//                 .clone();
+
+//             swap_funding_prices = funding_prices.get(&synthetic_token).unwrap()
+//                 [min_swap_funding_idx as usize..]
+//                 .to_vec()
+//                 .clone();
+//         };
+
+//         let swap_funding_info = SwapFundingInfo {
+//             current_funding_idx,
+//             swap_funding_rates,
+//             swap_funding_prices,
+//             min_swap_funding_idx,
+//         };
+
+//         return swap_funding_info;
+//     }
+// }
+
+
+
+
+
+
+
+
+
+
+
+pub async fn handle_margin_change_repsonse(
+    handle: TokioJoinHandle<GrpcTxResponse>,
+    user_id: u64,
+    swap_output_json: &Arc<Mutex<Vec<Map<String, Value>>>>,
+    main_storage: &Arc<Mutex<MainStorage>>,
+    perp_order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
+    ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
+) -> Result<Response<MarginChangeRes>, Status> {
+    if let Ok(grpc_res) = handle.await {
+        match grpc_res.margin_change_response {
+            Some((margin_change_response_, err_msg)) => {
+                let reply: MarginChangeRes;
+                if let Some(margin_change_response) = margin_change_response_ {
+                    //
+
+                    let market_id = PERP_MARKET_IDS
+                        .get(&margin_change_response.position.synthetic_token.to_string())
+                        .unwrap();
+                    let mut perp_book = perp_order_books.get(market_id).unwrap().lock().await;
+                    perp_book.update_order_positions(
+                        user_id,
+                        &Some(margin_change_response.position.clone()),
+                    );
+                    drop(perp_book);
+
+                    store_output_json(&swap_output_json, &main_storage);
+
+                    let pos = Some((
+                        margin_change_response.position.position_address.to_string(),
+                        margin_change_response.position.index,
+                        margin_change_response.position.synthetic_token,
+                        margin_change_response.position.order_side == OrderSide::Long,
+                        margin_change_response.position.liquidation_price,
+                    ));
+                    let msg = json!({
+                        "message_id": "NEW_POSITIONS",
+                        "position1":  pos,
+                        "position2":  null
+                    });
+                    let msg = Message::Text(msg.to_string());
+
+                    if let Err(_) = send_to_relay_server(ws_connections, msg).await {
+                        println!("Error sending perp swap fill update message")
+                    };
+
+                    reply = MarginChangeRes {
+                        successful: true,
+                        error_message: "".to_string(),
+                        return_collateral_index: margin_change_response.new_note_idx,
+                    };
+                } else {
+                    reply = MarginChangeRes {
+                        successful: false,
+                        error_message: err_msg,
+                        return_collateral_index: 0,
+                    };
+                }
+
+                return Ok(Response::new(reply));
+            }
+            None => {
+                return send_margin_change_error_reply(
+                    "Unknown error in split_notes, this should have been bypassed".to_string(),
+                );
+            }
+        }
+    } else {
+        return send_margin_change_error_reply(
+            "Unexpected error occured updating margin".to_string(),
+        );
     }
 }

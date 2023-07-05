@@ -17,6 +17,9 @@ func python_define_utils() {
         output_positions = {}
         fee_tracker_dict_manager = {}
 
+        accumulated_deposit_hashes = {}
+        accumulated_withdrawal_hashes = {}
+
         # * NOTES ====================================================================
         NOTE_SIZE = ids.Note.SIZE
         ADDRESS_OFFSET = ids.Note.address
@@ -84,6 +87,7 @@ func python_define_utils() {
 
         # * WITHDRAWAL ================================================================
         WITHDRAWAL_SIZE = ids.Withdrawal.SIZE
+        WITHDRAWAL_CHAIN_OFFSET = ids.Withdrawal.withdrawal_chain
         WITHDRAWAL_TOKEN_OFFSET = ids.Withdrawal.token
         WITHDRAWAL_AMOUNT_OFFSET = ids.Withdrawal.amount
         WITHDRAWAL_ADDRESS_OFFSET = ids.Withdrawal.withdrawal_address

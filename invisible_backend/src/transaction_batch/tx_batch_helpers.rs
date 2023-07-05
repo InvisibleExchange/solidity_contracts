@@ -340,11 +340,17 @@ pub fn _calculate_funding_rates(
     // Should do once every hour (60 minutes)
 
     let mut funding_rates: HashMap<u64, i64> = HashMap::new();
-    for (token, twap_sum) in running_funding_tick_sums.drain() {
-        let funding_rate = twap_sum / 60; // 60 minutes per 1 hours
 
-        funding_rates.insert(token, funding_rate);
+    for t in TOKENS {
+        let twap_sum = running_funding_tick_sums.remove(&t).unwrap_or(0);
+        funding_rates.insert(t, twap_sum / 60);
     }
+
+    // for (token, twap_sum) in running_funding_tick_sums.drain() {
+    //     let funding_rate = twap_sum / 60; // 60 minutes per 1 hours
+
+    //     funding_rates.insert(token, funding_rate);
+    // }
 
     return funding_rates;
 }

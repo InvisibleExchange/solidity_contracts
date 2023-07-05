@@ -36,6 +36,7 @@ func verify_withdrawal{
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
+    accumulated_withdrawal_hashes: DictAccess*,
     note_dict: DictAccess*,
     zero_note_output_ptr: ZeroOutput*,
 }() {
@@ -44,6 +45,7 @@ func verify_withdrawal{
     // & This is the public on_chain withdraw information
     local withdrawal: Withdrawal;
     %{
+        memory[ids.withdrawal.address_ + WITHDRAWAL_CHAIN_OFFSET] = int(current_withdrawal["withdrawal_chain"])
         memory[ids.withdrawal.address_ + WITHDRAWAL_TOKEN_OFFSET] = int(current_withdrawal["withdrawal_token"])
         memory[ids.withdrawal.address_ + WITHDRAWAL_AMOUNT_OFFSET] = int(current_withdrawal["withdrawal_amount"])
         memory[ids.withdrawal.address_ + WITHDRAWAL_ADDRESS_OFFSET] = int(current_withdrawal["stark_key"])
