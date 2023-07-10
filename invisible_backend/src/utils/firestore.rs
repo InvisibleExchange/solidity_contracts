@@ -261,7 +261,9 @@ fn store_new_position(
         "liquidations",
         Some(write_path),
         &json!({
-            "liquidation_price": &position.liquidation_price
+            "liquidation_price": &position.liquidation_price,
+            "synthetic_token": &position.synthetic_token,
+            "order_side": &position.order_side,
         }),
         documents::WriteOptions::default(),
     );
