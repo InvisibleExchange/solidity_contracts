@@ -127,9 +127,9 @@ fn hash_order(
     hash_inputs.push(pos_addr_string);
 
     let order_side: BigUint = if *order_side == OrderSide::Long {
-        BigUint::zero()
-    } else {
         BigUint::one()
+    } else {
+        BigUint::zero()
     };
     hash_inputs.push(&order_side);
 
@@ -139,6 +139,8 @@ fn hash_order(
     hash_inputs.push(&synthetic_amount);
     let collateral_amount = BigUint::from_u64(collateral_amount).unwrap();
     hash_inputs.push(&collateral_amount);
+
+    println!("hash_inputs: {:?}", hash_inputs);
 
     let order_hash = pedersen_on_vec(&hash_inputs);
 
