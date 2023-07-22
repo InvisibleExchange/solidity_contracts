@@ -32,7 +32,18 @@ async function main2() {
     if (err) {
       console.log(err);
     } else {
-      console.log(response);
+      // console.log(response);
+
+      let res_map = {};
+      for (let i = 0; i < response.state_tree.length; i++) {
+        const element = response.state_tree[i];
+
+        if (element != 0) {
+          res_map[i] = element;
+        }
+      }
+
+      console.log(res_map);
     }
   });
 }

@@ -22,6 +22,8 @@ service Engine {
 
     rpc change_position_margin (MarginChangeReq) returns (MarginChangeRes);
 
+    rpc open_order_tab (OrderTabReq) returns (SuccessResponse);
+
     //
 
     // rpc start_funding (StartFundingUpdatesReq) returns (SuccessResponse);
@@ -207,6 +209,49 @@ message LiquidationOrderResponse {
     GrpcPerpPosition new_position = 3;
 }
 
+
+
+// ------ ORDERS TAB --------------
+
+message OrderTabReq {
+    repeated GrpcNote base_notes_in = 1;
+    GrpcNote base_refund_note = 2;
+    repeated GrpcNote quote_notes_in = 3;
+    GrpcNote quote_refund_note = 4;
+    uint64 base_token = 5;
+    uint64 quote_token = 6;
+    GrpcPerpPosition position = 7;
+    uint64 expiration_timestamp = 8;
+    bool is_perp = 9;
+    bool is_smart_contract = 10;
+    string pub_key = 11;
+    uint64 user_id = 12;
+    uint32 market_id = 13;
+    uint32 tab_id = 14;
+    Signature signature = 15;
+
+}
+
+message OrderTab {
+    TabHeader tab_header = 1;
+    uint64 base_token = 2;
+    uint64 quote_token = 3;
+    uint64 base_amount = 4;
+    uint64 quote_amount = 5;
+    GrpcPerpPosition position = 6;
+    
+}
+
+message TabHeader {
+    uint64 tab_id = 1;
+    uint64 expiration_timestamp = 2;
+    bool is_perp = 3;
+    bool is_smart_contract = 4;
+    string pub_key = 5;
+    uint64 user_id = 6;
+    uint32 market_id = 7;
+
+}
 
 
 // ------ ORDER BOOK ------------------

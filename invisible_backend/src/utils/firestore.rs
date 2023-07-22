@@ -57,6 +57,45 @@ impl FirebaseNoteObject {
     }
 }
 
+
+// ? Order Tab
+pub struct OrderTabObject {
+    pub address: [String; 2],
+    pub commitment: String,
+    pub hidden_amount: String,
+    pub index: String,
+    pub token: String,
+}
+
+impl OrderTabObject {
+    pub fn from_note(note: &Note) -> OrderTabObject {
+        // let hash8 = trimHash(yt, 64);
+        // let hiddentAmount = bigInt(amount).xor(hash8).value;
+
+        let yt_digits = note.blinding.to_u64_digits();
+        let yt_trimmed = if yt_digits.len() == 0 {
+            0
+        } else {
+            yt_digits[0]
+        };
+
+        let hidden_amount = note.amount ^ yt_trimmed;
+
+        return OrderTabObject {
+            address: [note.address.x.to_string(), note.address.y.to_string()],
+            commitment: pedersen(&BigUint::from_u64(note.amount).unwrap(), &note.blinding)
+                .to_string(),
+            hidden_amount: hidden_amount.to_string(),
+            index: note.index.to_string(),
+            token: note.token.to_string(),
+        };
+    }
+}
+
+
+// * ==================================================================================
+
+
 pub fn create_session() -> ServiceSession {
     let mut cred =
         Credentials::from_file("firebase-service-account.json").expect("Read credentials file");

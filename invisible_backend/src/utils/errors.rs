@@ -308,14 +308,14 @@ pub fn send_split_notes_error_reply(err_msg: String) -> Result<Response<SplitNot
     return Ok(Response::new(reply));
 }
 
-// pub fn send_funding_error_reply(err_msg: String) -> Result<Response<SuccessResponse>, Status> {
-//     let reply = SuccessResponse {
-//         successful: false,
-//         error_message: err_msg,
-//     };
+pub fn send_open_tab_reply(err_msg: String) -> Result<Response<SuccessResponse>, Status> {
+    let reply = SuccessResponse {
+        successful: false,
+        error_message: err_msg,
+    };
 
-//     return Ok(Response::new(reply));
-// }
+    return Ok(Response::new(reply));
+}
 
 pub fn send_margin_change_error_reply(
     err_msg: String,

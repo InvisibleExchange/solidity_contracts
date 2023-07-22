@@ -400,6 +400,7 @@ pub fn proccess_perp_matching_result(
                         ts: _,
                         user_id,
                     } => {
+
                         if let Order::Perp(perp_order) = order {
                             if side == OBOrderSide::Ask {
                                 // The synthetic exchnaged in the swap
@@ -436,14 +437,14 @@ pub fn proccess_perp_matching_result(
                                     )
                                 };
 
-                                if collateral_spent > perp_order.collateral_amount {
-                                    println!(
-                                        "collateral_spent: {}, < perp_order.collateral_amount: {}",
-                                        collateral_spent, perp_order.collateral_amount
-                                    )
-                                }
-                                let collateral_spent =
-                                    min(collateral_spent, perp_order.collateral_amount);
+                                // if collateral_spent > perp_order.collateral_amount {
+                                //     println!(
+                                //         "collateral_spent: {}, < perp_order.collateral_amount: {}",
+                                //         collateral_spent, perp_order.collateral_amount
+                                //     )
+                                // }
+                                // let collateral_spent =
+                                //     min(collateral_spent, perp_order.collateral_amount);
 
                                 // transactions are ordered as [(taker,maker), (taker,maker), ...]
                                 let take_fee = i % 2 == 0;

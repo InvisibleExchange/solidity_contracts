@@ -26,6 +26,7 @@ use crate::{
         perp_swap::PerpSwap,
         DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
     },
+    server::grpc::engine::OrderTabReq,
     transaction_batch::{tx_batch_helpers::_calculate_funding_rates, CHAIN_IDS},
     transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
     trees::TreeStateType,
@@ -109,6 +110,8 @@ pub struct TransactionBatch {
     pub blocked_perp_order_ids: Arc<Mutex<HashMap<u64, bool>>>, // maps orderIds to whether they are blocked while another thread is processing the same order (in case of partial fills)
     pub insurance_fund: Arc<Mutex<i64>>, // insurance fund used to pay for liquidations
     //
+    pub order_tabs_state_tree: Arc<Mutex<SuperficialTree>>, // current order tabs state tree (superficial tree only stores the leaves)
+    //
     pub latest_index_price: HashMap<u64, u64>,
     pub min_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the min price, OracleUpdate info of this batch
     pub max_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the max price, OracleUpdate info of this batch
@@ -155,6 +158,8 @@ impl TransactionBatch {
         let perpetual_updated_position_hashes: HashMap<u64, BigUint> = HashMap::new();
         let blocked_perp_order_ids: HashMap<u64, bool> = HashMap::new();
 
+        let order_tabs_state_tree = SuperficialTree::new(16);
+
         let mut latest_index_price: HashMap<u64, u64> = HashMap::new();
         let mut min_index_price_data: HashMap<u64, (u64, OracleUpdate)> = HashMap::new();
         let mut max_index_price_data: HashMap<u64, (u64, OracleUpdate)> = HashMap::new();
@@ -198,6 +203,8 @@ impl TransactionBatch {
             )),
             blocked_perp_order_ids: Arc::new(Mutex::new(blocked_perp_order_ids)),
             insurance_fund: Arc::new(Mutex::new(0)),
+            //
+            order_tabs_state_tree: Arc::new(Mutex::new(order_tabs_state_tree)),
             //
             latest_index_price,
             min_index_price_data,
@@ -822,6 +829,125 @@ impl TransactionBatch {
         drop(swap_output_json);
 
         Ok((z_index, position))
+    }
+
+    pub fn open_orders_tab(&self, order_tab_req: OrderTabReq) -> std::result::Result<(), String> {
+        let mut base_amount = 0;
+        let mut base_refund_note: Option<Note> = None;
+        let mut quote_amount = 0;
+        let mut quote_refund_note: Option<Note> = None;
+        let mut position: Option<PerpPosition> = None;
+
+        if order_tab_req.is_perp {
+            // ? Check that the position exists
+            let perp_state_tree = self.perpetual_state_tree.lock();
+
+            if order_tab_req.position.is_none() {
+                return Err("position is undefined".to_string());
+            }
+
+            let position_ = order_tab_req.position.unwrap();
+            if position_.synthetic_token != order_tab_req.base_token
+                || !VALID_COLLATERAL_TOKENS.contains(&order_tab_req.quote_token)
+            {
+                return Err("token missmatch".to_string());
+            }
+
+            let position_ = PerpPosition::try_from(position_);
+
+            if let Err(e) = position_ {
+                return Err(e.to_string());
+            }
+
+            position = position_.ok();
+
+            let leaf_hash =
+                perp_state_tree.get_leaf_by_index(position.as_ref().unwrap().index as u64);
+
+            if leaf_hash != position.as_ref().unwrap().hash {
+                return Err("note spent to open tab does not exist".to_string());
+            }
+        } else {
+            // ? Check that the notes spent exist
+            let state_tree = self.state_tree.lock();
+
+            // & BASE TOKEN —————————————————————————
+            // ? Check that notes for base token exist
+            for note_ in order_tab_req.base_notes_in.into_iter() {
+                if note_.token != order_tab_req.base_token {
+                    return Err("token missmatch".to_string());
+                }
+
+                let note = Note::try_from(note_);
+                if let Err(e) = note {
+                    return Err(e.to_string());
+                }
+                let note = note.unwrap();
+
+                let leaf_hash = state_tree.get_leaf_by_index(note.index);
+
+                if leaf_hash != note.hash {
+                    return Err("note spent to open tab does not exist".to_string());
+                }
+
+                base_amount += note.amount;
+            }
+            // ? Check if there is a refund note for base token
+            if order_tab_req.base_refund_note.is_some() {
+                let note_ = order_tab_req.base_refund_note.unwrap();
+                if note_.token != order_tab_req.base_token {
+                    return Err("token missmatch".to_string());
+                }
+
+                base_amount -= note_.amount;
+
+                base_refund_note = Note::try_from(note_).ok();
+            }
+
+            // & QUOTE TOKEN —————————————————————————
+            // ? Check that notes for quote token exist
+            for note_ in order_tab_req.quote_notes_in.into_iter() {
+                if note_.token != order_tab_req.quote_token {
+                    return Err("token missmatch".to_string());
+                }
+
+                let note = Note::try_from(note_);
+                if let Err(e) = note {
+                    return Err(e.to_string());
+                }
+                let note = note.unwrap();
+
+                let leaf_hash = state_tree.get_leaf_by_index(note.index);
+
+                if leaf_hash != note.hash {
+                    return Err("note spent to open tab does not exist".to_string());
+                }
+
+                quote_amount += note.amount;
+            }
+            // ? Check if there is a refund note for base token
+            if order_tab_req.quote_refund_note.is_some() {
+                let note_ = order_tab_req.quote_refund_note.unwrap();
+                if note_.token != order_tab_req.quote_token {
+                    return Err("token missmatch".to_string());
+                }
+
+                quote_amount -= note_.amount;
+                quote_refund_note = Note::try_from(note_).ok();
+            }
+
+            drop(state_tree);
+        }
+
+        // ? Verify the signature
+
+        // ? Create an Orders tab object
+
+        // ? add it to the order tabs state
+
+        // ? add it to the database
+
+        Ok(())
     }
 
     // * =================================================================

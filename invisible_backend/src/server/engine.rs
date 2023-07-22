@@ -13,8 +13,9 @@ use super::{
         AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, EmptyReq,
         FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes, GrpcPerpPosition,
         LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
-        LiquidityRes, OracleUpdateReq, OrderResponse, PerpOrderMessage, RestoreOrderBookMessage,
-        SpotOrderRestoreMessage, StateInfoReq, StateInfoRes, SuccessResponse, WithdrawalMessage,
+        LiquidityRes, OracleUpdateReq, OrderResponse, OrderTabReq, PerpOrderMessage,
+        RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq, StateInfoRes,
+        SuccessResponse, WithdrawalMessage,
     },
     server_helpers::{
         amend_order_execution::{
@@ -1322,6 +1323,36 @@ impl Engine for EngineService {
                 );
             }
         }
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn open_order_tab(
+        &self,
+        req: Request<OrderTabReq>,
+    ) -> Result<Response<SuccessResponse>, Status> {
+        tokio::task::yield_now().await;
+
+        let req: OrderTabReq = req.into_inner();
+
+        let is_perp = req.is_perp;
+
+
+        
+
+
+
+
+        // ===================================================================================
+
+        let reply = SuccessResponse {
+            successful: true,
+            error_message: "".to_string(),
+        };
+
+        return Ok(Response::new(reply));
     }
 
     //
