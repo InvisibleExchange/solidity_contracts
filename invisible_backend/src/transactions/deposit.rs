@@ -176,7 +176,7 @@ impl Transaction for Deposit {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        _: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,

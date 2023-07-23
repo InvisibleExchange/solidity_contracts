@@ -1,6 +1,39 @@
-use std::{fmt::Debug, sync::Arc, time::SystemTime};
+use std::{fmt::Debug, time::SystemTime};
 
-use parking_lot::Mutex;
+
+// let could_be_matched;
+//             let opposite_price: f64;
+//             match side {
+//                 // verify bid/ask price overlap
+//                 OrderSide::Bid => {
+//                     if is_market_order && price >= opposite_order.price + 0.01 {
+//                         could_be_matched = true;
+//                         opposite_price = opposite_order.price + 0.01;
+//                     } else {
+//                         if price >= opposite_order.price {
+//                             could_be_matched = true;
+//                         } else {
+//                             could_be_matched = false;
+//                         }
+//                         opposite_price = opposite_order.price;
+//                     }
+//                 }
+//                 OrderSide::Ask => {
+//                     if is_market_order && price <= opposite_order.price - 0.01 {
+//                         could_be_matched = true;
+//                         opposite_price = opposite_order.price - 0.01;
+//                     } else {
+//                         if price <= opposite_order.price {
+//                             could_be_matched = true;
+//                         } else {
+//                             could_be_matched = false;
+//                         }
+//                         opposite_price = opposite_order.price;
+//                     }
+//                 }
+//             };
+
+//             if could_be_matched {
 
 use crate::{
     perpetual::{
@@ -29,21 +62,13 @@ impl From<PerpOrderSide> for OrderSide {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OrderWrapper {
-    pub order: Arc<Mutex<SharedOrderInner>>, // The order to be executed
-    pub price: f64,                          // The prices at which the order is to be executed
-    pub qty_left: u64,                       // The amounts left to be executed
-}
-
-/// This is the inner state of the order wrapper
-/// It can be used to place orders at different price levels with different amounts
-#[derive(Clone)]
-pub struct SharedOrderInner {
     pub order: Order,          // The order to be executed
     pub signature: Signature,  // The order signature
     pub order_id: u64,         // The id of the order
     pub order_side: OrderSide, // The side of the order
+    pub qty_left: u64,         // The amount left to be executed
     pub user_id: u64,
 }
 

@@ -66,8 +66,6 @@ pub async fn execute_spot_swaps_after_amend_order(
         }
     };
 
-    
-
     let retry_messages;
     match await_swap_handles(ws_connections, privileged_ws_connections, handles, user_id).await {
         Ok(rm) => retry_messages = rm,
@@ -83,10 +81,9 @@ pub async fn execute_spot_swaps_after_amend_order(
             return Err("Order not found".to_string());
         }
 
-        let w = order_wrapper.unwrap();
-        let ord = &w.order.lock().order.clone();
+        let wrapper = order_wrapper.unwrap();
         let limit_order: LimitOrder;
-        if let Order::Spot(limit_order_) = ord {
+        if let Order::Spot(limit_order_) = wrapper.order {
             limit_order = limit_order_.clone();
         } else {
             return Err("Order not found".to_string());
@@ -165,15 +162,13 @@ pub async fn execute_perp_swaps_after_amend_order(
             return Err("Order not found".to_string());
         }
 
-        let w = order_wrapper.unwrap();
-        let ord = &w.order.lock().order.clone();
+        let wrapper = order_wrapper.unwrap();
         let perp_order: PerpOrder;
-        if let Order::Perp(perp_order_) = ord {
+        if let Order::Perp(perp_order_) = wrapper.order {
             perp_order = perp_order_.clone();
         } else {
             return Err("Order not found".to_string());
         }
-        drop(ord);
 
         if let Err(e) = retry_failed_perp_swaps(
             mpsc_tx,

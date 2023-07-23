@@ -26,6 +26,7 @@ use crate::{
         },
         storage::MainStorage,
     },
+    order_tab::OrderTab,
 };
 use tokio::sync::Mutex as TokioMutex;
 use tokio::task::JoinHandle as TokioJoinHandle;
@@ -65,6 +66,25 @@ pub fn verify_notes_existence(
             return Err("Note does not exist".to_string());
         }
     }
+
+    Ok(())
+}
+
+pub fn verify_tab_existence(
+    tab: &Arc<Mutex<OrderTab>>,
+    tab_state_tree: &Arc<Mutex<SuperficialTree>>,
+) -> Result<(), String> {
+    let tree = tab_state_tree.lock();
+
+    let tab = tab.lock();
+
+    let tab_hash = tree.get_leaf_by_index(tab.tab_idx as u64);
+
+    if tab_hash != tab.hash {
+        return Err("Order tab does not exist".to_string());
+    }
+
+    drop(tab);
 
     Ok(())
 }
@@ -396,7 +416,7 @@ pub fn handle_cancel_order_repsonse(
     res: &Result<Success, Failed>,
     is_perp: bool,
     order_id: u64,
-    partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+    partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     perpetual_partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
 ) -> Result<Response<CancelOrderResponse>, Status> {
     match &res {
@@ -416,8 +436,10 @@ pub fn handle_cancel_order_repsonse(
                 let mut partial_fill_tracker_m = partial_fill_tracker.lock();
 
                 let pfr_info = partial_fill_tracker_m.remove(&(order_id));
-                pfr_note = if pfr_info.is_some() {
-                    Some(GrpcNote::from(pfr_info.unwrap().0))
+                pfr_note = if pfr_info.is_some() && pfr_info.as_ref().unwrap().0.is_some() {
+                    Some(GrpcNote::from(
+                        pfr_info.as_ref().unwrap().0.as_ref().unwrap().clone(),
+                    ))
                 } else {
                     None
                 };

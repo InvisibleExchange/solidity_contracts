@@ -5,15 +5,18 @@ pub mod engine {
 use std::{
     collections::HashMap,
     str::FromStr,
+    sync::Arc,
     thread::{JoinHandle, ThreadId},
 };
 
 use engine::{Address, GrpcNote, LimitOrderMessage, Signature as GrpcSignature};
 use error_stack::{Report, Result};
 use num_bigint::{BigInt, BigUint};
+use parking_lot::Mutex;
 use serde::Serialize;
 
 use crate::{
+    order_tab::{OrderTab, TabHeader},
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
@@ -28,7 +31,7 @@ use crate::{
     transaction_batch::tx_batch_structs::OracleUpdate,
     transactions::{
         deposit::Deposit,
-        limit_order::LimitOrder,
+        limit_order::{LimitOrder, SpotNotesInfo},
         swap::{Swap, SwapResponse},
         withdrawal::Withdrawal,
     },
@@ -40,8 +43,9 @@ use crate::{
 };
 
 use self::engine::{
-    DepositMessage, GrpcCloseOrderFields, GrpcOpenOrderFields, GrpcOracleUpdate, GrpcPerpPosition,
-    LiquidationOrderMessage, MarginChangeReq, PerpOrderMessage, WithdrawalMessage,
+    DepositMessage, GrpcCloseOrderFields, GrpcOpenOrderFields, GrpcOracleUpdate, GrpcOrderTab,
+    GrpcPerpPosition, GrpcTabHeader, LiquidationOrderMessage, MarginChangeReq, PerpOrderMessage,
+    SpotNotesInfoMessage, WithdrawalMessage,
 };
 
 // * TRANSACTION ENGINE ======================================================================
@@ -81,6 +85,41 @@ impl TryFrom<LimitOrderMessage> for LimitOrder {
     type Error = Report<GrpcMessageError>;
 
     fn try_from(req: LimitOrderMessage) -> Result<Self, GrpcMessageError> {
+        let spot_note_info: Option<SpotNotesInfo> = if req.spot_note_info.is_some() {
+            let notes_info =
+                SpotNotesInfo::try_from(req.spot_note_info.ok_or(GrpcMessageError {})?)?;
+            Some(notes_info)
+        } else {
+            None
+        };
+
+        let order_tab = if req.order_tab.is_some() {
+            let tab = OrderTab::try_from(req.order_tab.ok_or(GrpcMessageError {})?)?;
+            Some(Arc::new(Mutex::new(tab)))
+        } else {
+            None
+        };
+
+        let limit_order = LimitOrder::new(
+            0,
+            req.expiration_timestamp,
+            req.token_spent,
+            req.token_received,
+            req.amount_spent,
+            req.amount_received,
+            req.fee_limit,
+            spot_note_info,
+            order_tab,
+        );
+
+        Ok(limit_order)
+    }
+}
+
+impl TryFrom<SpotNotesInfoMessage> for SpotNotesInfo {
+    type Error = Report<GrpcMessageError>;
+
+    fn try_from(req: SpotNotesInfoMessage) -> Result<Self, GrpcMessageError> {
         let mut notes_in: Vec<Note> = Vec::new();
         for n in req.notes_in.iter() {
             let note = Note::try_from(n.clone())?;
@@ -96,23 +135,81 @@ impl TryFrom<LimitOrderMessage> for LimitOrder {
             refund_note = None
         }
 
-        let limit_order = LimitOrder::new(
-            0,
-            req.expiration_timestamp,
-            req.token_spent,
-            req.token_received,
-            req.amount_spent,
-            req.amount_received,
-            req.fee_limit,
-            EcPoint::try_from(req.dest_received_address.ok_or(GrpcMessageError {})?)?,
-            BigUint::from_str(req.dest_received_blinding.as_str())
+        let spot_notes_info = SpotNotesInfo {
+            dest_received_address: EcPoint::try_from(
+                req.dest_received_address.ok_or(GrpcMessageError {})?,
+            )?,
+            dest_received_blinding: BigUint::from_str(req.dest_received_blinding.as_str())
                 .ok()
                 .ok_or(GrpcMessageError {})?,
             notes_in,
             refund_note,
+        };
+
+        Ok(spot_notes_info)
+    }
+}
+
+impl TryFrom<GrpcOrderTab> for OrderTab {
+    type Error = Report<GrpcMessageError>;
+
+    fn try_from(req: GrpcOrderTab) -> Result<Self, GrpcMessageError> {
+        let tab_header = TabHeader::try_from(req.tab_header.ok_or(GrpcMessageError {})?)?;
+        let position = if req.position.is_some() {
+            Some(PerpPosition::try_from(
+                req.position.ok_or(GrpcMessageError {})?,
+            )?)
+        } else {
+            None
+        };
+        let order_tab = OrderTab::new(
+            tab_header,
+            req.base_token,
+            req.quote_token,
+            req.base_amount,
+            req.quote_amount,
+            position,
         );
 
-        Ok(limit_order)
+        Ok(order_tab)
+    }
+}
+
+impl TryFrom<GrpcTabHeader> for TabHeader {
+    type Error = Report<GrpcMessageError>;
+
+    fn try_from(req: GrpcTabHeader) -> Result<Self, GrpcMessageError> {
+        let header = TabHeader::new(
+            req.expiration_timestamp,
+            req.is_perp,
+            req.is_smart_contract,
+            BigUint::from_str(&req.pub_key).unwrap_or_default(),
+        );
+
+        Ok(header)
+    }
+}
+
+impl From<OrderTab> for GrpcOrderTab {
+    fn from(req: OrderTab) -> Self {
+        let header = GrpcTabHeader {
+            expiration_timestamp: req.tab_header.expiration_timestamp,
+            is_perp: req.tab_header.is_perp,
+            is_smart_contract: req.tab_header.is_smart_contract,
+            pub_key: req.tab_header.pub_key.to_string(),
+        };
+
+        let order_tab = GrpcOrderTab {
+            tab_idx: req.tab_idx,
+            tab_header: Some(header),
+            base_token: req.base_token,
+            quote_token: req.quote_token,
+            base_amount: req.base_amount,
+            quote_amount: req.quote_amount,
+            position: None,
+        };
+
+        return order_tab;
     }
 }
 

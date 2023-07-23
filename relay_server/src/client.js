@@ -80,7 +80,7 @@ app.post("/submit_limit_order", (req, res) => {
     } else {
       res.send({ response: response });
 
-      storeSpotOrder(db, response.order_id, req.body);
+      // Todo: storeSpotOrder(db, response.order_id, req.body);
     }
   });
 });
@@ -102,7 +102,7 @@ app.post("/submit_perpetual_order", (req, res) => {
     if (err) {
       console.log(err);
     } else {
-      storePerpOrder(db, response.order_id, req.body);
+      // Todo: storePerpOrder(db, response.order_id, req.body);
 
       res.send({ response: response });
     }

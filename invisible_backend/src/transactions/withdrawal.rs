@@ -193,7 +193,7 @@ impl Transaction for Withdrawal {
     fn execute_transaction(
         &mut self,
         tree: Arc<Mutex<SuperficialTree>>,
-        _: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,

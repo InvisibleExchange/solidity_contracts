@@ -86,7 +86,7 @@ pub trait Transaction {
     fn execute_transaction(
         &mut self,
         tree: Arc<Mutex<SuperficialTree>>,
-        partial_fill_tracker: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
@@ -98,7 +98,7 @@ pub trait Transaction {
 
 pub struct TransactionBatch {
     pub state_tree: Arc<Mutex<SuperficialTree>>, // current state tree (superficial tree only stores the leaves)
-    pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Note, u64)>>>, // maps orderIds to partial fill refund notes and filled mounts
+    pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>, // maps orderIds to partial fill refund notes and filled mounts
     pub updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>, // info to get merkle proofs at the end of the batch
     pub swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>, // json output map for cairo input
     pub blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>, // maps orderIds to whether they are blocked while another thread is processing the same order (in case of partial fills)
@@ -147,7 +147,7 @@ impl TransactionBatch {
         perp_rollback_safeguard: Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>,
     ) -> TransactionBatch {
         let state_tree = SuperficialTree::new(spot_tree_depth);
-        let partial_fill_tracker: HashMap<u64, (Note, u64)> = HashMap::new();
+        let partial_fill_tracker: HashMap<u64, (Option<Note>, u64)> = HashMap::new();
         let updated_note_hashes: HashMap<u64, BigUint> = HashMap::new();
         let swap_output_json: Vec<serde_json::Map<String, Value>> = Vec::new();
         let blocked_order_ids: HashMap<u64, bool> = HashMap::new();

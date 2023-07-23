@@ -100,8 +100,6 @@ pub struct TabHeader {
     pub is_perp: bool,
     pub is_smart_contract: bool,
     pub pub_key: BigUint,
-    pub user_id: u64,
-    pub market_id: u16,
 }
 
 impl TabHeader {
@@ -110,16 +108,12 @@ impl TabHeader {
         is_perp: bool,
         is_smart_contract: bool,
         pub_key: BigUint,
-        user_id: u64,
-        market_id: u16,
     ) -> TabHeader {
         TabHeader {
-            user_id,
             expiration_timestamp,
             is_perp,
             is_smart_contract,
             pub_key,
-            market_id,
         }
     }
 
@@ -288,8 +282,6 @@ pub fn open_orders_tab(
         order_tab_req.is_perp,
         order_tab_req.is_smart_contract,
         pub_key,
-        order_tab_req.user_id,
-        order_tab_req.market_id as u16,
     );
 
     let order_tab: OrderTab = OrderTab::new(
@@ -323,4 +315,104 @@ pub fn open_orders_tab(
     // TODO: ADD TO DATATBASE
 
     Ok(())
+}
+
+// * SERIALIZE  ==========================================================================================
+
+use serde::ser::{Serialize, SerializeStruct, Serializer};
+impl Serialize for OrderTab {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut note = serializer.serialize_struct("TabHeader", 4)?;
+
+        note.serialize_field("tab_idx", &self.tab_idx)?;
+        note.serialize_field("tab_header", &self.tab_header)?;
+        note.serialize_field("base_token", &self.base_token)?;
+        note.serialize_field("quote_token", &self.quote_token)?;
+        note.serialize_field("base_amount", &self.base_amount)?;
+        note.serialize_field("quote_amount", &self.quote_amount)?;
+        note.serialize_field("position", &self.position)?;
+        note.serialize_field("hash", &self.hash.to_string())?;
+
+        return note.end();
+    }
+}
+
+impl Serialize for TabHeader {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut note = serializer.serialize_struct("TabHeader", 4)?;
+
+        note.serialize_field("expiration_timestamp", &self.expiration_timestamp)?;
+        note.serialize_field("is_perp", &self.is_perp)?;
+        note.serialize_field("is_smart_contract", &self.is_smart_contract)?;
+        note.serialize_field("pub_key", &self.pub_key.to_string())?;
+
+        return note.end();
+    }
+}
+
+// * DESERIALIZE * //
+use serde::de::{Deserialize, Deserializer};
+use serde::Deserialize as DeserializeTrait;
+
+impl<'de> Deserialize<'de> for TabHeader {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(DeserializeTrait)]
+        struct Helper {
+            expiration_timestamp: u64,
+            is_perp: bool,
+            is_smart_contract: bool,
+            pub_key: String,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(TabHeader {
+            expiration_timestamp: helper.expiration_timestamp,
+            is_perp: helper.is_perp,
+            is_smart_contract: helper.is_smart_contract,
+            pub_key: BigUint::from_str(helper.pub_key.as_str())
+                .map_err(|err| serde::de::Error::custom(err.to_string()))?,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for OrderTab {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+
+        #[derive(DeserializeTrait)]
+        struct Helper {
+            tab_idx: u32,
+            tab_header: TabHeader,
+            base_token: u64,
+            quote_token: u64,
+            base_amount: u64,
+            quote_amount: u64,
+            position: Option<PerpPosition>,
+            hash: String,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+        Ok(OrderTab {
+            tab_idx: helper.tab_idx,
+            tab_header: helper.tab_header,
+            base_token: helper.base_token,
+            quote_token: helper.quote_token,
+            base_amount: helper.base_amount,
+            quote_amount: helper.quote_amount,
+            position: helper.position,
+            hash: BigUint::from_str(helper.hash.as_str())
+                .map_err(|err| serde::de::Error::custom(err.to_string()))?,
+        })
+    }
 }

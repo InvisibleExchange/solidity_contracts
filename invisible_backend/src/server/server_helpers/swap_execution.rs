@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::matching_engine::orderbook::{Failed, Success};
-use crate::matching_engine::orders::{new_batch_order_request, new_limit_order_request};
+use crate::matching_engine::orders::new_limit_order_request;
 use crate::matching_engine::{
     domain::{Order, OrderSide as OBOrderSide},
     orderbook::OrderBook,
@@ -23,18 +23,18 @@ use crate::transactions::swap::OrderFillResponse;
 use crate::transactions::transaction_helpers::db_updates::store_spot_fill;
 use crate::transactions::{
     swap::{Swap, SwapResponse},
-    transaction_helpers::rollbacks::{initiate_rollback, RollbackInfo},
+    transaction_helpers::rollbacks::RollbackInfo,
 };
 
 use crate::utils::crypto_utils::Signature;
+use crate::utils::errors::TransactionExecutionError;
 use crate::utils::storage::BackupStorage;
-use crate::utils::{errors::TransactionExecutionError, notes::Note};
 
 use tokio::sync::{mpsc::Sender as MpscSender, oneshot::Sender as OneshotSender};
 
 use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
 
-use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType, RollbackMessage};
+use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType};
 use super::super::server_helpers::get_order_side;
 use super::{
     broadcast_message, proccess_spot_matching_result, send_direct_message, WsConnectionsMap,
@@ -63,6 +63,7 @@ pub async fn execute_swap(
     let taker_side: OBOrderSide;
     let maker_order_id: u64;
     let taker_order_id: u64;
+    let maker_order: LimitOrder;
     if swap.fee_taken_a == 0 {
         maker_order_id = swap.order_a.order_id;
         maker_side = get_order_side(
@@ -78,6 +79,7 @@ pub async fn execute_swap(
         )
         .unwrap();
         taker_order_id = swap.order_b.order_id;
+        maker_order = swap.order_a.clone();
     } else {
         maker_order_id = swap.order_b.order_id;
         maker_side = get_order_side(
@@ -93,6 +95,7 @@ pub async fn execute_swap(
         )
         .unwrap();
         taker_order_id = swap.order_a.order_id;
+        maker_order = swap.order_b.clone();
     };
     drop(book__);
 
@@ -242,18 +245,18 @@ pub async fn execute_swap(
                 let should_rollback = rollback_safeguard.lock().contains_key(&thread_id);
 
                 if should_rollback {
-                    let notes_in_a: (u64, Option<Vec<Note>>) =
-                        (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
-                    let notes_in_b: (u64, Option<Vec<Note>>) =
-                        (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
+                    // let notes_in_a: (u64, Option<Vec<Note>>) =
+                    //     (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
+                    // let notes_in_b: (u64, Option<Vec<Note>>) =
+                    //     (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
 
-                    let rollback_message = RollbackMessage {
-                        tx_type: "swap".to_string(),
-                        notes_in_a,
-                        notes_in_b,
-                    };
+                    // let rollback_message = RollbackMessage {
+                    //     tx_type: "swap".to_string(),
+                    //     notes_in_a,
+                    //     notes_in_b,
+                    // };
 
-                    initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
+                    // initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
                 }
 
                 let mut maker_order_id_ = None;
@@ -276,9 +279,11 @@ pub async fn execute_swap(
                         // ? else forcefully cancel that order since it is invalid
                         else {
                             if maker_side == OBOrderSide::Bid {
-                                book.bid_queue.restore_pending_order(maker_order_id, qty);
+                                book.bid_queue
+                                    .restore_pending_order(Order::Spot(maker_order), qty);
                             } else {
-                                book.ask_queue.restore_pending_order(maker_order_id, qty);
+                                book.ask_queue
+                                    .restore_pending_order(Order::Spot(maker_order), qty);
                             }
 
                             if taker_order_id % 2_u64.pow(32) == invalid_order_id % 2_u64.pow(32) {
@@ -287,9 +292,11 @@ pub async fn execute_swap(
                         }
                     } else {
                         if maker_side == OBOrderSide::Bid {
-                            book.bid_queue.restore_pending_order(maker_order_id, qty);
+                            book.bid_queue
+                                .restore_pending_order(Order::Spot(maker_order), qty);
                         } else {
-                            book.ask_queue.restore_pending_order(maker_order_id, qty);
+                            book.ask_queue
+                                .restore_pending_order(Order::Spot(maker_order), qty);
                         }
 
                         maker_order_id_ = Some(maker_order_id);
@@ -308,25 +315,27 @@ pub async fn execute_swap(
             let should_rollback = rollback_safeguard.lock().contains_key(&thread_id);
 
             if should_rollback {
-                let notes_in_a: (u64, Option<Vec<Note>>) =
-                    (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
-                let notes_in_b: (u64, Option<Vec<Note>>) =
-                    (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
+                // let notes_in_a: (u64, Option<Vec<Note>>) =
+                //     (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
+                // let notes_in_b: (u64, Option<Vec<Note>>) =
+                //     (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
 
-                let rollback_message = RollbackMessage {
-                    tx_type: "swap".to_string(),
-                    notes_in_a,
-                    notes_in_b,
-                };
+                // let rollback_message = RollbackMessage {
+                //     tx_type: "swap".to_string(),
+                //     notes_in_a,
+                //     notes_in_b,
+                // };
 
-                initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
+                // initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
             }
 
             let mut book = order_book.lock().await;
             if maker_side == OBOrderSide::Bid {
-                book.bid_queue.restore_pending_order(maker_order_id, qty);
+                book.bid_queue
+                    .restore_pending_order(Order::Spot(maker_order), qty);
             } else {
-                book.ask_queue.restore_pending_order(maker_order_id, qty);
+                book.ask_queue
+                    .restore_pending_order(Order::Spot(maker_order), qty);
             }
 
             return (
@@ -441,35 +450,35 @@ pub async fn process_limit_order_request(
     return processed_res;
 }
 
-pub async fn process_batch_order_request(
-    order_book: &Arc<TokioMutex<OrderBook>>,
-    limit_order: LimitOrder,
-    side: OBOrderSide,
-    signature: Signature,
-    prices: Vec<f64>,
-    amounts: Vec<u64>,
-    user_id: u64,
-) -> Vec<std::result::Result<Success, Failed>> {
-    // ? Create a new OrderRequest object
-    let order_ = Order::Spot(limit_order);
-    let order_request = new_batch_order_request(
-        side,
-        order_,
-        signature,
-        prices,
-        amounts,
-        SystemTime::now(),
-        user_id,
-    );
+// pub async fn process_batch_order_request(
+//     order_book: &Arc<TokioMutex<OrderBook>>,
+//     limit_order: LimitOrder,
+//     side: OBOrderSide,
+//     signature: Signature,
+//     prices: Vec<f64>,
+//     amounts: Vec<u64>,
+//     user_id: u64,
+// ) -> Vec<std::result::Result<Success, Failed>> {
+//     // ? Create a new OrderRequest object
+//     let order_ = Order::Spot(limit_order);
+//     let order_request = new_batch_order_request(
+//         side,
+//         order_,
+//         signature,
+//         prices,
+//         amounts,
+//         SystemTime::now(),
+//         user_id,
+//     );
 
-    // ? Insert the order into the book and get back the matched results if any
-    let mut order_book_m = order_book.lock().await;
-    let processed_res = order_book_m.process_order(order_request);
+//     // ? Insert the order into the book and get back the matched results if any
+//     let mut order_book_m = order_book.lock().await;
+//     let processed_res = order_book_m.process_order(order_request);
 
-    drop(order_book_m);
+//     drop(order_book_m);
 
-    return processed_res;
-}
+//     return processed_res;
+// }
 
 use async_recursion::async_recursion;
 

@@ -78,16 +78,20 @@ message LimitOrderMessage {
     uint64 amount_spent = 4;
     uint64 amount_received = 5;
     uint64 fee_limit = 6;
-    Address dest_received_address = 7;
-    string dest_received_blinding = 8;
-    repeated GrpcNote notes_in = 9;
-    GrpcNote refund_note = 10;
-    Signature signature = 11;
-    bool is_market = 12; // true - market order, false - limit order
-    uint64 user_id = 13; // used to send a response thorugh a ws
-    // for batch orders (market makers)
-    repeated double prices = 14;
-    repeated uint64 amounts = 15;
+    SpotNotesInfoMessage spot_note_info = 7;
+    GrpcOrderTab order_tab = 8;
+    Signature signature = 9;
+    bool is_market = 10; // true - market order, false - limit order
+    uint64 user_id = 11; // used to send a response thorugh a ws
+}
+
+
+
+message SpotNotesInfoMessage {
+    Address dest_received_address = 1;
+    string dest_received_blinding = 2;
+    repeated GrpcNote notes_in = 3;
+    GrpcNote refund_note = 4;
 }
 
 
@@ -118,13 +122,14 @@ message AmendOrderRequest {
     uint32 market_id = 1;
     uint64 order_id = 2;
     bool order_side = 3; // true-Bid, false-Ask
-    repeated double new_prices = 4;
+    double new_price = 4;
     uint64 new_expiration = 5;
     Signature signature = 6;
     uint64 user_id = 7; // used to verify that the user is the owner of the order
     bool is_perp = 8;
     bool match_only = 9; // if true - only match the order, if false - match and amend
 }
+
 
 message AmendOrderResponse {
     bool successful = 1;
@@ -225,31 +230,26 @@ message OrderTabReq {
     bool is_perp = 9;
     bool is_smart_contract = 10;
     string pub_key = 11;
-    uint64 user_id = 12;
-    uint32 market_id = 13;
-    uint32 tab_id = 14;
-    Signature signature = 15;
+    Signature signature = 14;
 
 }
 
-message OrderTab {
-    TabHeader tab_header = 1;
-    uint64 base_token = 2;
-    uint64 quote_token = 3;
-    uint64 base_amount = 4;
-    uint64 quote_amount = 5;
-    GrpcPerpPosition position = 6;
+message GrpcOrderTab {
+    uint32 tab_idx = 1;
+    GrpcTabHeader tab_header = 2;
+    uint64 base_token = 3;
+    uint64 quote_token = 4;
+    uint64 base_amount = 5;
+    uint64 quote_amount = 6;
+    GrpcPerpPosition position = 7;
     
 }
 
-message TabHeader {
-    uint64 tab_id = 1;
-    uint64 expiration_timestamp = 2;
-    bool is_perp = 3;
-    bool is_smart_contract = 4;
-    string pub_key = 5;
-    uint64 user_id = 6;
-    uint32 market_id = 7;
+message GrpcTabHeader {
+    uint64 expiration_timestamp = 1;
+    bool is_perp = 2;
+    bool is_smart_contract = 3;
+    string pub_key = 4;
 
 }
 
@@ -431,6 +431,8 @@ message ActiveOrder {
     uint64 fee_limit = 8;
     repeated GrpcNote notes_in = 9;
     GrpcNote refund_note = 10;
+    GrpcOrderTab order_tab = 11;
+
 }
 
 message ActivePerpOrder {

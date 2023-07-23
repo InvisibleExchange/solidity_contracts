@@ -246,10 +246,14 @@ function storeSpotOrder(db, order_id, orderObject) {
       orderObject.amount_spent,
       orderObject.amount_received,
       orderObject.fee_limit,
+      // spot_note_info
       JSON.stringify(orderObject.dest_received_address),
       orderObject.dest_received_blinding,
       JSON.stringify(orderObject.notes_in),
       JSON.stringify(orderObject.refund_note),
+      // order_tab
+
+      //
       JSON.stringify(orderObject.signature),
       orderObject.user_id,
     ]);

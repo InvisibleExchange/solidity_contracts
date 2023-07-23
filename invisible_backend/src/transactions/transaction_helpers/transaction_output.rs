@@ -18,37 +18,49 @@ impl TransactionOutptut<'_> {
 
     pub fn wrap_output(
         &self,
-        prev_pfr_note_a: &Option<Note>,
-        prev_pfr_note_b: &Option<Note>,
-        swap_note_idx_a: u64,
-        swap_note_idx_b: u64,
-        new_pfr_idx_a: u64,
-        new_pfr_idx_b: u64,
+        // & spot_note_info_res - (prev_pfr_note, swap_note_idx, new_pfr_idx)
+        spot_note_info_res_a: &Option<(Option<Note>, u64, u64)>,
+        spot_note_info_res_b: &Option<(Option<Note>, u64, u64)>,
     ) -> serde_json::map::Map<String, Value> {
-        let swap_json1 = serde_json::to_value(&self.swap).unwrap();
-        let pfr_note_a_json = serde_json::to_value(prev_pfr_note_a).unwrap();
-        let pfr_note_b_json2 = serde_json::to_value(prev_pfr_note_b).unwrap();
-
-        let indexes_json = json!({
-            "order_a": {
-                "swap_note_idx": swap_note_idx_a,
-                "partial_fill_idx": new_pfr_idx_a,
-            },
-            "order_b": {
-                "swap_note_idx": swap_note_idx_b,
-                "partial_fill_idx": new_pfr_idx_b,
-            },
-        });
-
         let mut json_map = serde_json::map::Map::new();
+
+        let swap_json1 = serde_json::to_value(&self.swap).unwrap();
+
+        // TODO:
+        let is_tab_order_a = spot_note_info_res_a.is_none();
+        let is_tab_order_b = spot_note_info_res_b.is_none();
+
+        // ? If this is a non-tab order get the relevant info for the cairo input
+        let mut indexes_a = None;
+        if let Some((prev_pfr, swap_idx, pfr_idx)) = spot_note_info_res_a {
+            let pfr_note_a_json = serde_json::to_value(prev_pfr).unwrap();
+            json_map.insert(String::from("prev_pfr_note_a"), pfr_note_a_json);
+
+            indexes_a = Some(json!({
+                "swap_note_idx": swap_idx,
+                "partial_fill_idx": pfr_idx,
+            }));
+        }
+        let mut indexes_b = None;
+        if let Some((prev_pfr, swap_idx, pfr_idx)) = spot_note_info_res_b {
+            let pfr_note_b_json = serde_json::to_value(prev_pfr).unwrap();
+            json_map.insert(String::from("prev_pfr_note_b"), pfr_note_b_json);
+
+            indexes_b = Some(json!({
+                "swap_note_idx": swap_idx,
+                "partial_fill_idx": pfr_idx,
+            }));
+        }
+        let indexes_json = json!({
+            "order_a": indexes_a,
+            "order_b": indexes_b
+        });
 
         json_map.insert(
             String::from("transaction_type"),
             serde_json::to_value(&"swap").unwrap(),
         );
         json_map.insert(String::from("swap_data"), swap_json1);
-        json_map.insert(String::from("prev_pfr_note_a"), pfr_note_a_json);
-        json_map.insert(String::from("prev_pfr_note_b"), pfr_note_b_json2);
         json_map.insert(String::from("indexes"), indexes_json);
 
         return json_map;

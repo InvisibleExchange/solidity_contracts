@@ -7,7 +7,10 @@ use sled::{Config, Result};
 use crate::{
     perpetual::perp_position::PerpPosition,
     transaction_batch::tx_batch_structs::OracleUpdate,
-    transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
+    transactions::{
+        limit_order::LimitOrder,
+        transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
+    },
 };
 
 use super::notes::Note;
@@ -466,5 +469,45 @@ impl BackupStorage {
         self.perp_fills_db.clear()?;
 
         Ok(())
+    }
+}
+
+pub struct LiquidityStorage {
+    liquidity_db: sled::Db,
+}
+
+impl LiquidityStorage {
+    pub fn new() -> Self {
+        let config = Config::new().path("./storage/backups/liquidity");
+        let liquidity_db = config.open().unwrap();
+
+        LiquidityStorage { liquidity_db }
+    }
+
+    pub fn store_liquidity(
+        &self,
+        spot_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
+        perp_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
+    ) -> Result<()> {
+        self.liquidity_db.insert(
+            "spot_liquidity",
+            serde_json::to_vec(&spot_liquidity).unwrap(),
+        )?;
+        self.liquidity_db.insert(
+            "perp_liquidity",
+            serde_json::to_vec(&perp_liquidity).unwrap(),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn read_liquidity(&self) {
+        let val = self.liquidity_db.get("spot_liquidity").unwrap();
+        let spot_liquidity: HashMap<u64, Vec<LimitOrder>> =
+            serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
+
+        let val = self.liquidity_db.get("perp_liquidity").unwrap();
+        let perp_liquidity: HashMap<u64, Vec<LimitOrder>> =
+            serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
     }
 }

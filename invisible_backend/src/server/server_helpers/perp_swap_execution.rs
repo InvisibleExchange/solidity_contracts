@@ -77,16 +77,19 @@ pub async fn execute_perp_swap(
     let taker_side: OrderSide;
     let maker_order_id: u64;
     let taker_order_id: u64;
+    let maker_order: PerpOrder;
     if perp_swap.fee_taken_a == 0 {
         maker_order_id = perp_swap.order_a.order_id;
         maker_side = perp_swap.order_a.order_side.clone();
         taker_side = perp_swap.order_b.order_side.clone();
         taker_order_id = order_b_clone.order_id;
+        maker_order = perp_swap.order_a.clone();
     } else {
         maker_order_id = perp_swap.order_b.order_id;
         maker_side = perp_swap.order_b.order_side.clone();
         taker_side = perp_swap.order_a.order_side.clone();
         taker_order_id = order_a_clone.order_id;
+        maker_order = perp_swap.order_b.clone();
     };
 
     // ? The qty being traded
@@ -246,9 +249,11 @@ pub async fn execute_perp_swap(
                     // ? else forcefully cancel that order since it is invalid
                     else {
                         if maker_side == OrderSide::Long {
-                            book.bid_queue.restore_pending_order(maker_order_id, qty);
+                            book.bid_queue
+                                .restore_pending_order(Order::Perp(maker_order), qty);
                         } else {
-                            book.ask_queue.restore_pending_order(maker_order_id, qty);
+                            book.ask_queue
+                                .restore_pending_order(Order::Perp(maker_order), qty);
                         }
 
                         if taker_order_id == *invalid_order_id {
@@ -257,9 +262,11 @@ pub async fn execute_perp_swap(
                     }
                 } else {
                     if maker_side == OrderSide::Long {
-                        book.bid_queue.restore_pending_order(maker_order_id, qty);
+                        book.bid_queue
+                            .restore_pending_order(Order::Perp(maker_order), qty);
                     } else {
-                        book.ask_queue.restore_pending_order(maker_order_id, qty);
+                        book.ask_queue
+                            .restore_pending_order(Order::Perp(maker_order), qty);
                     }
 
                     maker_order_id_ = Some(maker_order_id);
@@ -286,9 +293,11 @@ pub async fn execute_perp_swap(
             }
 
             if maker_side == OrderSide::Long {
-                book.bid_queue.restore_pending_order(maker_order_id, qty);
+                book.bid_queue
+                    .restore_pending_order(Order::Perp(maker_order), qty);
             } else {
-                book.ask_queue.restore_pending_order(maker_order_id, qty);
+                book.ask_queue
+                    .restore_pending_order(Order::Perp(maker_order), qty);
             }
 
             return (

@@ -11,7 +11,7 @@ use std::{
 use super::{
     grpc::engine::{
         AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, EmptyReq,
-        FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes, GrpcPerpPosition,
+        FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes, GrpcOrderTab, GrpcPerpPosition,
         LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
         LiquidityRes, OracleUpdateReq, OrderResponse, OrderTabReq, PerpOrderMessage,
         RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq, StateInfoRes,
@@ -24,13 +24,14 @@ use super::{
         engine_helpers::{
             handle_cancel_order_repsonse, handle_deposit_repsonse, handle_margin_change_repsonse,
             handle_split_notes_repsonse, handle_withdrawal_repsonse, store_output_json,
+            verify_tab_existence,
         },
         perp_swap_execution::{
             process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
         },
         swap_execution::{
-            await_swap_handles, process_and_execute_spot_swaps, process_batch_order_request,
-            process_limit_order_request, retry_failed_swaps,
+            await_swap_handles, process_and_execute_spot_swaps, process_limit_order_request,
+            retry_failed_swaps,
         },
         PERP_MARKET_IDS,
     },
@@ -50,6 +51,10 @@ use super::{
     server_helpers::engine_helpers::{
         verify_notes_existence, verify_position_existence, verify_signature_format,
     },
+};
+use crate::{
+    matching_engine::orders::limit_order_cancel_request,
+    perpetual::{perp_helpers::perp_rollback::PerpRollbackInfo, perp_order::PerpOrder},
 };
 use crate::{
     matching_engine::{
@@ -73,13 +78,6 @@ use crate::{
         },
         storage::{BackupStorage, MainStorage},
     },
-};
-use crate::{
-    matching_engine::{
-        orderbook::{Failed, Success},
-        orders::limit_order_cancel_request,
-    },
-    perpetual::{perp_helpers::perp_rollback::PerpRollbackInfo, perp_order::PerpOrder},
 };
 
 use crate::transactions::{
@@ -124,7 +122,7 @@ pub struct EngineService {
     pub state_tree: Arc<Mutex<SuperficialTree>>,
     pub perp_state_tree: Arc<Mutex<SuperficialTree>>,
     //
-    pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+    pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     pub perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
     //
     pub rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -160,8 +158,6 @@ impl Engine for EngineService {
 
         let user_id = req.user_id;
         let is_market: bool = req.is_market;
-        let prices = req.prices.clone();
-        let amounts = req.amounts.clone();
 
         // ? Verify the signature is defined and has a valid format
         let signature: Signature;
@@ -190,44 +186,42 @@ impl Engine for EngineService {
         }
         let (market_id, side) = res.unwrap();
 
-        // ? Verify the notes spent exist in the state tree
-        if let Err(err_msg) = verify_notes_existence(&limit_order.notes_in, &self.state_tree) {
-            return send_order_error_reply(err_msg);
-        }
-
-        let mut processed_res: Vec<std::result::Result<Success, Failed>>;
-        if prices.len() > 0 {
-            if prices.len() != amounts.len() {
+        if limit_order.spot_note_info.is_some() {
+            // ? Verify the notes spent exist in the state tree
+            if let Err(err_msg) = verify_notes_existence(
+                &limit_order.spot_note_info.as_ref().unwrap().notes_in,
+                &self.state_tree,
+            ) {
+                return send_order_error_reply(err_msg);
+            }
+        } else {
+            if limit_order.order_tab.is_none() {
                 return send_order_error_reply(
-                    "Prices and amounts must have the same length".to_string(),
+                    "Order tab is not defined for this limit order".to_string(),
                 );
             }
 
-            processed_res = process_batch_order_request(
-                self.order_books.get(&market_id).clone().unwrap(),
-                limit_order.clone(),
-                side,
-                signature.clone(),
-                prices,
-                amounts,
-                user_id,
-            )
-            .await;
-        } else {
-            processed_res = process_limit_order_request(
-                self.order_books.get(&market_id).clone().unwrap(),
-                limit_order.clone(),
-                side,
-                signature.clone(),
-                user_id,
-                is_market,
-                false,
-                0,
-                0,
-                None,
-            )
-            .await;
+            // ? Verify the order tab exist in the state tree
+            if let Err(err_msg) =
+                verify_tab_existence(&limit_order.order_tab.as_ref().unwrap(), &self.state_tree)
+            {
+                return send_order_error_reply(err_msg);
+            }
         }
+
+        let mut processed_res = process_limit_order_request(
+            self.order_books.get(&market_id).clone().unwrap(),
+            limit_order.clone(),
+            side,
+            signature.clone(),
+            user_id,
+            is_market,
+            false,
+            0,
+            0,
+            None,
+        )
+        .await;
 
         // This matches the orders and creates the swaps that can be executed
         let handles;
@@ -669,7 +663,7 @@ impl Engine for EngineService {
             req.order_id,
             order_side,
             req.user_id,
-            req.new_prices,
+            req.new_price,
             req.new_expiration,
             signature.clone(),
             req.match_only,
@@ -950,11 +944,10 @@ impl Engine for EngineService {
             let wrapper_ = order_book.get_order(order_id);
 
             if let Some(wrapper) = wrapper_ {
-                let order = wrapper.order.lock();
-                let order_side = order.order_side;
-                let price = order.order.get_price(order_side, None);
+                let order_side = wrapper.order_side;
+                let price = wrapper.order.get_price(order_side, None);
                 let qty_left = wrapper.qty_left;
-                if let Order::Spot(limit_order) = &order.order {
+                if let Order::Spot(limit_order) = &wrapper.order {
                     let base_asset: u64;
                     let quote_asset: u64;
                     if order_side == OBOrderSide::Bid {
@@ -965,6 +958,36 @@ impl Engine for EngineService {
                         quote_asset = limit_order.token_received
                     }
 
+                    let notes_in: Vec<GrpcNote>;
+                    let refund_note;
+                    if limit_order.spot_note_info.is_some() {
+                        let notes_info = limit_order.spot_note_info.as_ref().unwrap();
+
+                        notes_in = notes_info
+                            .notes_in
+                            .iter()
+                            .map(|n| GrpcNote::from(n.clone()))
+                            .collect();
+
+                        refund_note = if notes_info.refund_note.is_some() {
+                            Some(GrpcNote::from(
+                                notes_info.refund_note.as_ref().unwrap().clone(),
+                            ))
+                        } else {
+                            None
+                        };
+                    } else {
+                        notes_in = vec![];
+                        refund_note = None;
+                    };
+
+                    let order_tab = if limit_order.order_tab.is_some() {
+                        let lock = limit_order.order_tab.as_ref().unwrap().lock();
+                        Some(GrpcOrderTab::from(lock.clone()))
+                    } else {
+                        None
+                    };
+
                     let active_order = ActiveOrder {
                         order_id: limit_order.order_id,
                         expiration_timestamp: limit_order.expiration_timestamp,
@@ -974,23 +997,13 @@ impl Engine for EngineService {
                         fee_limit: limit_order.fee_limit,
                         price,
                         qty_left,
-                        notes_in: limit_order
-                            .notes_in
-                            .clone()
-                            .into_iter()
-                            .map(|n| GrpcNote::from(n))
-                            .collect(),
-                        refund_note: if limit_order.refund_note.is_some() {
-                            Some(GrpcNote::from(limit_order.refund_note.clone().unwrap()))
-                        } else {
-                            None
-                        },
+                        notes_in,
+                        refund_note,
+                        order_tab,
                     };
 
                     active_orders.push(active_order);
                 }
-
-                drop(order);
             } else {
                 bad_order_ids.push(order_id);
             }
@@ -998,8 +1011,8 @@ impl Engine for EngineService {
 
             let partial_fill_tracker_m = self.partial_fill_tracker.lock();
             let pfr_info = partial_fill_tracker_m.get(&(order_id % 2_u64.pow(32)));
-            if let Some(pfr_info) = pfr_info {
-                pfr_notes.push(pfr_info.0.clone());
+            if pfr_info.is_some() && pfr_info.unwrap().0.is_some() {
+                pfr_notes.push(pfr_info.unwrap().0.as_ref().unwrap().clone());
             }
             drop(partial_fill_tracker_m);
         }
@@ -1021,11 +1034,10 @@ impl Engine for EngineService {
             let wrapper = order_book.get_order(order_id);
 
             if let Some(wrapper) = wrapper {
-                let order = wrapper.order.lock();
-                let order_side = order.order_side;
-                let price = order.order.get_price(order_side, None);
+                let order_side = wrapper.order_side;
+                let price = wrapper.order.get_price(order_side, None);
                 let qty_left = wrapper.qty_left;
-                if let Order::Perp(perp_order) = &order.order {
+                if let Order::Perp(perp_order) = &wrapper.order {
                     let position_effect_type = match perp_order.position_effect_type {
                         PositionEffectType::Open => 0,
                         PositionEffectType::Modify => 1,
@@ -1079,8 +1091,6 @@ impl Engine for EngineService {
 
                     active_perp_orders.push(active_order)
                 }
-
-                drop(order);
             } else {
                 bad_perp_order_ids.push(order_id);
             }
@@ -1338,12 +1348,6 @@ impl Engine for EngineService {
         let req: OrderTabReq = req.into_inner();
 
         let is_perp = req.is_perp;
-
-
-        
-
-
-
 
         // ===================================================================================
 

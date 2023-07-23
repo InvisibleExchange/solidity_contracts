@@ -16,7 +16,8 @@ use super::swap_execution::{execute_order, update_state_after_order};
 use super::transaction_helpers::db_updates::update_db_after_spot_swap;
 use super::transaction_helpers::rollbacks::RollbackInfo;
 use super::transaction_helpers::swap_helpers::{
-    consistency_checks, finalize_updates, unblock_order, TxExecutionThreadOutput,
+    consistency_checks, finalize_updates, unblock_order, NoteInfoExecutionOutput,
+    TxExecutionThreadOutput,
 };
 use super::transaction_helpers::transaction_output::TransactionOutptut;
 pub use crate::transaction_batch::transaction_batch::Transaction;
@@ -70,7 +71,7 @@ impl Swap {
     fn execute_swap(
         &self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
@@ -80,9 +81,20 @@ impl Swap {
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
 
-        // ? parse order id (market makers can submit multiple orders with the same id))
-        let order_id_a = self.order_a.order_id % 2_u64.pow(32);
-        let order_id_b = self.order_b.order_id % 2_u64.pow(32);
+        if self.order_a.spot_note_info.is_some() && self.order_a.order_tab.is_some() {
+            return Err(send_swap_error(
+                "order can only have spot_note_info or order_tab defined, not both.".to_string(),
+                Some(self.order_a.order_id),
+                None,
+            ));
+        }
+        if self.order_b.spot_note_info.is_some() && self.order_b.order_tab.is_some() {
+            return Err(send_swap_error(
+                "order can only have spot_note_info or order_tab defined, not both.".to_string(),
+                Some(self.order_b.order_id),
+                None,
+            ));
+        }
 
         consistency_checks(
             &self.order_a,
@@ -109,18 +121,11 @@ impl Swap {
 
                 let execution_output: TxExecutionThreadOutput;
 
-                let (
-                    is_partially_filled,
-                    swap_note,
-                    new_partial_fill_info,
-                    prev_partial_fill_refund_note,
-                    new_amount_filled,
-                ) = execute_order(
+                let (is_partially_filled, note_info_output, new_amount_filled) = execute_order(
                     &tree,
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     &self.order_a,
-                    order_id_a,
                     &self.signature_a,
                     self.spent_amount_a,
                     self.spent_amount_b,
@@ -129,9 +134,7 @@ impl Swap {
 
                 execution_output = TxExecutionThreadOutput {
                     is_partially_filled,
-                    swap_note,
-                    new_partial_fill_info,
-                    prev_partial_fill_refund_note,
+                    note_info_output,
                     new_amount_filled,
                 };
 
@@ -147,18 +150,11 @@ impl Swap {
 
                 let execution_output: TxExecutionThreadOutput;
 
-                let (
-                    is_partially_filled,
-                    swap_note,
-                    new_partial_fill_info,
-                    prev_partial_fill_refund_note,
-                    new_amount_filled,
-                ) = execute_order(
+                let (is_partially_filled, note_info_output, new_amount_filled) = execute_order(
                     &tree,
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     &self.order_b,
-                    order_id_b,
                     &self.signature_b,
                     self.spent_amount_b,
                     self.spent_amount_a,
@@ -167,9 +163,7 @@ impl Swap {
 
                 execution_output = TxExecutionThreadOutput {
                     is_partially_filled,
-                    swap_note,
-                    new_partial_fill_info,
-                    prev_partial_fill_refund_note,
+                    note_info_output,
                     new_amount_filled,
                 };
 
@@ -224,20 +218,21 @@ impl Swap {
                     &updated_note_hashes,
                     &rollback_safeguard,
                     thread_id,
-                    order_a_output_clone.prev_partial_fill_refund_note.is_none(),
-                    order_id_a,
-                    &self.order_a.notes_in,
-                    &self.order_a.refund_note,
-                    &order_a_output_clone.swap_note,
-                    &order_a_output_clone.new_partial_fill_info,
-                    &order_a_output_clone.prev_partial_fill_refund_note,
+                    self.order_a.order_id,
+                    &self.order_a.spot_note_info,
+                    &order_a_output_clone.note_info_output,
+                    // &order_a_output_clone.swap_note,
+                    // &order_a_output_clone.new_partial_fill_info,
+                    // &order_a_output_clone.prev_partial_fill_refund_note,
                 )?;
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
+
                 finalize_updates(
                     &partial_fill_tracker,
                     &blocked_order_ids,
-                    order_id_a,
-                    &order_a_output_clone.new_partial_fill_info,
+                    self.order_a.order_id,
+                    self.order_a.order_tab.is_some(),
+                    &order_a_output_clone,
                 );
 
                 Ok(())
@@ -257,21 +252,21 @@ impl Swap {
                     &updated_note_hashes,
                     &rollback_safeguard,
                     thread_id,
-                    order_b_output_clone.prev_partial_fill_refund_note.is_none(),
-                    order_id_b,
-                    &self.order_b.notes_in,
-                    &self.order_b.refund_note,
-                    &order_b_output_clone.swap_note,
-                    &order_b_output_clone.new_partial_fill_info,
-                    &order_b_output_clone.prev_partial_fill_refund_note,
+                    self.order_b.order_id,
+                    &self.order_b.spot_note_info,
+                    &order_b_output_clone.note_info_output,
+                    // &order_b_output_clone.swap_note,
+                    // &order_b_output_clone.new_partial_fill_info,
+                    // &order_b_output_clone.prev_partial_fill_refund_note,
                 )?;
 
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
                 finalize_updates(
                     &partial_fill_tracker,
                     &blocked_order_ids,
-                    order_id_b,
-                    &order_b_output_clone.new_partial_fill_info,
+                    self.order_b.order_id,
+                    self.order_b.order_tab.is_some(),
+                    &order_b_output_clone,
                 );
 
                 Ok(())
@@ -315,7 +310,11 @@ impl Swap {
         // ? Get the result or return the error
         let (execution_output_a, execution_output_b) = swap_execution_handle
             .or_else(|e| {
-                unblock_order(&blocked_order_ids_c, order_id_a, order_id_b);
+                unblock_order(
+                    &blocked_order_ids_c,
+                    self.order_a.order_id,
+                    self.order_b.order_id,
+                );
 
                 Err(send_swap_error(
                     "Unknow Error Occured".to_string(),
@@ -324,7 +323,11 @@ impl Swap {
                 ))
             })?
             .or_else(|err: Report<SwapThreadExecutionError>| {
-                unblock_order(&blocked_order_ids_c, order_id_a, order_id_b);
+                unblock_order(
+                    &blocked_order_ids_c,
+                    self.order_a.order_id,
+                    self.order_b.order_id,
+                );
 
                 Err(err)
             })?;
@@ -333,24 +336,44 @@ impl Swap {
 
         let swap_output = TransactionOutptut::new(&self);
 
-        let mut new_pfr_idx_a: u64 = 0;
-        if let Some(new_pfr_note) = execution_output_a.new_partial_fill_info.as_ref() {
-            new_pfr_idx_a = new_pfr_note.0.index;
+        let mut spot_note_info_res_a = None;
+        let mut spot_note_info_res_b = None;
+        if self.order_a.order_tab.is_some() {
+            // TODO
+        } else {
+            // ? non-tab order
+            let note_info_output = execution_output_a.note_info_output.as_ref().unwrap();
+
+            let mut new_pfr_idx_a: u64 = 0;
+            if let Some(new_pfr_note) = note_info_output.new_partial_fill_info.as_ref() {
+                new_pfr_idx_a = new_pfr_note.0.as_ref().unwrap().index;
+            }
+
+            spot_note_info_res_a = Some((
+                note_info_output.prev_partial_fill_refund_note.clone(),
+                note_info_output.swap_note.index,
+                new_pfr_idx_a,
+            ));
+        }
+        if self.order_b.order_tab.is_some() {
+            // TODO
+        } else {
+            // ? non-tab order
+            let note_info_output = execution_output_b.note_info_output.as_ref().unwrap();
+
+            let mut new_pfr_idx_b: u64 = 0;
+            if let Some(new_pfr_note) = note_info_output.new_partial_fill_info.as_ref() {
+                new_pfr_idx_b = new_pfr_note.0.as_ref().unwrap().index;
+            }
+
+            spot_note_info_res_b = Some((
+                note_info_output.prev_partial_fill_refund_note.clone(),
+                note_info_output.swap_note.index,
+                new_pfr_idx_b,
+            ));
         }
 
-        let mut new_pfr_idx_b: u64 = 0;
-        if let Some(new_pfr_note) = execution_output_b.new_partial_fill_info.as_ref() {
-            new_pfr_idx_b = new_pfr_note.0.index;
-        }
-
-        let json_output = swap_output.wrap_output(
-            &execution_output_a.prev_partial_fill_refund_note,
-            &execution_output_b.prev_partial_fill_refund_note,
-            execution_output_a.swap_note.index,
-            execution_output_b.swap_note.index,
-            new_pfr_idx_a,
-            new_pfr_idx_b,
-        );
+        let json_output = swap_output.wrap_output(&spot_note_info_res_a, &spot_note_info_res_b);
 
         let mut swap_output_json = swap_output_json_m.lock();
         swap_output_json.push(json_output);
@@ -358,38 +381,22 @@ impl Swap {
 
         // * Cleanup =================================
 
-        let mut new_pfr_note_a: Option<Note> = None;
-        if let Some(new_pfr_note) = execution_output_a.new_partial_fill_info {
-            new_pfr_note_a = Some(new_pfr_note.0);
-        }
-
-        let mut new_pfr_note_b: Option<Note> = None;
-        if let Some(new_pfr_note) = execution_output_b.new_partial_fill_info {
-            new_pfr_note_b = Some(new_pfr_note.0);
-        }
-
         // *  Update the database
         update_db_after_spot_swap(
             &session,
             &backup_storage,
             &self.order_a,
             &self.order_b,
-            execution_output_a.prev_partial_fill_refund_note,
-            execution_output_b.prev_partial_fill_refund_note,
-            &execution_output_a.swap_note,
-            &execution_output_b.swap_note,
-            &new_pfr_note_a,
-            &new_pfr_note_b,
+            &execution_output_a.note_info_output,
+            &execution_output_b.note_info_output,
         );
 
-        return Ok(SwapResponse {
-            swap_note_a: execution_output_a.swap_note,
-            swap_note_b: execution_output_b.swap_note,
-            new_pfr_note_a,
-            new_amount_filled_a: execution_output_a.new_amount_filled,
-            new_pfr_note_b,
-            new_amount_filled_b: execution_output_b.new_amount_filled,
-        });
+        return Ok(SwapResponse::new(
+            &execution_output_a.note_info_output,
+            execution_output_a.new_amount_filled,
+            &execution_output_b.note_info_output,
+            execution_output_b.new_amount_filled,
+        ));
     }
 }
 
@@ -403,7 +410,7 @@ impl Transaction for Swap {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Note, u64)>>>,
+        partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
@@ -462,19 +469,64 @@ impl Serialize for Swap {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SwapResponse {
-    pub swap_note_a: Note,
-    pub swap_note_b: Note,
-    pub new_pfr_note_a: Option<Note>,
-    pub new_amount_filled_a: u64,
-    pub new_pfr_note_b: Option<Note>,
-    pub new_amount_filled_b: u64,
+    pub note_info_swap_response_a: Option<NoteInfoSwapResponse>,
+    pub note_info_swap_response_b: Option<NoteInfoSwapResponse>,
+}
+
+impl SwapResponse {
+    fn new(
+        note_info_output_a: &Option<NoteInfoExecutionOutput>,
+        new_amount_filled_a: u64,
+        note_info_output_b: &Option<NoteInfoExecutionOutput>,
+        new_amount_filled_b: u64,
+    ) -> SwapResponse {
+        // note info response a
+        let mut note_info_swap_response_a = None;
+        if let Some(output) = note_info_output_a {
+            let mut new_pfr_note = None;
+            if let Some((pfr_note_, _)) = output.new_partial_fill_info.as_ref() {
+                new_pfr_note = Some(pfr_note_.as_ref().unwrap().clone());
+            }
+
+            note_info_swap_response_a = Some(NoteInfoSwapResponse {
+                swap_note: output.swap_note.clone(),
+                new_pfr_note,
+                new_amount_filled: new_amount_filled_a,
+            });
+        }
+
+        // note info response b
+        let mut note_info_swap_response_b = None;
+        if let Some(output) = note_info_output_b {
+            let mut new_pfr_note = None;
+            if let Some((pfr_note_, _)) = output.new_partial_fill_info.as_ref() {
+                new_pfr_note = Some(pfr_note_.as_ref().unwrap().clone());
+            }
+
+            note_info_swap_response_b = Some(NoteInfoSwapResponse {
+                swap_note: output.swap_note.clone(),
+                new_pfr_note,
+                new_amount_filled: new_amount_filled_b,
+            });
+        }
+
+        SwapResponse {
+            note_info_swap_response_a,
+            note_info_swap_response_b,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NoteInfoSwapResponse {
+    pub swap_note: Note,
+    pub new_pfr_note: Option<Note>,
+    pub new_amount_filled: u64,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct OrderFillResponse {
-    pub swap_note: Note,
-    pub new_pfr_note: Option<Note>,
-    pub new_amount_filled: u64,
+    pub note_info_swap_response: Option<NoteInfoSwapResponse>,
     pub fee_taken: u64,
 }
 
@@ -482,16 +534,12 @@ impl OrderFillResponse {
     pub fn from_swap_response(req: &SwapResponse, fee_taken: u64, is_a: bool) -> Self {
         if is_a {
             return OrderFillResponse {
-                swap_note: req.swap_note_a.clone(),
-                new_pfr_note: req.new_pfr_note_a.clone(),
-                new_amount_filled: req.new_amount_filled_a,
+                note_info_swap_response: req.note_info_swap_response_a.clone(),
                 fee_taken,
             };
         } else {
             return OrderFillResponse {
-                swap_note: req.swap_note_b.clone(),
-                new_pfr_note: req.new_pfr_note_b.clone(),
-                new_amount_filled: req.new_amount_filled_b,
+                note_info_swap_response: req.note_info_swap_response_b.clone(),
                 fee_taken,
             };
         }

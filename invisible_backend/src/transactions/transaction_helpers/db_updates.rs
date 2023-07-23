@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-use super::transaction_output::FillInfo;
+use super::{swap_helpers::NoteInfoExecutionOutput, transaction_output::FillInfo};
 
 // SWAPS ----------------------------------------------------
 
@@ -23,63 +23,91 @@ pub fn update_db_after_spot_swap(
     backup_storage: &Arc<Mutex<BackupStorage>>,
     order_a: &LimitOrder,
     order_b: &LimitOrder,
-    prev_pfr_note_a: Option<Note>,
-    prev_pfr_note_b: Option<Note>,
-    swap_note_a: &Note,
-    swap_note_b: &Note,
-    new_pfr_note_a: &Option<Note>,
-    new_pfr_note_b: &Option<Note>,
+    note_info_output_a: &Option<NoteInfoExecutionOutput>,
+    note_info_output_b: &Option<NoteInfoExecutionOutput>,
 ) {
     let mut delete_notes: Vec<(u64, String)> = Vec::new();
     let mut add_notes: Vec<&Note> = Vec::new();
 
-    let is_first_fill_a = prev_pfr_note_a.is_none();
-    let is_first_fill_b = prev_pfr_note_b.is_none();
+    if order_a.spot_note_info.is_some() {
+        let spot_note_info = order_a.spot_note_info.as_ref().unwrap();
+        let prev_pfr_note_a = &note_info_output_a
+            .as_ref()
+            .unwrap()
+            .prev_partial_fill_refund_note;
+        let swap_note_a = &note_info_output_a.as_ref().unwrap().swap_note;
+        let new_pfr_note_a = &note_info_output_a.as_ref().unwrap().new_partial_fill_info;
 
-    // ? Delete notes spent from the database
-    if is_first_fill_a {
-        if order_a.refund_note.is_some() {
-            // ? Store the refund note in place of the first note
-            add_notes.push(&order_a.refund_note.as_ref().unwrap())
+        let is_first_fill_a = prev_pfr_note_a.is_none();
+
+        // ? Delete notes spent from the database
+        if is_first_fill_a {
+            if spot_note_info.refund_note.is_some() {
+                // ? Store the refund note in place of the first note
+                add_notes.push(&spot_note_info.refund_note.as_ref().unwrap())
+            }
+
+            // ? Delete all notes in
+            for n in spot_note_info.notes_in.iter() {
+                delete_notes.push((n.index, n.address.x.to_string()))
+            }
         }
 
-        // ? Delete all notes in
-        for n in order_a.notes_in.iter() {
-            delete_notes.push((n.index, n.address.x.to_string()))
-        }
-    }
-    if is_first_fill_b {
-        // ? Store refund note (*if necessary)
-        if order_b.refund_note.is_some() {
-            add_notes.push(&order_b.refund_note.as_ref().unwrap())
+        // ? Delete prev partially fill refund notes (*if necessary)
+        if prev_pfr_note_a.is_some() {
+            let n = prev_pfr_note_a.as_ref().unwrap();
+            delete_notes.push((n.index, n.address.x.to_string()));
         }
 
-        // ? Delete all notes in
-        for n in order_b.notes_in.iter() {
-            delete_notes.push((n.index, n.address.x.to_string()))
+        // ? Store swap notes
+        add_notes.push(&swap_note_a);
+
+        // ? Store partial fill refund notes if order was partially filled
+        if new_pfr_note_a.is_some() {
+            add_notes.push(&new_pfr_note_a.as_ref().unwrap().0.as_ref().unwrap());
         }
+    } else {
+        // TODO
     }
 
-    // ? Delete prev partially fill refund notes (*if necessary)
-    if prev_pfr_note_a.is_some() {
-        let n = prev_pfr_note_a.as_ref().unwrap();
-        delete_notes.push((n.index, n.address.x.to_string()));
-    }
-    if prev_pfr_note_b.is_some() {
-        let n = prev_pfr_note_b.as_ref().unwrap();
-        delete_notes.push((n.index, n.address.x.to_string()));
-    }
+    if order_a.spot_note_info.is_some() {
+        let spot_note_info = order_b.spot_note_info.as_ref().unwrap();
+        let prev_pfr_note_b = &note_info_output_b
+            .as_ref()
+            .unwrap()
+            .prev_partial_fill_refund_note;
+        let swap_note_b = &note_info_output_b.as_ref().unwrap().swap_note;
+        let new_pfr_note_b = &note_info_output_b.as_ref().unwrap().new_partial_fill_info;
 
-    // ? Store swap notes
-    add_notes.push(&swap_note_a);
-    add_notes.push(&swap_note_b);
+        let is_first_fill_b = prev_pfr_note_b.is_none();
 
-    // ? Store partial fill refund notes if order was partially filled
-    if new_pfr_note_a.is_some() {
-        add_notes.push(&new_pfr_note_a.as_ref().unwrap());
-    }
-    if new_pfr_note_b.is_some() {
-        add_notes.push(&new_pfr_note_b.as_ref().unwrap());
+        if is_first_fill_b {
+            // ? Store refund note (*if necessary)
+            if spot_note_info.refund_note.is_some() {
+                add_notes.push(&spot_note_info.refund_note.as_ref().unwrap())
+            }
+
+            // ? Delete all notes in
+            for n in spot_note_info.notes_in.iter() {
+                delete_notes.push((n.index, n.address.x.to_string()))
+            }
+        }
+
+        // ? Delete prev partially fill refund notes (*if necessary)
+        if prev_pfr_note_b.is_some() {
+            let n = prev_pfr_note_b.as_ref().unwrap();
+            delete_notes.push((n.index, n.address.x.to_string()));
+        }
+
+        // ? Store swap notes
+        add_notes.push(&swap_note_b);
+
+        // ? Store partial fill refund notes if order was partially filled
+        if new_pfr_note_b.is_some() {
+            add_notes.push(&new_pfr_note_b.as_ref().unwrap().0.as_ref().unwrap());
+        }
+    } else {
+        // TODO
     }
 
     let updater = DbNoteUpdater {

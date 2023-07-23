@@ -4,35 +4,39 @@ use std::time::SystemTime;
 use crate::{perpetual::VALID_COLLATERAL_TOKENS, utils::crypto_utils::Signature};
 
 use super::{
-    domain::{Order, OrderSide, SharedOrderInner},
+    domain::{Order, OrderSide, OrderWrapper},
     get_qty_from_quote, get_quote_qty,
 };
 
 #[derive(Debug, Clone)]
 pub enum OrderRequest {
+    // NewMarketOrder {
+    //     order_asset: u64,
+    //     price_asset: u64,
+    //     side: OrderSide,
+    //     qty: u64,
+    //     order: OrderWrapper,
+    //     ts: SystemTime,
+    // },
     NewLimitOrder {
         order_asset: u64,
         price_asset: u64,
         side: OrderSide,
-        prices: Vec<f64>,
-        qtys: Vec<u64>,
-        signature: Signature,
-        order: Order,
-        user_id: u64,
+        price: f64,
+        qty: u64,
+        order: OrderWrapper,
         ts: SystemTime,
         is_market: bool,
     },
-
     AmendOrder {
         id: u64,
         side: OrderSide,
-        new_prices: Vec<f64>,
+        new_price: f64,
         new_expiration: u64,
         signature: Signature,
         user_id: u64,
         match_only: bool,
     },
-
     CancelOrder {
         id: u64,
         side: OrderSide,
@@ -40,6 +44,35 @@ pub enum OrderRequest {
         //ts: SystemTime,
     },
 }
+
+// pub fn new_market_order_request(
+//     side: OrderSide,
+//     order: Order,
+//     signature: Signature,
+//     ts: SystemTime,
+//     user_id: u64,
+// ) -> OrderRequest {
+//     let (order_asset, price_asset) = order.get_order_and_price_assets(side);
+
+//     let qty: u64 = order.get_qty(side);
+//     let order = OrderWrapper {
+//         order,
+//         signature,
+//         qty_left: qty,
+//         order_id: 0,
+//         order_side: side,
+//         user_id,
+//     };
+
+//     OrderRequest::NewMarketOrder {
+//         order_asset,
+//         price_asset,
+//         side,
+//         qty,
+//         order,
+//         ts,
+//     }
+// }
 
 /// Create request for the new limit order
 pub fn new_limit_order_request(
@@ -52,61 +85,28 @@ pub fn new_limit_order_request(
 ) -> OrderRequest {
     let (order_asset, price_asset) = order.get_order_and_price_assets(side);
 
-    let price: f64 = order.get_price(side, Some(side == OrderSide::Ask));
+    let price: f64 = order.get_price(side, None);
 
     let qty: u64 = order.get_qty(side, price);
 
-    OrderRequest::NewLimitOrder {
-        order_asset,
-        price_asset,
-        side,
-        prices: vec![price],
-        qtys: vec![qty],
-        signature,
+    let order = OrderWrapper {
         order,
+        signature,
+        qty_left: qty,
+        order_id: 0,
+        order_side: side,
         user_id,
-        ts,
-        is_market,
-    }
-}
-
-/// Create request for the new batch order
-pub fn new_batch_order_request(
-    side: OrderSide,
-    order: Order,
-    signature: Signature,
-    prices: Vec<f64>,
-    amounts: Vec<u64>,
-    ts: SystemTime,
-    user_id: u64,
-) -> OrderRequest {
-    let (order_asset, price_asset) = order.get_order_and_price_assets(side);
-
-    let (base_token, qoute_token) = order.get_order_and_price_assets(side);
-
-    let amounts = if side == OrderSide::Bid {
-        amounts
-            .iter()
-            .enumerate()
-            .map(|(i, quote_qty)| {
-                get_qty_from_quote(*quote_qty, prices[i], base_token, qoute_token)
-            })
-            .collect()
-    } else {
-        amounts
     };
 
     OrderRequest::NewLimitOrder {
         order_asset,
         price_asset,
         side,
-        prices,
-        qtys: amounts,
-        signature,
+        price,
+        qty,
         order,
-        user_id,
         ts,
-        is_market: false,
+        is_market,
     }
 }
 
@@ -124,7 +124,7 @@ pub fn new_amend_order(
     order_id: u64,
     side: OrderSide,
     user_id: u64,
-    new_prices: Vec<f64>,
+    new_price: f64,
     new_expiration: u64,
     signature: Signature,
     match_only: bool,
@@ -132,7 +132,7 @@ pub fn new_amend_order(
     OrderRequest::AmendOrder {
         id: order_id,
         side,
-        new_prices,
+        new_price,
         new_expiration,
         signature,
         user_id,
@@ -142,7 +142,7 @@ pub fn new_amend_order(
 
 /// Amend an order
 pub fn amend_inner(
-    wrapper: &mut SharedOrderInner,
+    wrapper: &mut OrderWrapper,
     price: f64,
     new_expiration: u64,
     signature: Signature,
