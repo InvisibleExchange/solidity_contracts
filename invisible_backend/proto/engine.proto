@@ -9,14 +9,14 @@ service Engine {
 
     rpc execute_withdrawal (WithdrawalMessage) returns (SuccessResponse);
 
-    // orders --------------- ----------------- -------------------
+    // order executions --------------- ----------------- -------------------
     rpc submit_limit_order (LimitOrderMessage) returns (OrderResponse);
 
     rpc submit_perpetual_order (PerpOrderMessage) returns (OrderResponse);
 
     rpc submit_liquidation_order (LiquidationOrderMessage) returns (LiquidationOrderResponse);
 
-    // order updates --------------- ----------------- ----------------
+    // order interactions (amend/cancel ...) --------------- ----------------- ----------------
     rpc cancel_order (CancelOrderMessage) returns (CancelOrderResponse);
 
     rpc amend_order (AmendOrderRequest) returns (AmendOrderResponse);

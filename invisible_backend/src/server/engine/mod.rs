@@ -8,12 +8,21 @@ use std::{
     time::Instant,
 };
 
+use self::{
+    onchain_interaction::{execute_deposit_inner, execute_withdrawal_inner},
+    order_executions::{
+        submit_limit_order_inner, submit_liquidation_order_inner, submit_perpetual_order_inner,
+    },
+    order_interactions::{amend_order_inner, cancel_order_inner},
+};
+
+use super::grpc::{ChangeMarginMessage, GrpcMessage, GrpcTxResponse, MessageType};
 use super::{
     grpc::{
         engine_proto::{engine_server::Engine, CloseOrderTabRes, OpenOrderTabRes},
         OrderTabActionMessage,
     },
-    server_helpers::{get_market_id_and_order_side, WsConnectionsMap},
+    server_helpers::WsConnectionsMap,
 };
 use super::{
     grpc::{
@@ -21,7 +30,7 @@ use super::{
             ActiveOrder, ActivePerpOrder, AmendOrderRequest, AmendOrderResponse, BookEntry,
             CancelOrderMessage, CancelOrderResponse, CloseOrderTabReq, DepositMessage,
             DepositResponse, EmptyReq, FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes,
-            GrpcNote, GrpcOrderTab, GrpcPerpPosition, LimitOrderMessage, LiquidationOrderMessage,
+            GrpcNote, GrpcOrderTab, LimitOrderMessage, LiquidationOrderMessage,
             LiquidationOrderResponse, LiquidityReq, LiquidityRes, MarginChangeReq, MarginChangeRes,
             OpenOrderTabReq, OracleUpdateReq, OrderResponse, OrdersReq, OrdersRes,
             PerpOrderMessage, RestoreOrderBookMessage, SplitNotesReq, SplitNotesRes,
@@ -30,75 +39,36 @@ use super::{
         },
         OrderTabActionResponse,
     },
-    server_helpers::{
-        amend_order_execution::{
-            execute_perp_swaps_after_amend_order, execute_spot_swaps_after_amend_order,
-        },
-        engine_helpers::{
-            handle_cancel_order_repsonse, handle_deposit_repsonse, handle_margin_change_repsonse,
-            handle_split_notes_repsonse, handle_withdrawal_repsonse, store_output_json,
-            verify_tab_existence,
-        },
-        perp_swap_execution::{
-            process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
-        },
-        swap_execution::{
-            await_swap_handles, process_and_execute_spot_swaps, process_limit_order_request,
-            retry_failed_swaps,
-        },
-        PERP_MARKET_IDS,
-    },
-};
-use super::{
-    grpc::{ChangeMarginMessage, GrpcMessage, GrpcTxResponse, MessageType},
-    server_helpers::engine_helpers::{
-        verify_notes_existence, verify_position_existence, verify_signature_format,
-    },
-};
-use crate::{
-    matching_engine::orders::limit_order_cancel_request,
-    perpetual::{perp_helpers::perp_rollback::PerpRollbackInfo, perp_order::PerpOrder},
-    utils::errors::{send_close_tab_error_reply, send_open_tab_error_reply},
+    server_helpers::engine_helpers::{handle_margin_change_repsonse, handle_split_notes_repsonse},
 };
 use crate::{
     matching_engine::{
         domain::{Order, OrderSide as OBOrderSide},
         orderbook::OrderBook,
-        orders::new_amend_order,
     },
-    perpetual::{
-        liquidations::{
-            liquidation_engine::LiquidationSwap, liquidation_order::LiquidationOrder,
-            liquidation_output::LiquidationResponse,
-        },
-        PositionEffectType,
-    },
+    perpetual::PositionEffectType,
     transaction_batch::tx_batch_structs::OracleUpdate,
     trees::superficial_tree::SuperficialTree,
     utils::{
-        errors::{
-            send_amend_order_error_reply, send_funding_error_reply,
-            send_liquidation_order_error_reply, PerpSwapExecutionError,
-        },
+        errors::send_funding_error_reply,
         storage::{BackupStorage, MainStorage},
     },
 };
-
-use crate::transactions::{
-    deposit::Deposit, limit_order::LimitOrder, transaction_helpers::rollbacks::RollbackInfo,
-    withdrawal::Withdrawal,
+use crate::{
+    perpetual::perp_helpers::perp_rollback::PerpRollbackInfo,
+    utils::errors::{send_close_tab_error_reply, send_open_tab_error_reply},
 };
-use crate::utils::crypto_utils::Signature;
+
+use crate::transactions::transaction_helpers::rollbacks::RollbackInfo;
+
 use crate::utils::{
     errors::{
-        send_cancel_order_error_reply, send_deposit_error_reply, send_liquidity_error_reply,
-        send_margin_change_error_reply, send_oracle_update_error_reply, send_order_error_reply,
-        send_split_notes_error_reply, send_withdrawal_error_reply,
+        send_liquidity_error_reply, send_margin_change_error_reply, send_oracle_update_error_reply,
+        send_split_notes_error_reply,
     },
     notes::Note,
 };
 
-use error_stack::Report;
 use tokio::sync::{
     mpsc::Sender as MpscSender,
     oneshot::{self, Sender as OneshotSender},
@@ -106,6 +76,10 @@ use tokio::sync::{
 };
 use tokio::task::JoinHandle as TokioJoinHandle;
 use tonic::{Request, Response, Status};
+
+mod onchain_interaction;
+mod order_executions;
+mod order_interactions;
 
 // TODO: ALL OPERATIONS SHOULD START A THREAD INCASE SOMETHING FAILS WE CAN CONTINUE ON
 
@@ -144,153 +118,22 @@ impl Engine for EngineService {
         &self,
         request: Request<LimitOrderMessage>,
     ) -> Result<Response<OrderResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
-        tokio::task::yield_now().await;
-
-        // let now = Instant::now();
-
-        let req: LimitOrderMessage = request.into_inner();
-
-        let user_id = req.user_id;
-        let is_market: bool = req.is_market;
-
-        // ? Verify the signature is defined and has a valid format
-        let signature: Signature;
-        match verify_signature_format(&req.signature) {
-            Ok(sig) => signature = sig,
-            Err(err) => {
-                return send_order_error_reply(err);
-            }
-        }
-
-        // ? Try to parse the grpc input as a LimitOrder
-        let limit_order: LimitOrder;
-        match LimitOrder::try_from(req) {
-            Ok(lo) => limit_order = lo,
-            Err(_e) => {
-                return send_order_error_reply(
-                    "Error unpacking the limit order (verify the format is correct)".to_string(),
-                );
-            }
-        };
-
-        // ? Try to get the market_id and order_side from the limit_order
-        let res = get_market_id_and_order_side(limit_order.token_spent, limit_order.token_received);
-        if res.is_none() {
-            return send_order_error_reply("Market (token pair) not found".to_string());
-        }
-        let (market_id, side) = res.unwrap();
-
-        if limit_order.spot_note_info.is_some() {
-            // ? Verify the notes spent exist in the state tree
-            if let Err(err_msg) = verify_notes_existence(
-                &limit_order.spot_note_info.as_ref().unwrap().notes_in,
-                &self.state_tree,
-            ) {
-                return send_order_error_reply(err_msg);
-            }
-        } else {
-            if limit_order.order_tab.is_none() {
-                return send_order_error_reply(
-                    "Order tab is not defined for this limit order".to_string(),
-                );
-            }
-
-            // ? Verify the order tab exist in the state tree
-            if let Err(err_msg) =
-                verify_tab_existence(&limit_order.order_tab.as_ref().unwrap(), &self.state_tree)
-            {
-                return send_order_error_reply(err_msg);
-            }
-        }
-
-        let mut processed_res = process_limit_order_request(
-            self.order_books.get(&market_id).clone().unwrap(),
-            limit_order.clone(),
-            side,
-            signature.clone(),
-            user_id,
-            is_market,
-            false,
-            0,
-            0,
-            None,
-        )
-        .await;
-
-        // This matches the orders and creates the swaps that can be executed
-        let handles;
-        let new_order_id;
-        match process_and_execute_spot_swaps(
+        return submit_limit_order_inner(
             &self.mpsc_tx,
-            &self.rollback_safeguard,
-            self.order_books.get(&market_id).clone().unwrap(),
             &self.session,
+            &self.main_storage,
             &self.backup_storage,
-            &mut processed_res,
-        )
-        .await
-        {
-            Ok((h, oid)) => {
-                handles = h;
-                new_order_id = oid;
-            }
-            Err(err) => {
-                return send_order_error_reply(err);
-            }
-        };
-
-        // this executes the swaps in parallel
-        let retry_messages;
-        match await_swap_handles(
+            &self.swap_output_json,
+            &self.state_tree,
+            &self.rollback_safeguard,
+            &self.order_books,
             &self.ws_connections,
             &self.privileged_ws_connections,
-            handles,
-            user_id,
+            &self.semaphore,
+            &self.is_paused,
+            request,
         )
-        .await
-        {
-            Ok(rm) => retry_messages = rm,
-            Err(e) => return send_order_error_reply(e),
-        };
-
-        if retry_messages.len() > 0 {
-            if let Err(e) = retry_failed_swaps(
-                &self.mpsc_tx,
-                &self.rollback_safeguard,
-                self.order_books.get(&market_id).clone().unwrap(),
-                &self.session,
-                &self.backup_storage,
-                limit_order,
-                side,
-                signature,
-                user_id,
-                is_market,
-                &self.ws_connections,
-                &self.privileged_ws_connections,
-                retry_messages,
-                None,
-            )
-            .await
-            {
-                return send_order_error_reply(e);
-            }
-        }
-
-        store_output_json(&self.swap_output_json, &self.main_storage);
-
-        // Send a successul reply to the caller
-        let reply = OrderResponse {
-            successful: true,
-            error_message: "".to_string(),
-            order_id: new_order_id,
-        };
-
-        return Ok(Response::new(reply));
+        .await;
     }
 
     //
@@ -301,135 +144,23 @@ impl Engine for EngineService {
         &self,
         request: Request<PerpOrderMessage>,
     ) -> Result<Response<OrderResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
-        tokio::task::yield_now().await;
-
-        let req: PerpOrderMessage = request.into_inner();
-
-        let user_id = req.user_id;
-        let is_market: bool = req.is_market;
-
-        // ? Verify the signature is defined and has a valid format
-        let signature: Signature;
-        match verify_signature_format(&req.signature) {
-            Ok(sig) => signature = sig,
-            Err(err) => {
-                return send_order_error_reply(err);
-            }
-        }
-
-        // ? Try to parse the grpc input as a LimitOrder
-        let perp_order: PerpOrder;
-        match PerpOrder::try_from(req) {
-            Ok(po) => perp_order = po,
-            Err(_e) => {
-                return send_order_error_reply(
-                    "Error unpacking the limit order (verify the format is correct)".to_string(),
-                );
-            }
-        };
-
-        // ? market for perpetuals can be just the synthetic token
-        let market = PERP_MARKET_IDS.get(&perp_order.synthetic_token.to_string());
-        if market.is_none() {
-            return send_order_error_reply(
-                "Market (token pair) does not exist for this token".to_string(),
-            );
-        }
-
-        // ? Verify the notes spent and position modified exist in the state tree
-        if perp_order.position_effect_type == PositionEffectType::Open {
-            if let Err(err_msg) = verify_notes_existence(
-                &perp_order.open_order_fields.as_ref().unwrap().notes_in,
-                &self.state_tree,
-            ) {
-                return send_order_error_reply(err_msg);
-            }
-        } else {
-            if let Err(err_msg) = verify_position_existence(
-                &perp_order.position.as_ref().unwrap(),
-                &self.perp_state_tree,
-            ) {
-                return send_order_error_reply(err_msg);
-            }
-        }
-
-        let side: OBOrderSide = perp_order.order_side.clone().into();
-
-        let mut processed_res = process_perp_order_request(
-            self.perp_order_books.get(&market.unwrap()).clone().unwrap(),
-            perp_order.clone(),
-            side,
-            signature.clone(),
-            user_id,
-            is_market,
-            false,
-            0,
-            0,
-            None,
+        return submit_perpetual_order_inner(
+            &self.mpsc_tx,
+            &self.session,
+            &self.main_storage,
+            &self.backup_storage,
+            &self.swap_output_json,
+            &self.state_tree,
+            &self.perp_state_tree,
+            &self.perp_rollback_safeguard,
+            &self.perp_order_books,
+            &self.ws_connections,
+            &self.privileged_ws_connections,
+            &self.semaphore,
+            &self.is_paused,
+            request,
         )
         .await;
-
-        // This matches the orders and creates the swaps that can be executed
-        let retry_messages;
-        let new_order_id;
-        match process_and_execute_perp_swaps(
-            &self.mpsc_tx,
-            &self.perp_rollback_safeguard,
-            self.perp_order_books.get(&market.unwrap()).clone().unwrap(),
-            &self.session,
-            &self.backup_storage,
-            &self.ws_connections,
-            &self.privileged_ws_connections,
-            &mut processed_res,
-            user_id,
-        )
-        .await
-        {
-            Ok((h, oid)) => {
-                retry_messages = h;
-                new_order_id = oid;
-            }
-            Err(err) => {
-                return send_order_error_reply(err);
-            }
-        };
-
-        if let Err(e) = retry_failed_perp_swaps(
-            &self.mpsc_tx,
-            &self.perp_rollback_safeguard,
-            self.perp_order_books.get(&market.unwrap()).clone().unwrap(),
-            &self.session,
-            &self.backup_storage,
-            perp_order,
-            side,
-            signature,
-            user_id,
-            is_market,
-            &self.ws_connections,
-            &self.privileged_ws_connections,
-            retry_messages,
-            None,
-        )
-        .await
-        {
-            return send_order_error_reply(e);
-        }
-
-        store_output_json(&self.swap_output_json, &self.main_storage);
-
-        // Send a successful reply to the caller
-        let reply = OrderResponse {
-            successful: true,
-            error_message: "".to_string(),
-            order_id: new_order_id,
-        };
-
-        return Ok(Response::new(reply));
     }
 
     //
@@ -440,122 +171,16 @@ impl Engine for EngineService {
         &self,
         request: Request<LiquidationOrderMessage>,
     ) -> Result<Response<LiquidationOrderResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
-        tokio::task::yield_now().await;
-
-        let req: LiquidationOrderMessage = request.into_inner();
-
-        // ? Verify the signature is defined and has a valid format
-        let signature: Signature;
-        match verify_signature_format(&req.signature) {
-            Ok(sig) => signature = sig,
-            Err(err) => {
-                return send_liquidation_order_error_reply(err);
-            }
-        }
-
-        // ? Try to parse the grpc input as a LimitOrder
-        let liquidation_order: LiquidationOrder;
-        match LiquidationOrder::try_from(req) {
-            Ok(lo) => liquidation_order = lo,
-            Err(_e) => {
-                return send_liquidation_order_error_reply(
-                    "Error unpacking the liquidation order (verify the format is correct)"
-                        .to_string(),
-                );
-            }
-        };
-
-        // ? market for perpetuals can be just the synthetic token
-        let market = PERP_MARKET_IDS.get(&liquidation_order.synthetic_token.to_string());
-        if market.is_none() {
-            return send_liquidation_order_error_reply(
-                "Market (token pair) does not exist for this token".to_string(),
-            );
-        }
-
-        let mut perp_orderbook = self
-            .perp_order_books
-            .get(&market.unwrap())
-            .clone()
-            .unwrap()
-            .lock()
-            .await;
-        let market_price;
-        match perp_orderbook.get_market_price() {
-            Ok(mp) => market_price = mp,
-            Err(e) => {
-                return send_liquidation_order_error_reply(e);
-            }
-        };
-        drop(perp_orderbook);
-
-        let liquidation_swap = LiquidationSwap::new(liquidation_order, signature, market_price);
-
-        // TODO ==================================================================================
-
-        let transaction_mpsc_tx = self.mpsc_tx.clone();
-
-        let handle: TokioJoinHandle<
-            JoinHandle<Result<LiquidationResponse, Report<PerpSwapExecutionError>>>,
-        > = tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
-
-            let mut grpc_message = GrpcMessage::new();
-            grpc_message.msg_type = MessageType::LiquidationMessage;
-            grpc_message.liquidation_message = Some(liquidation_swap);
-
-            transaction_mpsc_tx
-                .send((grpc_message, resp_tx))
-                .await
-                .ok()
-                .unwrap();
-            let res = resp_rx.await.unwrap();
-
-            return res.liquidation_tx_handle.unwrap();
-        });
-
-        let liquidation_handle = handle.await.unwrap();
-
-        let liquidation_response = liquidation_handle.join();
-
-        // TODO ==================================================================================
-
-        match liquidation_response {
-            Ok(res1) => match res1 {
-                Ok(response) => {
-                    store_output_json(&self.swap_output_json, &self.main_storage);
-
-                    // TODO Send message to the user whose position was liquidated
-
-                    let reply = LiquidationOrderResponse {
-                        successful: true,
-                        error_message: "".to_string(),
-                        new_position: Some(GrpcPerpPosition::from(response.new_position)),
-                    };
-
-                    return Ok(Response::new(reply));
-                }
-                Err(err) => {
-                    println!("\n{:?}", err);
-
-                    let error_message_response: String = err.current_context().err_msg.to_string();
-
-                    return send_liquidation_order_error_reply(error_message_response);
-                }
-            },
-            Err(_e) => {
-                println!("Unknown Error in liquidation execution");
-
-                return send_liquidation_order_error_reply(
-                    "Unknown Error occurred in the liquidation execution".to_string(),
-                );
-            }
-        }
+        return submit_liquidation_order_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.perp_order_books,
+            &self.semaphore,
+            &self.is_paused,
+            request,
+        )
+        .await;
     }
 
     //
@@ -566,48 +191,14 @@ impl Engine for EngineService {
         &self,
         request: Request<CancelOrderMessage>,
     ) -> Result<Response<CancelOrderResponse>, Status> {
-        tokio::task::yield_now().await;
-
-        let req: CancelOrderMessage = request.into_inner();
-
-        let market_id = req.market_id as u16;
-
-        let order_book_m: &Arc<TokioMutex<OrderBook>>;
-        if req.is_perp {
-            let order_book_m_ = self.perp_order_books.get(&market_id);
-            if order_book_m_.is_none() {
-                return send_cancel_order_error_reply("Market not found".to_string());
-            }
-
-            order_book_m = order_book_m_.unwrap();
-        } else {
-            let order_book_m_ = self.order_books.get(&market_id);
-            if order_book_m_.is_none() {
-                return send_cancel_order_error_reply("Market not found".to_string());
-            }
-
-            order_book_m = order_book_m_.unwrap();
-        }
-
-        let order_side: OBOrderSide = if req.order_side {
-            OBOrderSide::Bid
-        } else {
-            OBOrderSide::Ask
-        };
-
-        let cancel_request = limit_order_cancel_request(req.order_id, order_side, req.user_id);
-
-        let mut order_book = order_book_m.lock().await;
-
-        let res = order_book.process_order(cancel_request);
-
-        return handle_cancel_order_repsonse(
-            &res[0],
-            req.is_perp,
-            req.order_id,
+        return cancel_order_inner(
             &self.partial_fill_tracker,
             &self.perpetual_partial_fill_tracker,
-        );
+            &self.order_books,
+            &self.perp_order_books,
+            request,
+        )
+        .await;
     }
 
     //
@@ -618,106 +209,21 @@ impl Engine for EngineService {
         &self,
         request: Request<AmendOrderRequest>,
     ) -> Result<Response<AmendOrderResponse>, Status> {
-        tokio::task::yield_now().await;
-
-        let req: AmendOrderRequest = request.into_inner();
-
-        // ? Verify the signature is defined and has a valid format
-        let signature: Signature;
-        match verify_signature_format(&req.signature) {
-            Ok(sig) => signature = sig,
-            Err(err) => {
-                return send_amend_order_error_reply(err);
-            }
-        }
-
-        let market_id = req.market_id as u16;
-
-        let order_book_m: &Arc<TokioMutex<OrderBook>>;
-        if req.is_perp {
-            let order_book_m_ = self.perp_order_books.get(&market_id);
-            if order_book_m_.is_none() {
-                return send_amend_order_error_reply("Market not found".to_string());
-            }
-
-            order_book_m = order_book_m_.unwrap();
-        } else {
-            let order_book_m_ = self.order_books.get(&market_id);
-            if order_book_m_.is_none() {
-                return send_amend_order_error_reply("Market not found".to_string());
-            }
-
-            order_book_m = order_book_m_.unwrap();
-        }
-
-        let order_side: OBOrderSide = if req.order_side {
-            OBOrderSide::Bid
-        } else {
-            OBOrderSide::Ask
-        };
-
-        let amend_request = new_amend_order(
-            req.order_id,
-            order_side,
-            req.user_id,
-            req.new_price,
-            req.new_expiration,
-            signature.clone(),
-            req.match_only,
-        );
-
-        let mut order_book = order_book_m.lock().await;
-        let mut processed_res = order_book.process_order(amend_request);
-        drop(order_book);
-
-        if req.is_perp {
-            if let Err(e) = execute_perp_swaps_after_amend_order(
-                &self.mpsc_tx,
-                &self.perp_rollback_safeguard,
-                &order_book_m,
-                &self.session,
-                &self.backup_storage,
-                &self.ws_connections,
-                &self.privileged_ws_connections,
-                &mut processed_res,
-                req.order_id,
-                order_side,
-                signature,
-                req.user_id,
-            )
-            .await
-            {
-                return send_amend_order_error_reply(e);
-            }
-        } else {
-            if let Err(e) = execute_spot_swaps_after_amend_order(
-                &self.mpsc_tx,
-                &self.rollback_safeguard,
-                &order_book_m,
-                &self.session,
-                &self.backup_storage,
-                processed_res,
-                &self.ws_connections,
-                &self.privileged_ws_connections,
-                req.order_id,
-                order_side,
-                signature,
-                req.user_id,
-            )
-            .await
-            {
-                return send_amend_order_error_reply(e);
-            }
-        }
-
-        store_output_json(&self.swap_output_json, &self.main_storage);
-
-        let reply: AmendOrderResponse = AmendOrderResponse {
-            successful: true,
-            error_message: "".to_string(),
-        };
-
-        return Ok(Response::new(reply));
+        return amend_order_inner(
+            &self.mpsc_tx,
+            &self.session,
+            &self.main_storage,
+            &self.backup_storage,
+            &self.swap_output_json,
+            &self.rollback_safeguard,
+            &self.perp_rollback_safeguard,
+            &self.order_books,
+            &self.perp_order_books,
+            &self.ws_connections,
+            &self.privileged_ws_connections,
+            request,
+        )
+        .await;
     }
 
     //
@@ -728,59 +234,15 @@ impl Engine for EngineService {
         &self,
         request: Request<DepositMessage>,
     ) -> Result<Response<DepositResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
-        tokio::task::yield_now().await;
-
-        let transaction_mpsc_tx = self.mpsc_tx.clone();
-        let swap_output_json = self.swap_output_json.clone();
-        let main_storage = self.main_storage.clone();
-
-        let handle = tokio::spawn(async move {
-            let req: DepositMessage = request.into_inner();
-
-            let deposit: Deposit;
-            match Deposit::try_from(req) {
-                Ok(d) => deposit = d,
-                Err(_e) => {
-                    return send_deposit_error_reply(
-                        "Erroc unpacking the swap message (verify the format is correct)"
-                            .to_string(),
-                    );
-                }
-            };
-
-            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-                let (resp_tx, resp_rx) = oneshot::channel();
-
-                let mut grpc_message = GrpcMessage::new();
-                grpc_message.msg_type = MessageType::DepositMessage;
-                grpc_message.deposit_message = Some(deposit);
-
-                transaction_mpsc_tx
-                    .send((grpc_message, resp_tx))
-                    .await
-                    .ok()
-                    .unwrap();
-                return resp_rx.await.unwrap();
-            });
-
-            return handle_deposit_repsonse(handle, &swap_output_json, &main_storage).await;
-        });
-
-        match handle.await {
-            Ok(res) => {
-                return res;
-            }
-            Err(_e) => {
-                return send_deposit_error_reply(
-                    "Unknown Error occured in the withdrawal execution".to_string(),
-                );
-            }
-        }
+        return execute_deposit_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.semaphore,
+            &self.is_paused,
+            request,
+        )
+        .await;
     }
 
     //
@@ -791,59 +253,15 @@ impl Engine for EngineService {
         &self,
         request: Request<WithdrawalMessage>,
     ) -> Result<Response<SuccessResponse>, Status> {
-        let _permit = self.semaphore.acquire().await.unwrap();
-
-        let lock = self.is_paused.lock().await;
-        drop(lock);
-
-        tokio::task::yield_now().await;
-
-        let transaction_mpsc_tx = self.mpsc_tx.clone();
-        let swap_output_json = self.swap_output_json.clone();
-        let main_storage = self.main_storage.clone();
-
-        let handle = tokio::spawn(async move {
-            let req: WithdrawalMessage = request.into_inner();
-
-            let withdrawal: Withdrawal;
-            match Withdrawal::try_from(req) {
-                Ok(w) => withdrawal = w,
-                Err(_e) => {
-                    return send_withdrawal_error_reply(
-                        "Erroc unpacking the withdrawal message (verify the format is correct)"
-                            .to_string(),
-                    );
-                }
-            };
-
-            let handle: TokioJoinHandle<GrpcTxResponse> = tokio::spawn(async move {
-                let (resp_tx, resp_rx) = oneshot::channel();
-
-                let mut grpc_message = GrpcMessage::new();
-                grpc_message.msg_type = MessageType::WithdrawalMessage;
-                grpc_message.withdrawal_message = Some(withdrawal);
-
-                transaction_mpsc_tx
-                    .send((grpc_message, resp_tx))
-                    .await
-                    .ok()
-                    .unwrap();
-                return resp_rx.await.unwrap();
-            });
-
-            return handle_withdrawal_repsonse(handle, &swap_output_json, &main_storage).await;
-        });
-
-        match handle.await {
-            Ok(res) => {
-                return res;
-            }
-            Err(_e) => {
-                return send_withdrawal_error_reply(
-                    "Unknown Error occured in the withdrawal execution".to_string(),
-                );
-            }
-        }
+        return execute_withdrawal_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.semaphore,
+            &self.is_paused,
+            request,
+        )
+        .await;
     }
 
     //
