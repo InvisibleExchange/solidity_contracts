@@ -216,9 +216,10 @@ pub fn send_matching_error(err_msg: String) -> Report<MatchingEngineError> {
 
 use tonic::{Response, Status};
 
-use crate::server::grpc::engine::{
-    AmendOrderResponse, CancelOrderResponse, DepositResponse, FundingRes, LiquidationOrderResponse,
-    LiquidityRes, MarginChangeRes, OrderResponse, SplitNotesRes, SuccessResponse,
+use crate::server::grpc::engine_proto::{
+    AmendOrderResponse, CancelOrderResponse, CloseOrderTabRes, DepositResponse, FundingRes,
+    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, OpenOrderTabRes, OrderResponse,
+    SplitNotesRes, SuccessResponse,
 };
 
 // * ERROR GRPC REPLIES
@@ -324,6 +325,27 @@ pub fn send_margin_change_error_reply(
         successful: false,
         error_message: err_msg,
         return_collateral_index: 0,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_open_tab_error_reply(err_msg: String) -> Result<Response<OpenOrderTabRes>, Status> {
+    let reply = OpenOrderTabRes {
+        successful: false,
+        error_message: err_msg,
+        order_tab: None,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_close_tab_error_reply(err_msg: String) -> Result<Response<CloseOrderTabRes>, Status> {
+    let reply = CloseOrderTabRes {
+        successful: false,
+        error_message: err_msg,
+        base_return_note: None,
+        quote_return_note: None,
     };
 
     return Ok(Response::new(reply));

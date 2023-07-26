@@ -1,3 +1,4 @@
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -21,6 +22,8 @@ impl TransactionOutptut<'_> {
         // & spot_note_info_res - (prev_pfr_note, swap_note_idx, new_pfr_idx)
         spot_note_info_res_a: &Option<(Option<Note>, u64, u64)>,
         spot_note_info_res_b: &Option<(Option<Note>, u64, u64)>,
+        updated_tab_hash_a: &Option<BigUint>,
+        updated_tab_hash_b: &Option<BigUint>,
     ) -> serde_json::map::Map<String, Value> {
         let mut json_map = serde_json::map::Map::new();
 
@@ -59,6 +62,22 @@ impl TransactionOutptut<'_> {
         json_map.insert(
             String::from("transaction_type"),
             serde_json::to_value(&"swap").unwrap(),
+        );
+        json_map.insert(
+            String::from("is_tab_order_a"),
+            serde_json::to_value(&is_tab_order_a).unwrap(),
+        );
+        json_map.insert(
+            String::from("is_tab_order_b"),
+            serde_json::to_value(&is_tab_order_b).unwrap(),
+        );
+        json_map.insert(
+            String::from("updated_tab_hash_a"),
+            serde_json::to_value(&updated_tab_hash_a.as_ref().map(|h| h.to_string())).unwrap(),
+        );
+        json_map.insert(
+            String::from("updated_tab_hash_b"),
+            serde_json::to_value(&updated_tab_hash_b.as_ref().map(|h| h.to_string())).unwrap(),
         );
         json_map.insert(String::from("swap_data"), swap_json1);
         json_map.insert(String::from("indexes"), indexes_json);

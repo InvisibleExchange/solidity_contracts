@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 use invisible_backend::perpetual::perp_helpers::perp_rollback::PerpRollbackInfo;
 use invisible_backend::server::{
     engine::EngineService,
-    grpc::{engine, GrpcMessage, GrpcTxResponse, MessageType},
+    grpc::{engine_proto, GrpcMessage, GrpcTxResponse, MessageType},
     server_helpers::{handle_connection, init_order_books, WsConnectionsMap},
 };
 
@@ -17,7 +17,7 @@ use invisible_backend::transactions::transaction_helpers::rollbacks::RollbackInf
 use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex, Semaphore};
 use tonic::transport::Server;
 
-use engine::engine_server::EngineServer;
+use engine_proto::engine_server::EngineServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -167,6 +167,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     response
                         .send(grpc_res)
                         .expect("failed sending back the TxResponse in margin change");
+                }
+                MessageType::OrderTabAction => {
+                    let result = tx_batch.execute_order_tab_modification(
+                        grpc_message.order_tab_action_message.unwrap(),
+                    );
+
+                    let mut grpc_res = GrpcTxResponse::new(true);
+                    grpc_res.order_tab_action_response = Some(result);
+
+                    response
+                        .send(grpc_res)
+                        .expect("failed sending back the TxResponse in order tab action");
                 }
                 MessageType::Rollback => {
                     tx_batch.rollback_transaction(grpc_message.rollback_info_message.unwrap());

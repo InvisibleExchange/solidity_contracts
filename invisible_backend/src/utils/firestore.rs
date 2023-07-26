@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    order_tab::OrderTab,
     perpetual::perp_position::PerpPosition,
     transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
     trees::superficial_tree::SuperficialTree,
@@ -57,44 +58,74 @@ impl FirebaseNoteObject {
     }
 }
 
-
 // ? Order Tab
+#[derive(Serialize, Deserialize, Debug)]
 pub struct OrderTabObject {
-    pub address: [String; 2],
-    pub commitment: String,
-    pub hidden_amount: String,
-    pub index: String,
-    pub token: String,
+    pub index: u32,
+    // header
+    pub expiration_timestamp: u64,
+    pub is_perp: bool,
+    pub is_smart_contract: bool,
+    pub base_token: u64,
+    pub quote_token: u64,
+    pub pub_key: String,
+    //
+    pub base_commitment: String,
+    pub base_hidden_amount: String,
+    pub quote_commitment: String,
+    pub quote_hidden_amount: String,
+    pub hash: String,
 }
 
 impl OrderTabObject {
-    pub fn from_note(note: &Note) -> OrderTabObject {
+    pub fn from_order_tab(order_tab: &OrderTab) -> Self {
         // let hash8 = trimHash(yt, 64);
         // let hiddentAmount = bigInt(amount).xor(hash8).value;
 
-        let yt_digits = note.blinding.to_u64_digits();
-        let yt_trimmed = if yt_digits.len() == 0 {
+        // ? Hide base amount
+        let base_yt_digits = order_tab.tab_header.base_blinding.to_u64_digits();
+        let base_yt_trimmed = if base_yt_digits.len() == 0 {
             0
         } else {
-            yt_digits[0]
+            base_yt_digits[0]
         };
+        let base_hidden_amount = order_tab.base_amount ^ base_yt_trimmed;
 
-        let hidden_amount = note.amount ^ yt_trimmed;
+        // ? Hide quote amount
+        let quote_yt_digits = order_tab.tab_header.quote_blinding.to_u64_digits();
+        let quote_yt_trimmed = if quote_yt_digits.len() == 0 {
+            0
+        } else {
+            quote_yt_digits[0]
+        };
+        let quote_hidden_amount = order_tab.quote_amount ^ quote_yt_trimmed;
 
         return OrderTabObject {
-            address: [note.address.x.to_string(), note.address.y.to_string()],
-            commitment: pedersen(&BigUint::from_u64(note.amount).unwrap(), &note.blinding)
-                .to_string(),
-            hidden_amount: hidden_amount.to_string(),
-            index: note.index.to_string(),
-            token: note.token.to_string(),
+            index: order_tab.tab_idx,
+            expiration_timestamp: order_tab.tab_header.expiration_timestamp,
+            is_perp: order_tab.tab_header.is_perp,
+            is_smart_contract: order_tab.tab_header.is_smart_contract,
+            base_token: order_tab.tab_header.base_token,
+            quote_token: order_tab.tab_header.quote_token,
+            pub_key: order_tab.tab_header.pub_key.to_string(),
+            base_commitment: pedersen(
+                &BigUint::from_u64(order_tab.base_amount).unwrap(),
+                &order_tab.tab_header.base_blinding,
+            )
+            .to_string(),
+            base_hidden_amount: base_hidden_amount.to_string(),
+            quote_commitment: pedersen(
+                &BigUint::from_u64(order_tab.quote_amount).unwrap(),
+                &order_tab.tab_header.quote_blinding,
+            )
+            .to_string(),
+            quote_hidden_amount: quote_hidden_amount.to_string(),
+            hash: order_tab.hash.to_string(),
         };
     }
 }
 
-
 // * ==================================================================================
-
 
 pub fn create_session() -> ServiceSession {
     let mut cred =
@@ -315,6 +346,60 @@ fn store_new_position(
     }
 }
 
+// ORDER TAB ------------- -------------- ---------------- ----------------- ----------------
+
+fn store_order_tab(
+    session: &ServiceSession,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    order_tab: &OrderTab,
+) {
+    let obj = OrderTabObject::from_order_tab(order_tab);
+
+    let write_path = format!(
+        "order_tabs/{}/indexes",
+        order_tab.tab_header.pub_key.to_string().as_str()
+    );
+    let res = documents::write(
+        session,
+        write_path.as_str(),
+        Some(order_tab.tab_idx.to_string()),
+        &obj,
+        documents::WriteOptions::default(),
+    );
+
+    if let Err(e) = res {
+        println!("Error storing note in backup storage. ERROR: {:?}", e);
+        let s = backup_storage.lock();
+        if let Err(_e) = s.store_order_tab(order_tab) {};
+        drop(s);
+    }
+}
+
+fn delete_order_tab(
+    session: &ServiceSession,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    pub_key: &str,
+    idx: &str,
+) {
+    // & address is the x coordinate in string format and idx is the index in string format
+
+    let delete_path = format!("order_tabs/{}/indexes/{}", pub_key, idx);
+    let r = documents::delete(session, delete_path.as_str(), true);
+    if let Err(e) = r {
+        if let FirebaseError::APIError(numeric_code, string_code, _context) = e {
+            if string_code.starts_with("No document to update") && numeric_code == 404 {
+                return;
+            }
+        } else {
+            println!("Error deleting note from backup storage. ERROR: {:?}", e);
+        }
+
+        let s = backup_storage.lock();
+        if let Err(_e) = s.store_order_tab_removal(u64::from_str_radix(idx, 10).unwrap(), pub_key) {
+        }
+    }
+}
+
 // FILLS   -------------- ---------------- ----------------- ----------------
 
 fn store_new_spot_fill(
@@ -437,6 +522,43 @@ pub fn start_delete_position_thread(
     let handle = spawn(move || {
         let session_ = s.lock();
         delete_position_at_address(&session_, &backup, address.as_str(), idx.as_str());
+        drop(session_);
+    });
+    return handle;
+}
+
+// ORDER TABS
+
+pub fn start_add_order_tab_thread(
+    order_tab: OrderTab,
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+) -> JoinHandle<()> {
+    let s = Arc::clone(&session);
+    let backup = Arc::clone(&backup_storage);
+
+    let handle = spawn(move || {
+        let session_ = s.lock();
+        // let backup_storage = backup_storage.lock();
+
+        store_order_tab(&session_, &backup, &order_tab);
+        drop(session_);
+    });
+    return handle;
+}
+
+pub fn start_delete_order_tab_thread(
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    pub_key: String,
+    idx: String,
+) -> JoinHandle<()> {
+    let s = Arc::clone(&session);
+    let backup = Arc::clone(&backup_storage);
+
+    let handle = spawn(move || {
+        let session_ = s.lock();
+        delete_order_tab(&session_, &backup, pub_key.as_str(), idx.as_str());
         drop(session_);
     });
     return handle;

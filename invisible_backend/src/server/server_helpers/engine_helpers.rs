@@ -9,9 +9,10 @@ use tonic::{Response, Status};
 
 use crate::{
     matching_engine::orderbook::{Failed, OrderBook, Success},
+    order_tab::OrderTab,
     perpetual::{perp_position::PerpPosition, OrderSide},
     server::grpc::{
-        engine::{
+        engine_proto::{
             CancelOrderResponse, DepositResponse, GrpcNote, MarginChangeRes,
             Signature as GrpcSignature, SplitNotesRes, SuccessResponse,
         },
@@ -26,7 +27,6 @@ use crate::{
         },
         storage::MainStorage,
     },
-    order_tab::OrderTab,
 };
 use tokio::sync::Mutex as TokioMutex;
 use tokio::task::JoinHandle as TokioJoinHandle;

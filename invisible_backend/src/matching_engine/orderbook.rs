@@ -6,7 +6,9 @@ use crate::matching_engine::orders::amend_inner;
 use crate::perpetual::perp_order::PerpOrder;
 use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{DUST_AMOUNT_PER_ASSET, PRICE_DECIMALS_PER_ASSET};
-use crate::server::grpc::engine::{PerpOrderRestoreMessageInner, SpotOrderRestoreMessageInner};
+use crate::server::grpc::engine_proto::{
+    PerpOrderRestoreMessageInner, SpotOrderRestoreMessageInner,
+};
 use crate::transactions::limit_order::LimitOrder;
 use crate::utils::crypto_utils::Signature;
 

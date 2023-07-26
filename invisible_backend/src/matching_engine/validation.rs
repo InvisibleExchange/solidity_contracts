@@ -139,15 +139,15 @@ impl OrderRequestValidator {
                 } else if limit_order.order_tab.is_some() {
                     // ? Check that the order tab is valid
                     let order_tab = limit_order.order_tab.as_ref().unwrap().lock();
-                    if (order_tab.base_token != limit_order.token_spent
-                        || order_tab.quote_token != limit_order.token_received)
-                        && (order_tab.base_token != limit_order.token_received
-                            || order_tab.quote_token != limit_order.token_spent)
+                    if (order_tab.tab_header.base_token != limit_order.token_spent
+                        || order_tab.tab_header.quote_token != limit_order.token_received)
+                        && (order_tab.tab_header.base_token != limit_order.token_received
+                            || order_tab.tab_header.quote_token != limit_order.token_spent)
                     {
                         return Err("Token missmatch");
                     }
 
-                    if limit_order.token_spent == order_tab.base_token {
+                    if limit_order.token_spent == order_tab.tab_header.base_token {
                         if limit_order.amount_spent > order_tab.base_amount {
                             return Err("Overspending base token");
                         }

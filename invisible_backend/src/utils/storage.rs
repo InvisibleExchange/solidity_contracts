@@ -5,12 +5,10 @@ use serde_json::Value;
 use sled::{Config, Result};
 
 use crate::{
+    order_tab::OrderTab,
     perpetual::perp_position::PerpPosition,
     transaction_batch::tx_batch_structs::OracleUpdate,
-    transactions::{
-        limit_order::LimitOrder,
-        transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
-    },
+    transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
 };
 
 use super::notes::Note;
@@ -289,6 +287,8 @@ pub struct BackupStorage {
     removable_positions_db: sled::Db, // For failed removable positions updates
     fills_db: sled::Db,               // For failed spot fills updates
     perp_fills_db: sled::Db,          // For failed perp fills updates
+    order_tabs_db: sled::Db,          // For failed order tab updates
+    removable_order_tabs_db: sled::Db, // For failed removable order tab updates
                                       // rollback_db: sled::Db,            // For rollback transactions
 }
 
@@ -315,6 +315,12 @@ impl BackupStorage {
         // let config = Config::new().path("./storage/rollback_info");
         // let rollback_db = config.open().unwrap();
 
+        let config = Config::new().path("./storage/order_tabs_info");
+        let order_tabs_db = config.open().unwrap();
+
+        let config = Config::new().path("./storage/removable_order_tabs_info");
+        let removable_order_tabs_db = config.open().unwrap();
+
         BackupStorage {
             note_db,
             removable_notes_db,
@@ -323,6 +329,8 @@ impl BackupStorage {
             fills_db,
             perp_fills_db,
             // rollback_db,
+            order_tabs_db,
+            removable_order_tabs_db,
         }
     }
 
@@ -456,11 +464,26 @@ impl BackupStorage {
     //     Ok(())
     // }
 
-    // pub struct RollbackInfo {
-    //     pub zero_idxs: Option<Vec<u64>>,
-    //     pub swap_rollback_info_a: Option<OrderRollbackInfo>,
-    //     pub swap_rollback_info_b: Option<OrderRollbackInfo>,
-    // }
+    pub fn store_order_tab(&self, order_tab: &OrderTab) -> Result<()> {
+        let idx = order_tab.tab_idx;
+        let tab = serde_json::to_vec(order_tab).unwrap();
+
+        self.order_tabs_db.insert(idx.to_string(), tab)?;
+
+        Ok(())
+    }
+
+    pub fn store_order_tab_removal(&self, idx: u64, pub_key: &str) -> Result<()> {
+        let info = serde_json::to_vec(&(idx, pub_key)).unwrap();
+
+        self.removable_order_tabs_db.insert(idx.to_string(), info)?;
+
+        Ok(())
+    }
+
+    // TODO: Read order tabs
+
+    // TODO: Read removable order tabs
 
     pub fn clear_db(&self) -> Result<()> {
         self.note_db.clear()?;
@@ -472,42 +495,42 @@ impl BackupStorage {
     }
 }
 
-pub struct LiquidityStorage {
-    liquidity_db: sled::Db,
-}
+// pub struct LiquidityStorage {
+//     liquidity_db: sled::Db,
+// }
 
-impl LiquidityStorage {
-    pub fn new() -> Self {
-        let config = Config::new().path("./storage/backups/liquidity");
-        let liquidity_db = config.open().unwrap();
+// impl LiquidityStorage {
+//     pub fn new() -> Self {
+//         let config = Config::new().path("./storage/backups/liquidity");
+//         let liquidity_db = config.open().unwrap();
 
-        LiquidityStorage { liquidity_db }
-    }
+//         LiquidityStorage { liquidity_db }
+//     }
 
-    pub fn store_liquidity(
-        &self,
-        spot_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
-        perp_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
-    ) -> Result<()> {
-        self.liquidity_db.insert(
-            "spot_liquidity",
-            serde_json::to_vec(&spot_liquidity).unwrap(),
-        )?;
-        self.liquidity_db.insert(
-            "perp_liquidity",
-            serde_json::to_vec(&perp_liquidity).unwrap(),
-        )?;
+//     pub fn store_liquidity(
+//         &self,
+//         spot_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
+//         perp_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
+//     ) -> Result<()> {
+//         self.liquidity_db.insert(
+//             "spot_liquidity",
+//             serde_json::to_vec(&spot_liquidity).unwrap(),
+//         )?;
+//         self.liquidity_db.insert(
+//             "perp_liquidity",
+//             serde_json::to_vec(&perp_liquidity).unwrap(),
+//         )?;
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    pub fn read_liquidity(&self) {
-        let val = self.liquidity_db.get("spot_liquidity").unwrap();
-        let spot_liquidity: HashMap<u64, Vec<LimitOrder>> =
-            serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
+//     pub fn read_liquidity(&self) {
+//         let val = self.liquidity_db.get("spot_liquidity").unwrap();
+//         let spot_liquidity: HashMap<u64, Vec<LimitOrder>> =
+//             serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
 
-        let val = self.liquidity_db.get("perp_liquidity").unwrap();
-        let perp_liquidity: HashMap<u64, Vec<LimitOrder>> =
-            serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
-    }
-}
+//         let val = self.liquidity_db.get("perp_liquidity").unwrap();
+//         let perp_liquidity: HashMap<u64, Vec<LimitOrder>> =
+//             serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
+//     }
+// }

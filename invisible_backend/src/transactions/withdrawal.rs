@@ -22,8 +22,9 @@ use serde_json::Value;
 use super::transaction_helpers::db_updates::update_db_after_withdrawal;
 use super::transaction_helpers::rollbacks::RollbackInfo;
 use super::transaction_helpers::state_updates::update_state_after_withdrawal;
+use super::Transaction;
 //
-use super::swap::{SwapResponse, Transaction};
+use super::swap::SwapResponse;
 use crate::utils::notes::Note;
 //
 
@@ -193,6 +194,7 @@ impl Transaction for Withdrawal {
     fn execute_transaction(
         &mut self,
         tree: Arc<Mutex<SuperficialTree>>,
+        _: Arc<Mutex<SuperficialTree>>,
         _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,

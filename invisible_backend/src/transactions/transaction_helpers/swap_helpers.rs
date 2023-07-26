@@ -4,6 +4,7 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
 use crate::{
+    order_tab::OrderTab,
     perpetual::{DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
@@ -242,6 +243,7 @@ pub fn consistency_checks(
 pub struct TxExecutionThreadOutput {
     pub is_partially_filled: bool,
     pub note_info_output: Option<NoteInfoExecutionOutput>,
+    pub updated_order_tab: Option<OrderTab>,
     pub new_amount_filled: u64,
 }
 

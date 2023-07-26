@@ -4,38 +4,41 @@ package engine;
 
 service Engine {
 
+    // on-chain interactions --------------- -----------------
     rpc execute_deposit (DepositMessage) returns (DepositResponse);
 
     rpc execute_withdrawal (WithdrawalMessage) returns (SuccessResponse);
 
+    // orders --------------- ----------------- -------------------
     rpc submit_limit_order (LimitOrderMessage) returns (OrderResponse);
 
     rpc submit_perpetual_order (PerpOrderMessage) returns (OrderResponse);
 
     rpc submit_liquidation_order (LiquidationOrderMessage) returns (LiquidationOrderResponse);
 
+    // order updates --------------- ----------------- ----------------
     rpc cancel_order (CancelOrderMessage) returns (CancelOrderResponse);
 
     rpc amend_order (AmendOrderRequest) returns (AmendOrderResponse);
 
+    // note/position helpers --------------- ----------------- ----------------
     rpc split_notes (SplitNotesReq) returns (SplitNotesRes);
 
     rpc change_position_margin (MarginChangeReq) returns (MarginChangeRes);
 
-    rpc open_order_tab (OrderTabReq) returns (SuccessResponse);
+    // Order tabs --------------- ----------------- ----------------
+    rpc open_order_tab (OpenOrderTabReq) returns (OpenOrderTabRes);
 
-    //
+    rpc close_order_tab (CloseOrderTabReq) returns (CloseOrderTabRes);
 
-    // rpc start_funding (StartFundingUpdatesReq) returns (SuccessResponse);
-
+    // admin --------------- ----------------- ----------------
     rpc finalize_batch (EmptyReq) returns (FinalizeBatchResponse);
 
     rpc update_index_price (OracleUpdateReq) returns (SuccessResponse);
 
     rpc restore_orderbook (RestoreOrderBookMessage) returns (SuccessResponse);
 
-    //
-
+    // queries --------------- ----------------- ----------------
     rpc get_orders (OrdersReq) returns (OrdersRes);
 
     rpc get_liquidity (LiquidityReq) returns (LiquidityRes);
@@ -218,30 +221,53 @@ message LiquidationOrderResponse {
 
 // ------ ORDERS TAB --------------
 
-message OrderTabReq {
+message OpenOrderTabReq {
     repeated GrpcNote base_notes_in = 1;
     GrpcNote base_refund_note = 2;
     repeated GrpcNote quote_notes_in = 3;
     GrpcNote quote_refund_note = 4;
     uint64 base_token = 5;
     uint64 quote_token = 6;
-    GrpcPerpPosition position = 7;
-    uint64 expiration_timestamp = 8;
-    bool is_perp = 9;
-    bool is_smart_contract = 10;
-    string pub_key = 11;
-    Signature signature = 14;
-
+    uint64 expiration_timestamp = 7;
+    bool is_perp = 8;
+    bool is_smart_contract = 9;
+    string base_blinding = 10;
+    string quote_blinding = 11;
+    string pub_key = 12;
+    Signature signature = 13;
 }
+
+message OpenOrderTabRes {
+    bool successful = 1;
+    string error_message = 2;
+    GrpcOrderTab order_tab = 3;
+}
+
+
+message CloseOrderTabReq {
+    GrpcOrderTab order_tab = 1;
+    Signature signature = 2;
+    GrpcCloseOrderFields base_close_order_fields = 3;
+    GrpcCloseOrderFields quote_close_order_fields = 4;
+}
+
+message CloseOrderTabRes {
+    bool successful = 1;
+    string error_message = 2;
+    GrpcNote base_return_note = 3;
+    GrpcNote quote_return_note = 4;
+}
+
+
+// ------
+
 
 message GrpcOrderTab {
     uint32 tab_idx = 1;
     GrpcTabHeader tab_header = 2;
-    uint64 base_token = 3;
-    uint64 quote_token = 4;
-    uint64 base_amount = 5;
-    uint64 quote_amount = 6;
-    GrpcPerpPosition position = 7;
+    uint64 base_amount = 3;
+    uint64 quote_amount = 4;
+    GrpcPerpPosition position = 5;
     
 }
 
@@ -249,7 +275,11 @@ message GrpcTabHeader {
     uint64 expiration_timestamp = 1;
     bool is_perp = 2;
     bool is_smart_contract = 3;
-    string pub_key = 4;
+    uint64 base_token = 4;
+    uint64 quote_token = 5;
+    string base_blinding = 6;
+    string quote_blinding = 7;
+    string pub_key = 8;
 
 }
 

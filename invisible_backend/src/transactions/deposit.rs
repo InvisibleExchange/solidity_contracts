@@ -5,7 +5,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
-use crate::transaction_batch::transaction_batch::Transaction;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{
     send_deposit_error, DepositThreadExecutionError, TransactionExecutionError,
@@ -26,6 +25,7 @@ use super::swap::SwapResponse;
 use super::transaction_helpers::db_updates::update_db_after_deposit;
 use super::transaction_helpers::rollbacks::RollbackInfo;
 use super::transaction_helpers::state_updates::update_state_after_deposit;
+use super::Transaction;
 //
 
 #[derive(Debug, Clone)]
@@ -176,6 +176,7 @@ impl Transaction for Deposit {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
+        _: Arc<Mutex<SuperficialTree>>,
         _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,

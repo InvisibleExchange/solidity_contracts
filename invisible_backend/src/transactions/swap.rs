@@ -10,6 +10,7 @@ use serde_json::Value;
 use crossbeam::thread;
 use error_stack::{Report, Result};
 
+use super::Transaction;
 //
 use super::limit_order::LimitOrder;
 use super::swap_execution::{execute_order, update_state_after_order};
@@ -20,7 +21,6 @@ use super::transaction_helpers::swap_helpers::{
     TxExecutionThreadOutput,
 };
 use super::transaction_helpers::transaction_output::TransactionOutptut;
-pub use crate::transaction_batch::transaction_batch::Transaction;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
 use crate::utils::errors::{send_swap_error, SwapThreadExecutionError, TransactionExecutionError};
@@ -71,6 +71,7 @@ impl Swap {
     fn execute_swap(
         &self,
         tree_m: Arc<Mutex<SuperficialTree>>,
+        tabs_state_tree_m: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
@@ -80,6 +81,22 @@ impl Swap {
         backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
+
+        let mut tab_a_lock = None;
+        let mut order_tab_a = None;
+        if let Some(tab) = self.order_a.order_tab.as_ref() {
+            let t = tab.lock();
+            order_tab_a = Some(t.to_owned());
+            tab_a_lock = Some(t);
+        };
+
+        let mut tab_b_lock = None;
+        let mut order_tab_b = None;
+        if let Some(tab) = self.order_b.order_tab.as_ref() {
+            let t = tab.lock();
+            order_tab_b = Some(t.to_owned());
+            tab_b_lock = Some(t);
+        }
 
         if self.order_a.spot_note_info.is_some() && self.order_a.order_tab.is_some() {
             return Err(send_swap_error(
@@ -105,14 +122,15 @@ impl Swap {
             self.fee_taken_b,
         )?;
 
-        // self._range_checks(&self.order_a, &self.order_b);
-
         let thread_id = std::thread::current().id();
 
         let blocked_order_ids_c = blocked_order_ids_m.clone();
 
+        // * Execute the swap in a thread scope ===============================================================
+
         let swap_execution_handle = thread::scope(move |s| {
             let tree = tree_m.clone();
+            let tabs_state_tree = tabs_state_tree_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
 
@@ -121,20 +139,24 @@ impl Swap {
 
                 let execution_output: TxExecutionThreadOutput;
 
-                let (is_partially_filled, note_info_output, new_amount_filled) = execute_order(
-                    &tree,
-                    &partial_fill_tracker,
-                    &blocked_order_ids,
-                    &self.order_a,
-                    &self.signature_a,
-                    self.spent_amount_a,
-                    self.spent_amount_b,
-                    self.fee_taken_a,
-                )?;
+                let (is_partially_filled, note_info_output, updated_order_tab, new_amount_filled) =
+                    execute_order(
+                        &tree,
+                        &tabs_state_tree,
+                        &partial_fill_tracker,
+                        &blocked_order_ids,
+                        &self.order_a,
+                        order_tab_a,
+                        &self.signature_a,
+                        self.spent_amount_a,
+                        self.spent_amount_b,
+                        self.fee_taken_a,
+                    )?;
 
                 execution_output = TxExecutionThreadOutput {
                     is_partially_filled,
                     note_info_output,
+                    updated_order_tab,
                     new_amount_filled,
                 };
 
@@ -142,6 +164,7 @@ impl Swap {
             });
 
             let tree = tree_m.clone();
+            let tabs_state_tree = tabs_state_tree_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
 
@@ -150,20 +173,24 @@ impl Swap {
 
                 let execution_output: TxExecutionThreadOutput;
 
-                let (is_partially_filled, note_info_output, new_amount_filled) = execute_order(
-                    &tree,
-                    &partial_fill_tracker,
-                    &blocked_order_ids,
-                    &self.order_b,
-                    &self.signature_b,
-                    self.spent_amount_b,
-                    self.spent_amount_a,
-                    self.fee_taken_b,
-                )?;
+                let (is_partially_filled, note_info_output, updated_order_tab, new_amount_filled) =
+                    execute_order(
+                        &tree,
+                        &tabs_state_tree,
+                        &partial_fill_tracker,
+                        &blocked_order_ids,
+                        &self.order_b,
+                        order_tab_b,
+                        &self.signature_b,
+                        self.spent_amount_b,
+                        self.spent_amount_a,
+                        self.fee_taken_b,
+                    )?;
 
                 execution_output = TxExecutionThreadOutput {
                     is_partially_filled,
                     note_info_output,
+                    updated_order_tab,
                     new_amount_filled,
                 };
 
@@ -202,10 +229,11 @@ impl Swap {
                     Err(err)
                 })?;
 
-            // & After both orders have been verified successfully update the state (!NOT BEFORE)
+            // * AFTER BOTH orders have been verified successfully update the state —————————————————————————————————————
 
             // ? Order a ----------------------------------------
             let tree = tree_m.clone();
+            let tabs_state_tree = tabs_state_tree_m.clone();
             let updated_note_hashes = updated_note_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
@@ -215,12 +243,14 @@ impl Swap {
             let update_state_handle_a = s.spawn(move |_| {
                 update_state_after_order(
                     &tree,
+                    &tabs_state_tree,
                     &updated_note_hashes,
                     &rollback_safeguard,
                     thread_id,
                     self.order_a.order_id,
                     &self.order_a.spot_note_info,
                     &order_a_output_clone.note_info_output,
+                    &order_a_output_clone.updated_order_tab,
                     // &order_a_output_clone.swap_note,
                     // &order_a_output_clone.new_partial_fill_info,
                     // &order_a_output_clone.prev_partial_fill_refund_note,
@@ -240,6 +270,7 @@ impl Swap {
 
             // ? Order b ----------------------------------------
             let tree = tree_m.clone();
+            let tabs_state_tree = tabs_state_tree_m.clone();
             let updated_note_hashes = updated_note_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
@@ -249,12 +280,14 @@ impl Swap {
             let update_state_handle_b = s.spawn(move |_| {
                 update_state_after_order(
                     &tree,
+                    &tabs_state_tree,
                     &updated_note_hashes,
                     &rollback_safeguard,
                     thread_id,
                     self.order_b.order_id,
                     &self.order_b.spot_note_info,
                     &order_b_output_clone.note_info_output,
+                    &order_b_output_clone.updated_order_tab,
                     // &order_b_output_clone.swap_note,
                     // &order_b_output_clone.new_partial_fill_info,
                     // &order_b_output_clone.prev_partial_fill_refund_note,
@@ -332,14 +365,17 @@ impl Swap {
                 Err(err)
             })?;
 
-        // ? JSON Output =================================
+        // * JSON Output ========================================================================================
 
         let swap_output = TransactionOutptut::new(&self);
 
         let mut spot_note_info_res_a = None;
         let mut spot_note_info_res_b = None;
+        let mut updated_tab_hash_a = None;
+        let mut updated_tab_hash_b = None;
         if self.order_a.order_tab.is_some() {
-            // TODO
+            let updated_tab = execution_output_a.updated_order_tab.as_ref().unwrap();
+            updated_tab_hash_a = Some(updated_tab.hash.clone());
         } else {
             // ? non-tab order
             let note_info_output = execution_output_a.note_info_output.as_ref().unwrap();
@@ -356,7 +392,8 @@ impl Swap {
             ));
         }
         if self.order_b.order_tab.is_some() {
-            // TODO
+            let updated_tab = execution_output_b.updated_order_tab.as_ref().unwrap();
+            updated_tab_hash_b = Some(updated_tab.hash.clone());
         } else {
             // ? non-tab order
             let note_info_output = execution_output_b.note_info_output.as_ref().unwrap();
@@ -373,15 +410,18 @@ impl Swap {
             ));
         }
 
-        let json_output = swap_output.wrap_output(&spot_note_info_res_a, &spot_note_info_res_b);
+        let json_output = swap_output.wrap_output(
+            &spot_note_info_res_a,
+            &spot_note_info_res_b,
+            &updated_tab_hash_a,
+            &updated_tab_hash_b,
+        );
 
         let mut swap_output_json = swap_output_json_m.lock();
         swap_output_json.push(json_output);
         drop(swap_output_json);
 
-        // * Cleanup =================================
-
-        // *  Update the database
+        // *  Update the database =====================================
         update_db_after_spot_swap(
             &session,
             &backup_storage,
@@ -389,7 +429,17 @@ impl Swap {
             &self.order_b,
             &execution_output_a.note_info_output,
             &execution_output_b.note_info_output,
+            &execution_output_a.updated_order_tab,
+            &execution_output_b.updated_order_tab,
         );
+
+        // * Update and release the order tab mutex
+        if execution_output_a.updated_order_tab.is_some() {
+            *tab_a_lock.unwrap() = execution_output_a.updated_order_tab.unwrap();
+        }
+        if execution_output_b.updated_order_tab.is_some() {
+            *tab_b_lock.unwrap() = execution_output_b.updated_order_tab.unwrap();
+        }
 
         return Ok(SwapResponse::new(
             &execution_output_a.note_info_output,
@@ -410,6 +460,7 @@ impl Transaction for Swap {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
+        tabs_state_tree: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
@@ -421,6 +472,7 @@ impl Transaction for Swap {
         let swap_response = self
             .execute_swap(
                 tree_m,
+                tabs_state_tree,
                 partial_fill_tracker_m,
                 updated_note_hashes_m,
                 swap_output_json_m,

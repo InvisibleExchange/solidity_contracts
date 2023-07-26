@@ -9,13 +9,26 @@ use std::{
 };
 
 use super::{
-    grpc::engine::{
-        AmendOrderRequest, AmendOrderResponse, BookEntry, DepositResponse, EmptyReq,
-        FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes, GrpcOrderTab, GrpcPerpPosition,
-        LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
-        LiquidityRes, OracleUpdateReq, OrderResponse, OrderTabReq, PerpOrderMessage,
-        RestoreOrderBookMessage, SpotOrderRestoreMessage, StateInfoReq, StateInfoRes,
-        SuccessResponse, WithdrawalMessage,
+    grpc::{
+        engine_proto::{engine_server::Engine, CloseOrderTabRes, OpenOrderTabRes},
+        OrderTabActionMessage,
+    },
+    server_helpers::{get_market_id_and_order_side, WsConnectionsMap},
+};
+use super::{
+    grpc::{
+        engine_proto::{
+            ActiveOrder, ActivePerpOrder, AmendOrderRequest, AmendOrderResponse, BookEntry,
+            CancelOrderMessage, CancelOrderResponse, CloseOrderTabReq, DepositMessage,
+            DepositResponse, EmptyReq, FinalizeBatchResponse, FundingInfo, FundingReq, FundingRes,
+            GrpcNote, GrpcOrderTab, GrpcPerpPosition, LimitOrderMessage, LiquidationOrderMessage,
+            LiquidationOrderResponse, LiquidityReq, LiquidityRes, MarginChangeReq, MarginChangeRes,
+            OpenOrderTabReq, OracleUpdateReq, OrderResponse, OrdersReq, OrdersRes,
+            PerpOrderMessage, RestoreOrderBookMessage, SplitNotesReq, SplitNotesRes,
+            SpotOrderRestoreMessage, StateInfoReq, StateInfoRes, SuccessResponse,
+            WithdrawalMessage,
+        },
+        OrderTabActionResponse,
     },
     server_helpers::{
         amend_order_execution::{
@@ -37,17 +50,7 @@ use super::{
     },
 };
 use super::{
-    grpc::engine::{OrdersReq, OrdersRes},
-    server_helpers::{get_market_id_and_order_side, WsConnectionsMap},
-};
-use super::{
-    grpc::{
-        engine::{
-            ActiveOrder, ActivePerpOrder, CancelOrderMessage, CancelOrderResponse, GrpcNote,
-            MarginChangeReq, MarginChangeRes, SplitNotesReq, SplitNotesRes,
-        },
-        ChangeMarginMessage,
-    },
+    grpc::{ChangeMarginMessage, GrpcMessage, GrpcTxResponse, MessageType},
     server_helpers::engine_helpers::{
         verify_notes_existence, verify_position_existence, verify_signature_format,
     },
@@ -55,6 +58,7 @@ use super::{
 use crate::{
     matching_engine::orders::limit_order_cancel_request,
     perpetual::{perp_helpers::perp_rollback::PerpRollbackInfo, perp_order::PerpOrder},
+    utils::errors::{send_close_tab_error_reply, send_open_tab_error_reply},
 };
 use crate::{
     matching_engine::{
@@ -103,12 +107,7 @@ use tokio::sync::{
 use tokio::task::JoinHandle as TokioJoinHandle;
 use tonic::{Request, Response, Status};
 
-use super::grpc::{engine, GrpcMessage, GrpcTxResponse, MessageType};
-use engine::{engine_server::Engine, DepositMessage};
-
 // TODO: ALL OPERATIONS SHOULD START A THREAD INCASE SOMETHING FAILS WE CAN CONTINUE ON
-
-// TODO: WE HAVE TO CHANGE THE INIT MARGIN FUNCTION IN THE CAIRO CODE SINCE WE CHANGED IT IN THE RUST CODE
 
 // #[derive(Debug)]
 pub struct EngineService {
@@ -532,8 +531,6 @@ impl Engine for EngineService {
                     store_output_json(&self.swap_output_json, &self.main_storage);
 
                     // TODO Send message to the user whose position was liquidated
-
-                    store_output_json(&self.swap_output_json, &self.main_storage);
 
                     let reply = LiquidationOrderResponse {
                         successful: true,
@@ -1341,22 +1338,136 @@ impl Engine for EngineService {
 
     async fn open_order_tab(
         &self,
-        req: Request<OrderTabReq>,
-    ) -> Result<Response<SuccessResponse>, Status> {
+        req: Request<OpenOrderTabReq>,
+    ) -> Result<Response<OpenOrderTabRes>, Status> {
         tokio::task::yield_now().await;
 
-        let req: OrderTabReq = req.into_inner();
+        let req: OpenOrderTabReq = req.into_inner();
 
-        let is_perp = req.is_perp;
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
 
-        // ===================================================================================
+        let handle: TokioJoinHandle<JoinHandle<OrderTabActionResponse>> =
+            tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
 
-        let reply = SuccessResponse {
-            successful: true,
-            error_message: "".to_string(),
-        };
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::OrderTabAction;
+                grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
+                    open_order_tab_req: Some(req),
+                    close_order_tab_req: None,
+                });
 
-        return Ok(Response::new(reply));
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                let res = resp_rx.await.unwrap();
+
+                return res.order_tab_action_response.unwrap();
+            });
+
+        let order_action_handle = handle.await.unwrap();
+        let order_action_response = order_action_handle.join();
+
+        match order_action_response {
+            Ok(res) => match res.new_order_tab.unwrap() {
+                Ok(order_tab) => {
+                    let order_tab = GrpcOrderTab::from(order_tab);
+                    let reply = OpenOrderTabRes {
+                        successful: true,
+                        error_message: "".to_string(),
+                        order_tab: Some(order_tab),
+                    };
+
+                    return Ok(Response::new(reply));
+                }
+                Err(err) => {
+                    println!("Error in open order tab execution: {}", err);
+
+                    return send_open_tab_error_reply(
+                        "Error occurred in the open order tab execution".to_string() + &err,
+                    );
+                }
+            },
+            Err(_e) => {
+                println!("Unknown Error in open order tab execution");
+
+                return send_open_tab_error_reply(
+                    "Unknown Error occurred in the open order tab execution".to_string(),
+                );
+            }
+        }
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn close_order_tab(
+        &self,
+        req: Request<CloseOrderTabReq>,
+    ) -> Result<Response<CloseOrderTabRes>, Status> {
+        tokio::task::yield_now().await;
+
+        let req: CloseOrderTabReq = req.into_inner();
+
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
+
+        let handle: TokioJoinHandle<JoinHandle<OrderTabActionResponse>> =
+            tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
+
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::OrderTabAction;
+                grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
+                    open_order_tab_req: None,
+                    close_order_tab_req: Some(req),
+                });
+
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                let res = resp_rx.await.unwrap();
+
+                return res.order_tab_action_response.unwrap();
+            });
+
+        let order_action_handle = handle.await.unwrap();
+        let order_action_response = order_action_handle.join();
+
+        match order_action_response {
+            Ok(res) => match res.return_notes.unwrap() {
+                Ok((base_r_note, quote_r_note)) => {
+                    let base_return_note = Some(GrpcNote::from(base_r_note));
+                    let quote_return_note = Some(GrpcNote::from(quote_r_note));
+                    let reply = CloseOrderTabRes {
+                        successful: true,
+                        error_message: "".to_string(),
+                        base_return_note,
+                        quote_return_note,
+                    };
+
+                    return Ok(Response::new(reply));
+                }
+                Err(err) => {
+                    println!("Error in close order tab execution: {}", err);
+
+                    return send_close_tab_error_reply(
+                        "Error occurred in the close order tab execution".to_string() + &err,
+                    );
+                }
+            },
+            Err(_e) => {
+                println!("Unknown Error in close order tab execution");
+
+                return send_close_tab_error_reply(
+                    "Unknown Error occurred in the close order tab execution".to_string(),
+                );
+            }
+        }
     }
 
     //

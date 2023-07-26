@@ -14,6 +14,7 @@ use std::{
 use error_stack::Result;
 
 use crate::{
+    order_tab::{close_tab::close_order_tab, open_tab::open_order_tab},
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
@@ -26,9 +27,12 @@ use crate::{
         perp_swap::PerpSwap,
         DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
     },
-    server::grpc::engine::OrderTabReq,
+    server::grpc::{OrderTabActionMessage, OrderTabActionResponse},
     transaction_batch::{tx_batch_helpers::_calculate_funding_rates, CHAIN_IDS},
-    transactions::transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
+    transactions::{
+        transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
+        Transaction,
+    },
     trees::TreeStateType,
     utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
 };
@@ -80,22 +84,6 @@ use crate::transaction_batch::{
 
 // TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
 
-pub trait Transaction {
-    fn transaction_type(&self) -> &str;
-
-    fn execute_transaction(
-        &mut self,
-        tree: Arc<Mutex<SuperficialTree>>,
-        partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
-        swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
-        blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
-        rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-        session: &Arc<Mutex<ServiceSession>>,
-        backup_storage: &Arc<Mutex<BackupStorage>>,
-    ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError>;
-}
-
 pub struct TransactionBatch {
     pub state_tree: Arc<Mutex<SuperficialTree>>, // current state tree (superficial tree only stores the leaves)
     pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>, // maps orderIds to partial fill refund notes and filled mounts
@@ -111,6 +99,7 @@ pub struct TransactionBatch {
     pub insurance_fund: Arc<Mutex<i64>>, // insurance fund used to pay for liquidations
     //
     pub order_tabs_state_tree: Arc<Mutex<SuperficialTree>>, // current order tabs state tree (superficial tree only stores the leaves)
+    pub updated_tab_hashes: Arc<Mutex<HashMap<u32, BigUint>>>, // info to get merkle proofs at the end of the batch
     //
     pub latest_index_price: HashMap<u64, u64>,
     pub min_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the min price, OracleUpdate info of this batch
@@ -205,6 +194,7 @@ impl TransactionBatch {
             insurance_fund: Arc::new(Mutex::new(0)),
             //
             order_tabs_state_tree: Arc::new(Mutex::new(order_tabs_state_tree)),
+            updated_tab_hashes: Arc::new(Mutex::new(HashMap::new())),
             //
             latest_index_price,
             min_index_price_data,
@@ -303,6 +293,7 @@ impl TransactionBatch {
         let tx_type = String::from_str(transaction.transaction_type()).unwrap();
 
         let state_tree = self.state_tree.clone();
+        let tabs_state_tree = self.order_tabs_state_tree.clone();
         let partial_fill_tracker = self.partial_fill_tracker.clone();
         let updated_note_hashes = self.updated_note_hashes.clone();
         let swap_output_json = self.swap_output_json.clone();
@@ -314,6 +305,7 @@ impl TransactionBatch {
         let handle = thread::spawn(move || {
             let res = transaction.execute_transaction(
                 state_tree,
+                tabs_state_tree,
                 partial_fill_tracker,
                 updated_note_hashes,
                 swap_output_json,
@@ -831,123 +823,60 @@ impl TransactionBatch {
         Ok((z_index, position))
     }
 
-    pub fn open_orders_tab(&self, order_tab_req: OrderTabReq) -> std::result::Result<(), String> {
-        let mut base_amount = 0;
-        let mut base_refund_note: Option<Note> = None;
-        let mut quote_amount = 0;
-        let mut quote_refund_note: Option<Note> = None;
-        let mut position: Option<PerpPosition> = None;
+    pub fn execute_order_tab_modification(
+        &mut self,
+        tab_action_message: OrderTabActionMessage,
+    ) -> JoinHandle<OrderTabActionResponse> {
+        let state_tree = self.state_tree.clone();
+        let tabs_state_tree = self.order_tabs_state_tree.clone();
+        let updated_note_hashes = self.updated_note_hashes.clone();
+        let updated_tab_hashes = self.updated_tab_hashes.clone();
+        let session = self.firebase_session.clone();
+        let backup_storage = self.backup_storage.clone();
 
-        if order_tab_req.is_perp {
-            // ? Check that the position exists
-            let perp_state_tree = self.perpetual_state_tree.lock();
+        let handle = thread::spawn(move || {
+            if tab_action_message.open_order_tab_req.is_some() {
+                let open_order_tab_req = tab_action_message.open_order_tab_req.unwrap();
 
-            if order_tab_req.position.is_none() {
-                return Err("position is undefined".to_string());
+                let new_order_tab = open_order_tab(
+                    &session,
+                    &backup_storage,
+                    open_order_tab_req,
+                    &state_tree,
+                    &updated_note_hashes,
+                    &tabs_state_tree,
+                    &updated_tab_hashes,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    new_order_tab: Some(new_order_tab),
+                    return_notes: None,
+                };
+
+                return order_tab_action_response;
+            } else {
+                let close_order_tab_req = tab_action_message.close_order_tab_req.unwrap();
+
+                let new_notes = close_order_tab(
+                    &session,
+                    &backup_storage,
+                    close_order_tab_req,
+                    &state_tree,
+                    &updated_note_hashes,
+                    &tabs_state_tree,
+                    &updated_tab_hashes,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    new_order_tab: None,
+                    return_notes: Some(new_notes),
+                };
+
+                return order_tab_action_response;
             }
+        });
 
-            let position_ = order_tab_req.position.unwrap();
-            if position_.synthetic_token != order_tab_req.base_token
-                || !VALID_COLLATERAL_TOKENS.contains(&order_tab_req.quote_token)
-            {
-                return Err("token missmatch".to_string());
-            }
-
-            let position_ = PerpPosition::try_from(position_);
-
-            if let Err(e) = position_ {
-                return Err(e.to_string());
-            }
-
-            position = position_.ok();
-
-            let leaf_hash =
-                perp_state_tree.get_leaf_by_index(position.as_ref().unwrap().index as u64);
-
-            if leaf_hash != position.as_ref().unwrap().hash {
-                return Err("note spent to open tab does not exist".to_string());
-            }
-        } else {
-            // ? Check that the notes spent exist
-            let state_tree = self.state_tree.lock();
-
-            // & BASE TOKEN —————————————————————————
-            // ? Check that notes for base token exist
-            for note_ in order_tab_req.base_notes_in.into_iter() {
-                if note_.token != order_tab_req.base_token {
-                    return Err("token missmatch".to_string());
-                }
-
-                let note = Note::try_from(note_);
-                if let Err(e) = note {
-                    return Err(e.to_string());
-                }
-                let note = note.unwrap();
-
-                let leaf_hash = state_tree.get_leaf_by_index(note.index);
-
-                if leaf_hash != note.hash {
-                    return Err("note spent to open tab does not exist".to_string());
-                }
-
-                base_amount += note.amount;
-            }
-            // ? Check if there is a refund note for base token
-            if order_tab_req.base_refund_note.is_some() {
-                let note_ = order_tab_req.base_refund_note.unwrap();
-                if note_.token != order_tab_req.base_token {
-                    return Err("token missmatch".to_string());
-                }
-
-                base_amount -= note_.amount;
-
-                base_refund_note = Note::try_from(note_).ok();
-            }
-
-            // & QUOTE TOKEN —————————————————————————
-            // ? Check that notes for quote token exist
-            for note_ in order_tab_req.quote_notes_in.into_iter() {
-                if note_.token != order_tab_req.quote_token {
-                    return Err("token missmatch".to_string());
-                }
-
-                let note = Note::try_from(note_);
-                if let Err(e) = note {
-                    return Err(e.to_string());
-                }
-                let note = note.unwrap();
-
-                let leaf_hash = state_tree.get_leaf_by_index(note.index);
-
-                if leaf_hash != note.hash {
-                    return Err("note spent to open tab does not exist".to_string());
-                }
-
-                quote_amount += note.amount;
-            }
-            // ? Check if there is a refund note for base token
-            if order_tab_req.quote_refund_note.is_some() {
-                let note_ = order_tab_req.quote_refund_note.unwrap();
-                if note_.token != order_tab_req.quote_token {
-                    return Err("token missmatch".to_string());
-                }
-
-                quote_amount -= note_.amount;
-                quote_refund_note = Note::try_from(note_).ok();
-            }
-
-            drop(state_tree);
-        }
-
-        // ? Verify the signature
-
-        // ? Create an Orders tab object
-
-        // ? add it to the order tabs state
-
-        // ? add it to the database
-
-        Ok(())
+        return handle;
     }
 
     // * =================================================================
@@ -1352,7 +1281,7 @@ impl TransactionBatch {
 
         self.current_funding_count += 1;
 
-        if self.current_funding_count == 60 {
+        if self.current_funding_count == 480 {
             // Do we want 1 or 8 hours
             let fundings = _calculate_funding_rates(&mut self.running_funding_tick_sums);
 
