@@ -94,6 +94,7 @@ pub struct EngineService {
     //
     pub state_tree: Arc<Mutex<SuperficialTree>>,
     pub perp_state_tree: Arc<Mutex<SuperficialTree>>,
+    pub tabs_state_tree: Arc<Mutex<SuperficialTree>>,
     //
     pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     pub perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
@@ -762,6 +763,35 @@ impl Engine for EngineService {
 
         let req: OpenOrderTabReq = req.into_inner();
 
+        if req.order_tab.is_none() || req.order_tab.as_ref().unwrap().tab_header.is_none() {
+            return send_open_tab_error_reply("Order tab is undefined".to_string());
+        }
+        let tab_header = req.order_tab.as_ref().unwrap().tab_header.as_ref().unwrap();
+
+        // ? Verify the market_id exists
+        if !self.order_books.contains_key(&(req.market_id as u16)) {
+            return send_open_tab_error_reply(
+                "No market found for given base and quote token".to_string(),
+            );
+        }
+
+        // ? Get the relevant orderbook from the market_id
+        let order_book = self
+            .order_books
+            .get(&(req.market_id as u16))
+            .unwrap()
+            .lock()
+            .await;
+
+        // ? Verify the base and quote asset match the market_id
+        if order_book.order_asset != tab_header.base_token
+            || order_book.price_asset != tab_header.quote_token
+        {
+            return send_open_tab_error_reply(
+                "Base and quote asset do not match market_id".to_string(),
+            );
+        }
+
         let transaction_mpsc_tx = self.mpsc_tx.clone();
 
         let handle: TokioJoinHandle<JoinHandle<OrderTabActionResponse>> =
@@ -1041,30 +1071,20 @@ impl Engine for EngineService {
             .iter()
             .map(|x| x.to_string())
             .collect();
+        let tabs_state_tree = self.tabs_state_tree.lock();
+        let tabs_tree_leaves = tabs_state_tree
+            .leaf_nodes
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
         drop(state_tree);
         drop(perp_state_tree);
-
-        // let backup_storage = self.backup_storage.lock();
-        // let (failed_position_additions, _failed_position_deletions) =
-        //     backup_storage.read_positions();
-        // let notes = backup_storage.read_notes();
-        // drop(backup_storage);
-
-        // let perp_state = self.perp_state_tree.lock();
-        // for position in failed_position_additions {
-        //     let leaf_hash = perp_state.get_leaf_by_index(position.index as u64);
-
-        //     if position.hash == leaf_hash {
-        //         if position.hash == position.hash_position() {
-
-        //             // TODO
-        //         }
-        //     }
-        // }
+        drop(tabs_state_tree);
 
         let reply = StateInfoRes {
             state_tree: spot_tree_leaves,
             perpetual_state_tree: perp_tree_leaves,
+            tabs_state_tree: tabs_tree_leaves,
         };
 
         return Ok(Response::new(reply));

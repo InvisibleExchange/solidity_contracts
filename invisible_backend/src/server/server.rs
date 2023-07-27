@@ -59,6 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state_tree = Arc::clone(&tx_batch.state_tree);
     let perp_state_tree = Arc::clone(&tx_batch.perpetual_state_tree);
+    let tabs_state_tree = Arc::clone(&tx_batch.order_tabs_state_tree);
 
     let partial_fill_tracker = Arc::clone(&tx_batch.partial_fill_tracker);
     let perpetual_partial_fill_tracker = Arc::clone(&tx_batch.perpetual_partial_fill_tracker);
@@ -303,6 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session,
         state_tree,
         perp_state_tree,
+        tabs_state_tree,
         partial_fill_tracker,
         perpetual_partial_fill_tracker,
         rollback_safeguard,

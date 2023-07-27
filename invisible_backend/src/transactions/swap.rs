@@ -446,6 +446,8 @@ impl Swap {
             execution_output_a.new_amount_filled,
             &execution_output_b.note_info_output,
             execution_output_b.new_amount_filled,
+            self.spent_amount_a,
+            self.spent_amount_b,
         ));
     }
 }
@@ -523,6 +525,8 @@ impl Serialize for Swap {
 pub struct SwapResponse {
     pub note_info_swap_response_a: Option<NoteInfoSwapResponse>,
     pub note_info_swap_response_b: Option<NoteInfoSwapResponse>,
+    pub spent_amount_a: u64,
+    pub spent_amount_b: u64,
 }
 
 impl SwapResponse {
@@ -531,6 +535,8 @@ impl SwapResponse {
         new_amount_filled_a: u64,
         note_info_output_b: &Option<NoteInfoExecutionOutput>,
         new_amount_filled_b: u64,
+        spent_amount_a: u64,
+        spent_amount_b: u64,
     ) -> SwapResponse {
         // note info response a
         let mut note_info_swap_response_a = None;
@@ -565,6 +571,8 @@ impl SwapResponse {
         SwapResponse {
             note_info_swap_response_a,
             note_info_swap_response_b,
+            spent_amount_a,
+            spent_amount_b,
         }
     }
 }

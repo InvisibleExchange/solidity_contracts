@@ -226,15 +226,9 @@ message OpenOrderTabReq {
     GrpcNote base_refund_note = 2;
     repeated GrpcNote quote_notes_in = 3;
     GrpcNote quote_refund_note = 4;
-    uint64 base_token = 5;
-    uint64 quote_token = 6;
-    uint64 expiration_timestamp = 7;
-    bool is_perp = 8;
-    bool is_smart_contract = 9;
-    string base_blinding = 10;
-    string quote_blinding = 11;
-    string pub_key = 12;
-    Signature signature = 13;
+    GrpcOrderTab order_tab = 5;
+    Signature signature = 6;
+    uint32 market_id = 7;
 }
 
 message OpenOrderTabRes {
@@ -521,5 +515,6 @@ message StateInfoReq {
 message StateInfoRes {
     repeated string state_tree = 1;
     repeated string perpetual_state_tree = 2;
+    repeated string tabs_state_tree = 3;
 }
 

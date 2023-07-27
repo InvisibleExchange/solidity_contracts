@@ -185,12 +185,17 @@ pub async fn execute_swap(
                 let fill_res_b =
                     OrderFillResponse::from_swap_response(&swap_res, fee_taken_b, false);
 
+                // let spent_amount_a = swap_res.spent_amount_a;
+                // let spent_amount_b = swap_res.spent_amount_b;
+
                 // ? Return the swap response to be sent over the websocket in the engine
                 let json_msg_a = json!({
                     "message_id": "SWAP_RESULT",
                     "order_id": order_a_clone.order_id,
                     "market_id": book.market_id,
-                    "swap_response": serde_json::to_value(fill_res_a).unwrap(),
+                    "spent_amount": swap_res.spent_amount_a,
+                    "received_amount": swap_res.spent_amount_b,
+                    "swap_response":  serde_json::to_value(fill_res_a).unwrap(),
                 });
                 let msg_a = Message::Text(json_msg_a.to_string());
 
@@ -198,6 +203,8 @@ pub async fn execute_swap(
                     "message_id": "SWAP_RESULT",
                     "order_id": order_b_clone.order_id,
                     "market_id": book.market_id,
+                    "spent_amount": swap_res.spent_amount_b,
+                    "received_amount": swap_res.spent_amount_a,
                     "swap_response": serde_json::to_value(fill_res_b).unwrap(),
                 });
                 let msg_b = Message::Text(json_msg_b.to_string());

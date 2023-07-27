@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
 use parking_lot::Mutex;
@@ -14,9 +14,7 @@ use crate::{
 
 use crate::utils::crypto_utils::{verify, EcPoint, Signature};
 
-use super::{
-    db_updates::open_tab_db_updates, state_updates::open_tab_state_updates, OrderTab, TabHeader,
-};
+use super::{db_updates::open_tab_db_updates, state_updates::open_tab_state_updates, OrderTab};
 
 // TODO: Check that the notes exist just before you update the state tree not in the beginning
 
@@ -31,6 +29,16 @@ pub fn open_order_tab(
 ) -> std::result::Result<OrderTab, String> {
     let sig_pub_key: BigUint;
 
+    let tab_header = open_order_tab_req
+        .order_tab
+        .as_ref()
+        .unwrap()
+        .tab_header
+        .as_ref()
+        .unwrap();
+    let base_token = tab_header.base_token;
+    let quote_token = tab_header.quote_token;
+
     let mut base_amount = 0;
     let mut base_refund_note: Option<Note> = None;
     let mut quote_amount = 0;
@@ -38,13 +46,14 @@ pub fn open_order_tab(
 
     let mut pub_key_sum: AffinePoint = AffinePoint::identity();
 
+    // ? Check that the token pair is valid
+
     // ? Check that the notes spent exist
     let state_tree_m = state_tree.lock();
     // & BASE TOKEN —————————————————————————
-
     let mut base_notes_in = Vec::new();
     for note_ in open_order_tab_req.base_notes_in.into_iter() {
-        if note_.token != open_order_tab_req.base_token {
+        if note_.token != base_token {
             return Err("token missmatch".to_string());
         }
 
@@ -72,7 +81,7 @@ pub fn open_order_tab(
     // ? Check if there is a refund note for base token
     if open_order_tab_req.base_refund_note.is_some() {
         let note_ = open_order_tab_req.base_refund_note.as_ref().unwrap();
-        if note_.token != open_order_tab_req.base_token {
+        if note_.token != base_token {
             return Err("token missmatch".to_string());
         }
 
@@ -85,7 +94,7 @@ pub fn open_order_tab(
     // ? Check that notes for quote token exist
     let mut quote_notes_in = Vec::new();
     for note_ in open_order_tab_req.quote_notes_in.into_iter() {
-        if note_.token != open_order_tab_req.quote_token {
+        if note_.token != quote_token {
             return Err("token missmatch".to_string());
         }
 
@@ -112,7 +121,7 @@ pub fn open_order_tab(
     // ? Check if there is a refund note for base token
     if open_order_tab_req.quote_refund_note.is_some() {
         let note_ = open_order_tab_req.quote_refund_note.as_ref().unwrap();
-        if note_.token != open_order_tab_req.quote_token {
+        if note_.token != quote_token {
             return Err("token missmatch".to_string());
         }
 
@@ -125,25 +134,14 @@ pub fn open_order_tab(
 
     drop(state_tree_m);
 
-    // ? Create an Orders tab object
-    let pub_key =
-        BigUint::from_str(open_order_tab_req.pub_key.as_str()).map_err(|err| err.to_string())?;
-    let base_blinding = BigUint::from_str(open_order_tab_req.base_blinding.as_str())
-        .map_err(|err| err.to_string())?;
-    let quote_blinding = BigUint::from_str(open_order_tab_req.quote_blinding.as_str())
-        .map_err(|err| err.to_string())?;
-
-    let tab_header = TabHeader::new(
-        open_order_tab_req.expiration_timestamp,
-        open_order_tab_req.is_perp,
-        open_order_tab_req.is_smart_contract,
-        open_order_tab_req.base_token,
-        open_order_tab_req.quote_token,
-        base_blinding,
-        quote_blinding,
-        pub_key,
-    );
-    let mut order_tab: OrderTab = OrderTab::new(tab_header, base_amount, quote_amount);
+    // ? Create an OrderTab object and verify against base and quote amounts
+    let order_tab = OrderTab::try_from(open_order_tab_req.order_tab.unwrap());
+    if let Err(e) = order_tab {
+        return Err(e.to_string());
+    }
+    let mut order_tab = order_tab.unwrap();
+    order_tab.base_amount = base_amount;
+    order_tab.quote_amount = quote_amount;
 
     // ? Set the tab index
     let mut tabs_state_tree = order_tabs_state_tree.lock();
