@@ -37,7 +37,6 @@ pub fn execute_order(
     partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     blocked_order_ids_m: &Arc<Mutex<HashMap<u64, bool>>>,
     order: &LimitOrder,
-    order_tab_: Option<OrderTab>,
     signature: &Signature,
     spent_amount_x: u64,
     spent_amount_y: u64,
@@ -58,7 +57,6 @@ pub fn execute_order(
         tabs_state_tree,
         &partial_fill_info,
         order,
-        &order_tab_,
         is_first_fill,
         spent_amount_x,
         signature,
@@ -71,7 +69,6 @@ pub fn execute_order(
             &partial_fill_info,
             is_first_fill,
             order,
-            order_tab_,
             spent_amount_x,
             spent_amount_y,
             fee_taken_x,
@@ -90,7 +87,6 @@ fn execute_order_modifications(
     partial_fill_info: &Option<(Option<Note>, u64)>,
     is_first_fill: bool,
     order: &LimitOrder,
-    order_tab_: Option<OrderTab>,
     spent_amount_x: u64,
     spent_amount_y: u64,
     fee_taken_x: u64,
@@ -125,7 +121,9 @@ fn execute_order_modifications(
             new_amount_filled,
         );
     } else {
-        let order_tab = order_tab_.unwrap();
+        let tab_lock = order.order_tab.as_ref().unwrap().lock();
+        let order_tab = tab_lock.clone();
+        drop(tab_lock);
 
         let prev_filled_amount = if partial_fill_info.is_some() {
             partial_fill_info.as_ref().unwrap().1
@@ -157,7 +155,6 @@ fn check_order_validity(
     tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
     order: &LimitOrder,
-    order_tab: &Option<OrderTab>,
     is_first_fill: bool,
     spent_amount: u64,
     signature: &Signature,
@@ -176,19 +173,13 @@ fn check_order_validity(
             spent_amount,
         )?;
     } else {
-        let prev_filled_amount = if partial_fill_info.is_some() {
-            partial_fill_info.as_ref().unwrap().1
-        } else {
-            0
-        };
+        // let prev_filled_amount = if partial_fill_info.is_some() {
+        //     partial_fill_info.as_ref().unwrap().1
+        // } else {
+        //     0
+        // };
 
-        check_tab_order_validity(
-            tabs_state_tree,
-            prev_filled_amount,
-            order,
-            order_tab,
-            spent_amount,
-        )?;
+        check_tab_order_validity(tabs_state_tree, order, spent_amount)?;
     }
 
     return Ok(());
@@ -198,9 +189,10 @@ pub fn update_state_after_order(
     tree: &Arc<Mutex<SuperficialTree>>,
     tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     thread_id: ThreadId,
-    order_id: u64,
+    order: &LimitOrder,
     spot_note_info: &Option<SpotNotesInfo>,
     note_info_output: &Option<NoteInfoExecutionOutput>,
     updated_order_tab: &Option<OrderTab>,
@@ -223,7 +215,7 @@ pub fn update_state_after_order(
             rollback_safeguard,
             thread_id,
             is_first_fill,
-            order_id,
+            order.order_id,
             notes_in,
             refund_note,
             swap_note,
@@ -233,7 +225,12 @@ pub fn update_state_after_order(
     } else {
         let updated_order_tab = updated_order_tab.as_ref().unwrap();
 
-        update_state_after_tab_order(tabs_state_tree, updated_order_tab)?;
+        update_state_after_tab_order(
+            tabs_state_tree,
+            updated_tab_hashes,
+            order,
+            updated_order_tab,
+        )?;
     }
 
     Ok(())

@@ -29,6 +29,7 @@ pub trait Transaction {
         tabs_state_tree: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_tab_hashes: Arc<Mutex<HashMap<u32, BigUint>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,

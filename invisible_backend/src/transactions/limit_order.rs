@@ -157,13 +157,19 @@ fn hash_order(
     } else {
         BigUint::zero()
     };
-    let order_tab_hash = if order_tab.is_some() {
-        order_tab.as_ref().unwrap().lock().hash.clone()
+    let order_tab_pub_key = if order_tab.is_some() {
+        order_tab
+            .as_ref()
+            .unwrap()
+            .lock()
+            .tab_header
+            .pub_key
+            .clone()
     } else {
         BigUint::zero()
     };
     hash_inputs.push(&note_info_hash);
-    hash_inputs.push(&order_tab_hash);
+    hash_inputs.push(&order_tab_pub_key);
 
     let order_hash = pedersen_on_vec(&hash_inputs);
 

@@ -159,7 +159,16 @@ pub fn get_cross_price(
     // return price as f64 / 10_f64.powi(*base_price_decimals as i32);
 }
 
-pub fn round_price(price: f64, _round: Option<bool>) -> f64 {
+pub fn round_price(price: f64, round: Option<bool>) -> f64 {
+
+    if let Some(r) = round {
+        if r {
+            return (price * 100.0).ceil() / 100.0;
+        } else {
+            return (price * 100.0).floor() / 100.0;
+        }
+    }
+
     return (price * 100.0).floor() / 100.0;
 
     // if round.is_none() {

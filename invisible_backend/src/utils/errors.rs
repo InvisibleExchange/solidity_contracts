@@ -21,7 +21,7 @@ pub fn send_deposit_error(
     err_msg: String,
     attachment: Option<String>,
 ) -> Report<DepositThreadExecutionError> {
-    println!("ERROR: {:?}", attachment);
+    println!("ERROR in deposit: {:?} \n{:?}", err_msg, attachment);
     let report = Report::new(DepositThreadExecutionError {
         err_msg: err_msg.clone(),
     })
@@ -51,7 +51,7 @@ pub fn send_swap_error(
     invalid_order: Option<u64>,
     attachment: Option<String>,
 ) -> Report<SwapThreadExecutionError> {
-    println!("ERROR: {:?}", attachment);
+    println!("ERROR: in spot swap {:?} \n{:?}", err_msg, attachment);
     let report = Report::new(SwapThreadExecutionError {
         err_msg: err_msg.clone(),
         invalid_order,
@@ -80,7 +80,7 @@ pub fn send_withdrawal_error(
     err_msg: String,
     attachment: Option<String>,
 ) -> Report<WithdrawalThreadExecutionError> {
-    println!("ERROR: {:?}", attachment);
+    println!("ERROR in withdrawal: {:?} \n{:?}", err_msg, attachment);
     let report = Report::new(WithdrawalThreadExecutionError {
         err_msg: err_msg.clone(),
     })
@@ -127,7 +127,7 @@ pub fn send_perp_swap_error(
     invalid_order: Option<u64>, // The id if the order is invalid and shouldnt be retruned to the orderbook
     attachment: Option<String>,
 ) -> Report<PerpSwapExecutionError> {
-    // println!("ERROR: {:?}", attachment);
+    println!("ERROR in perp_swap: {:?} \n{:?}", err_msg, attachment);
 
     let report = Report::new(PerpSwapExecutionError {
         err_msg: err_msg.clone(),
@@ -218,8 +218,8 @@ use tonic::{Response, Status};
 
 use crate::server::grpc::engine_proto::{
     AmendOrderResponse, CancelOrderResponse, CloseOrderTabRes, DepositResponse, FundingRes,
-    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, OpenOrderTabRes, OrderResponse,
-    SplitNotesRes, SuccessResponse,
+    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, ModifyOrderTabRes, OpenOrderTabRes,
+    OrderResponse, SplitNotesRes, SuccessResponse,
 };
 
 // * ERROR GRPC REPLIES
@@ -335,6 +335,18 @@ pub fn send_open_tab_error_reply(err_msg: String) -> Result<Response<OpenOrderTa
         successful: false,
         error_message: err_msg,
         order_tab: None,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_modify_tab_error_reply(err_msg: String) -> Result<Response<ModifyOrderTabRes>, Status> {
+    let reply = ModifyOrderTabRes {
+        successful: false,
+        error_message: err_msg,
+        order_tab: None,
+        base_return_note: None,
+        quote_return_note: None,
     };
 
     return Ok(Response::new(reply));

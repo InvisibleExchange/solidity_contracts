@@ -200,6 +200,7 @@ pub fn store_output_json(
     main_storage_: &Arc<Mutex<MainStorage>>,
 ) {
     let mut swap_output_json = swap_output_json_.lock();
+
     if !swap_output_json.is_empty() {
         let main_storage = main_storage_.lock();
         main_storage.store_micro_batch(&swap_output_json);
@@ -209,6 +210,8 @@ pub fn store_output_json(
     } else {
         drop(swap_output_json);
     }
+
+    return;
 }
 
 // * ===========================================================================================================================0

@@ -24,6 +24,7 @@ pub enum OrderRequest {
         side: OrderSide,
         price: f64,
         qty: u64,
+        quote_qty: u64,
         order: OrderWrapper,
         ts: SystemTime,
         is_market: bool,
@@ -45,35 +46,6 @@ pub enum OrderRequest {
     },
 }
 
-// pub fn new_market_order_request(
-//     side: OrderSide,
-//     order: Order,
-//     signature: Signature,
-//     ts: SystemTime,
-//     user_id: u64,
-// ) -> OrderRequest {
-//     let (order_asset, price_asset) = order.get_order_and_price_assets(side);
-
-//     let qty: u64 = order.get_qty(side);
-//     let order = OrderWrapper {
-//         order,
-//         signature,
-//         qty_left: qty,
-//         order_id: 0,
-//         order_side: side,
-//         user_id,
-//     };
-
-//     OrderRequest::NewMarketOrder {
-//         order_asset,
-//         price_asset,
-//         side,
-//         qty,
-//         order,
-//         ts,
-//     }
-// }
-
 /// Create request for the new limit order
 pub fn new_limit_order_request(
     side: OrderSide,
@@ -85,9 +57,9 @@ pub fn new_limit_order_request(
 ) -> OrderRequest {
     let (order_asset, price_asset) = order.get_order_and_price_assets(side);
 
-    let price: f64 = order.get_price(side, None);
+    let price: f64 = order.get_price(side, Some(side == OrderSide::Ask));
 
-    let qty: u64 = order.get_qty(side, price);
+    let (qty, quote_qty) = order.get_base_and_quote_qty(side, price);
 
     let order = OrderWrapper {
         order,
@@ -104,6 +76,7 @@ pub fn new_limit_order_request(
         side,
         price,
         qty,
+        quote_qty,
         order,
         ts,
         is_market,

@@ -49,6 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "\nperp state tree: {:?}",
         tx_batch.perpetual_state_tree.lock().leaf_nodes
     );
+    println!(
+        "\ntabs state tree: {:?}",
+        tx_batch.order_tabs_state_tree.lock().leaf_nodes
+    );
 
     // TODO: TESTING ==========================================================
 

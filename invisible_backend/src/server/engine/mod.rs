@@ -16,10 +16,12 @@ use self::{
     order_interactions::{amend_order_inner, cancel_order_inner},
 };
 
-use super::grpc::{ChangeMarginMessage, GrpcMessage, GrpcTxResponse, MessageType};
 use super::{
     grpc::{
-        engine_proto::{engine_server::Engine, CloseOrderTabRes, OpenOrderTabRes},
+        engine_proto::{
+            engine_server::Engine, CloseOrderTabRes, ModifyOrderTabReq, ModifyOrderTabRes,
+            OpenOrderTabRes,
+        },
         OrderTabActionMessage,
     },
     server_helpers::WsConnectionsMap,
@@ -41,6 +43,10 @@ use super::{
     },
     server_helpers::engine_helpers::{handle_margin_change_repsonse, handle_split_notes_repsonse},
 };
+use super::{
+    grpc::{ChangeMarginMessage, GrpcMessage, GrpcTxResponse, MessageType},
+    server_helpers::engine_helpers::store_output_json,
+};
 use crate::{
     matching_engine::{
         domain::{Order, OrderSide as OBOrderSide},
@@ -50,7 +56,7 @@ use crate::{
     transaction_batch::tx_batch_structs::OracleUpdate,
     trees::superficial_tree::SuperficialTree,
     utils::{
-        errors::send_funding_error_reply,
+        errors::{send_funding_error_reply, send_modify_tab_error_reply},
         storage::{BackupStorage, MainStorage},
     },
 };
@@ -802,6 +808,7 @@ impl Engine for EngineService {
                 grpc_message.msg_type = MessageType::OrderTabAction;
                 grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
                     open_order_tab_req: Some(req),
+                    modify_order_tab_req: None,
                     close_order_tab_req: None,
                 });
 
@@ -821,6 +828,8 @@ impl Engine for EngineService {
         match order_action_response {
             Ok(res) => match res.new_order_tab.unwrap() {
                 Ok(order_tab) => {
+                    store_output_json(&self.swap_output_json, &self.main_storage);
+
                     let order_tab = GrpcOrderTab::from(order_tab);
                     let reply = OpenOrderTabRes {
                         successful: true,
@@ -852,6 +861,94 @@ impl Engine for EngineService {
     // * ===================================================================================================================================
     //
 
+    async fn modify_order_tab(
+        &self,
+        req: Request<ModifyOrderTabReq>,
+    ) -> Result<Response<ModifyOrderTabRes>, Status> {
+        tokio::task::yield_now().await;
+
+        let req: ModifyOrderTabReq = req.into_inner();
+
+        if req.order_tab.is_none() || req.order_tab.as_ref().unwrap().tab_header.is_none() {
+            return send_modify_tab_error_reply("Order tab is undefined".to_string());
+        }
+
+        let transaction_mpsc_tx = self.mpsc_tx.clone();
+
+        let handle: TokioJoinHandle<JoinHandle<OrderTabActionResponse>> =
+            tokio::spawn(async move {
+                let (resp_tx, resp_rx) = oneshot::channel();
+
+                let mut grpc_message = GrpcMessage::new();
+                grpc_message.msg_type = MessageType::OrderTabAction;
+                grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
+                    open_order_tab_req: None,
+                    modify_order_tab_req: Some(req),
+                    close_order_tab_req: None,
+                });
+
+                transaction_mpsc_tx
+                    .send((grpc_message, resp_tx))
+                    .await
+                    .ok()
+                    .unwrap();
+                let res = resp_rx.await.unwrap();
+
+                return res.order_tab_action_response.unwrap();
+            });
+
+        let order_action_handle = handle.await.unwrap();
+        let order_action_response = order_action_handle.join();
+
+        match order_action_response {
+            Ok(res) => match res.modified_tab_response.unwrap() {
+                Ok((order_tab, base_return_note, quote_return_note)) => {
+                    store_output_json(&self.swap_output_json, &self.main_storage);
+
+                    let order_tab = GrpcOrderTab::from(order_tab);
+                    let base_return_note = if base_return_note.is_some() {
+                        Some(GrpcNote::from(base_return_note.unwrap()))
+                    } else {
+                        None
+                    };
+                    let quote_return_note = if quote_return_note.is_some() {
+                        Some(GrpcNote::from(quote_return_note.unwrap()))
+                    } else {
+                        None
+                    };
+
+                    let reply = ModifyOrderTabRes {
+                        successful: true,
+                        error_message: "".to_string(),
+                        order_tab: Some(order_tab),
+                        base_return_note,
+                        quote_return_note,
+                    };
+
+                    return Ok(Response::new(reply));
+                }
+                Err(err) => {
+                    println!("Error in open order tab execution: {}", err);
+
+                    return send_modify_tab_error_reply(
+                        "Error occurred in the open order tab execution".to_string() + &err,
+                    );
+                }
+            },
+            Err(_e) => {
+                println!("Unknown Error in open order tab execution");
+
+                return send_modify_tab_error_reply(
+                    "Unknown Error occurred in the open order tab execution".to_string(),
+                );
+            }
+        }
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
     async fn close_order_tab(
         &self,
         req: Request<CloseOrderTabReq>,
@@ -870,6 +967,7 @@ impl Engine for EngineService {
                 grpc_message.msg_type = MessageType::OrderTabAction;
                 grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
                     open_order_tab_req: None,
+                    modify_order_tab_req: None,
                     close_order_tab_req: Some(req),
                 });
 
@@ -889,6 +987,8 @@ impl Engine for EngineService {
         match order_action_response {
             Ok(res) => match res.return_notes.unwrap() {
                 Ok((base_r_note, quote_r_note)) => {
+                    store_output_json(&self.swap_output_json, &self.main_storage);
+
                     let base_return_note = Some(GrpcNote::from(base_r_note));
                     let quote_return_note = Some(GrpcNote::from(quote_r_note));
                     let reply = CloseOrderTabRes {

@@ -8,6 +8,8 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 
 pub mod close_tab;
 pub mod db_updates;
+pub mod json_output;
+pub mod modify_tab;
 pub mod open_tab;
 pub mod state_updates;
 

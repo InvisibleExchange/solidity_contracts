@@ -3,9 +3,10 @@
 // Check that the tokens are valid
 // Check that the tab hash exists in the state
 
-use std::{sync::Arc, time::SystemTime};
+use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use error_stack::Result;
+use num_bigint::BigUint;
 use parking_lot::Mutex;
 
 use crate::{
@@ -19,20 +20,20 @@ use crate::{
 // * CHECK ORDER VALIDITY FUNCTION * --------------------------------------------
 pub fn check_tab_order_validity(
     order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    prev_filled_amount: u64,
     order: &LimitOrder,
-    order_tab_: &Option<OrderTab>,
     spent_amount: u64,
 ) -> Result<(), SwapThreadExecutionError> {
     // ? Check that the order tab is valid --------------------------------------------
-    if order_tab_.is_none() {
+    if order.order_tab.is_none() {
         return Err(send_swap_error(
             "order_tab is not defined".to_string(),
             Some(order.order_id),
             None,
         ));
     }
-    let order_tab = order_tab_.as_ref().unwrap();
+
+    let order_tab = order.order_tab.as_ref().unwrap();
+    let order_tab = order_tab.lock();
 
     // ? Check that the tokens are valid --------------------------------------------
     if (order_tab.tab_header.base_token != order.token_spent
@@ -52,7 +53,7 @@ pub fn check_tab_order_validity(
     let seconds_since_epoch = now
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("Time went backwards")
-        .as_secs() ;
+        .as_secs();
 
     if order_tab.tab_header.expiration_timestamp < seconds_since_epoch {
         return Err(send_swap_error(
@@ -84,9 +85,7 @@ pub fn check_tab_order_validity(
     }
 
     // ? Check that the order is not overspending --------------------------------------------
-    if prev_filled_amount + spent_amount
-        > order.amount_spent + DUST_AMOUNT_PER_ASSET[&order.token_spent.to_string()]
-    {
+    if spent_amount > order.amount_spent + DUST_AMOUNT_PER_ASSET[&order.token_spent.to_string()] {
         return Err(send_swap_error(
             "order is overspending".to_string(),
             Some(order.order_id),
@@ -99,12 +98,20 @@ pub fn check_tab_order_validity(
     let leaf_hash = tabs_state_tree.get_leaf_by_index(order_tab.tab_idx as u64);
 
     if leaf_hash != order_tab.hash {
+        println!("leaves: {:?}", tabs_state_tree.leaf_nodes);
+        println!(
+            "order_tab.hash: {:?} - {:?}",
+            order_tab.hash, order_tab.tab_idx
+        );
+
         return Err(send_swap_error(
             "order_tab hash does not exist in the state".to_string(),
             Some(order.order_id),
             None,
         ));
     }
+
+    drop(order_tab);
 
     Ok(())
 }
@@ -148,15 +155,31 @@ pub fn execute_tab_order_modifications(
 // ? update the state with the new order tab hash
 pub fn update_state_after_tab_order(
     tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
+    updated_tab_hashes_m: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    order: &LimitOrder,
     updated_order_tab: &OrderTab,
 ) -> Result<(), SwapThreadExecutionError> {
     let mut tabs_state_tree_ = tabs_state_tree.lock();
+    let mut updated_tab_hashes = updated_tab_hashes_m.lock();
+
+    let prev_tab_hash = order.order_tab.as_ref().unwrap().lock().hash.clone();
+
+    // ? Check that the order tab hash exists in the state --------------------------------------------
+    let leaf_hash = tabs_state_tree_.get_leaf_by_index(updated_order_tab.tab_idx as u64);
+
+    if leaf_hash != prev_tab_hash {
+        return Err(send_swap_error(
+            "order_tab hash does not exist in the state".to_string(),
+            Some(order.order_id),
+            None,
+        ));
+    }
 
     tabs_state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
-    // Todo:  updated_tab_hashes.insert(swap_idx, swap_note.hash.clone());
+    updated_tab_hashes.insert(updated_order_tab.tab_idx, updated_order_tab.hash.clone());
 
     drop(tabs_state_tree_);
-    // todo: drop(updated_tab_hashes);
+    drop(updated_tab_hashes);
 
     Ok(())
 }

@@ -34,7 +34,7 @@ use crate::{
     },
 };
 
-use self::engine_proto::{CloseOrderTabReq, OpenOrderTabReq};
+use self::engine_proto::{CloseOrderTabReq, ModifyOrderTabReq, OpenOrderTabReq};
 
 pub mod helpers;
 pub mod orders;
@@ -142,10 +142,13 @@ pub struct ChangeMarginMessage {
 
 pub struct OrderTabActionMessage {
     pub open_order_tab_req: Option<OpenOrderTabReq>,
+    pub modify_order_tab_req: Option<ModifyOrderTabReq>,
     pub close_order_tab_req: Option<CloseOrderTabReq>,
 }
 
 pub struct OrderTabActionResponse {
     pub new_order_tab: Option<std::result::Result<OrderTab, String>>,
+    pub modified_tab_response:
+        Option<std::result::Result<(OrderTab, Option<Note>, Option<Note>), String>>,
     pub return_notes: Option<std::result::Result<(Note, Note), String>>,
 }

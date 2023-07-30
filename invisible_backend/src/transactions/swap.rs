@@ -74,6 +74,7 @@ impl Swap {
         tabs_state_tree_m: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_tab_hashes_m: Arc<Mutex<HashMap<u32, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -81,22 +82,6 @@ impl Swap {
         backup_storage: &Arc<Mutex<BackupStorage>>,
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
-
-        let mut tab_a_lock = None;
-        let mut order_tab_a = None;
-        if let Some(tab) = self.order_a.order_tab.as_ref() {
-            let t = tab.lock();
-            order_tab_a = Some(t.to_owned());
-            tab_a_lock = Some(t);
-        };
-
-        let mut tab_b_lock = None;
-        let mut order_tab_b = None;
-        if let Some(tab) = self.order_b.order_tab.as_ref() {
-            let t = tab.lock();
-            order_tab_b = Some(t.to_owned());
-            tab_b_lock = Some(t);
-        }
 
         if self.order_a.spot_note_info.is_some() && self.order_a.order_tab.is_some() {
             return Err(send_swap_error(
@@ -146,7 +131,6 @@ impl Swap {
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_a,
-                        order_tab_a,
                         &self.signature_a,
                         self.spent_amount_a,
                         self.spent_amount_b,
@@ -180,7 +164,6 @@ impl Swap {
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_b,
-                        order_tab_b,
                         &self.signature_b,
                         self.spent_amount_b,
                         self.spent_amount_a,
@@ -235,6 +218,7 @@ impl Swap {
             let tree = tree_m.clone();
             let tabs_state_tree = tabs_state_tree_m.clone();
             let updated_note_hashes = updated_note_hashes_m.clone();
+            let updated_tab_hashes = updated_tab_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
             let rollback_safeguard = rollback_safeguard_m.clone();
@@ -245,9 +229,10 @@ impl Swap {
                     &tree,
                     &tabs_state_tree,
                     &updated_note_hashes,
+                    &updated_tab_hashes,
                     &rollback_safeguard,
                     thread_id,
-                    self.order_a.order_id,
+                    &self.order_a,
                     &self.order_a.spot_note_info,
                     &order_a_output_clone.note_info_output,
                     &order_a_output_clone.updated_order_tab,
@@ -272,6 +257,7 @@ impl Swap {
             let tree = tree_m.clone();
             let tabs_state_tree = tabs_state_tree_m.clone();
             let updated_note_hashes = updated_note_hashes_m.clone();
+            let updated_tab_hashes = updated_tab_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
             let rollback_safeguard = rollback_safeguard_m.clone();
@@ -282,9 +268,10 @@ impl Swap {
                     &tree,
                     &tabs_state_tree,
                     &updated_note_hashes,
+                    &updated_tab_hashes,
                     &rollback_safeguard,
                     thread_id,
-                    self.order_b.order_id,
+                    &self.order_b,
                     &self.order_b.spot_note_info,
                     &order_b_output_clone.note_info_output,
                     &order_b_output_clone.updated_order_tab,
@@ -343,6 +330,8 @@ impl Swap {
         // ? Get the result or return the error
         let (execution_output_a, execution_output_b) = swap_execution_handle
             .or_else(|e| {
+                println!("error occured executing spot swap2 :  {:?}", e);
+
                 unblock_order(
                     &blocked_order_ids_c,
                     self.order_a.order_id,
@@ -356,6 +345,8 @@ impl Swap {
                 ))
             })?
             .or_else(|err: Report<SwapThreadExecutionError>| {
+                println!("error occured executing spot swap1:  {:?}", err);
+
                 unblock_order(
                     &blocked_order_ids_c,
                     self.order_a.order_id,
@@ -435,10 +426,14 @@ impl Swap {
 
         // * Update and release the order tab mutex
         if execution_output_a.updated_order_tab.is_some() {
-            *tab_a_lock.unwrap() = execution_output_a.updated_order_tab.unwrap();
+            let mut tab_a_lock = self.order_a.order_tab.as_ref().unwrap().lock();
+            *tab_a_lock = execution_output_a.updated_order_tab.unwrap();
+            drop(tab_a_lock);
         }
         if execution_output_b.updated_order_tab.is_some() {
-            *tab_b_lock.unwrap() = execution_output_b.updated_order_tab.unwrap();
+            let mut tab_b_lock = self.order_b.order_tab.as_ref().unwrap().lock();
+            *tab_b_lock = execution_output_b.updated_order_tab.unwrap();
+            drop(tab_b_lock);
         }
 
         return Ok(SwapResponse::new(
@@ -465,6 +460,7 @@ impl Transaction for Swap {
         tabs_state_tree: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_tab_hashes_m: Arc<Mutex<HashMap<u32, BigUint>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -477,6 +473,7 @@ impl Transaction for Swap {
                 tabs_state_tree,
                 partial_fill_tracker_m,
                 updated_note_hashes_m,
+                updated_tab_hashes_m,
                 swap_output_json_m,
                 blocked_order_ids_m,
                 rollback_safeguard_m,

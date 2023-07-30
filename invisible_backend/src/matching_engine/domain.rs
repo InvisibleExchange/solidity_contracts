@@ -1,6 +1,5 @@
 use std::{fmt::Debug, time::SystemTime};
 
-
 // let could_be_matched;
 //             let opposite_price: f64;
 //             match side {
@@ -44,7 +43,7 @@ use crate::{
 
 use crate::utils::crypto_utils::Signature;
 
-use super::get_qty_from_quote;
+use super::{get_qty_from_quote, get_quote_qty};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum OrderSide {
@@ -113,25 +112,37 @@ impl Order {
         }
     }
 
-    pub fn get_qty(&self, side: OrderSide, price: f64) -> u64 {
+    pub fn get_base_and_quote_qty(&self, side: OrderSide, price: f64) -> (u64, u64) {
         match self {
             Order::Spot(ord) => match side {
                 OrderSide::Bid => {
-                    return get_qty_from_quote(
+                    return (
+                        get_qty_from_quote(
+                            ord.amount_spent,
+                            price,
+                            ord.token_received,
+                            ord.token_spent,
+                        ),
                         ord.amount_spent,
-                        price,
-                        ord.token_received,
-                        ord.token_spent,
                     );
 
                     // return ord.amount_received;
                 }
                 OrderSide::Ask => {
-                    return ord.amount_spent;
+                    return (
+                        ord.amount_spent,
+                        get_quote_qty(
+                            ord.amount_spent,
+                            price,
+                            ord.token_spent,
+                            ord.token_received,
+                            None,
+                        ),
+                    );
                 }
             },
             Order::Perp(ord) => {
-                return ord.synthetic_amount;
+                return (ord.synthetic_amount, ord.collateral_amount);
             }
         }
     }

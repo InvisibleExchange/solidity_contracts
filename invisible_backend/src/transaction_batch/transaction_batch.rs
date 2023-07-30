@@ -14,7 +14,9 @@ use std::{
 use error_stack::Result;
 
 use crate::{
-    order_tab::{close_tab::close_order_tab, open_tab::open_order_tab},
+    order_tab::{
+        close_tab::close_order_tab, modify_tab::modify_order_tab, open_tab::open_order_tab,
+    },
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
@@ -61,9 +63,9 @@ use super::{
         },
     },
     restore_state_helpers::{
-        restore_deposit_update, restore_liquidation_order_execution, restore_margin_update,
-        restore_note_split, restore_perp_order_execution, restore_spot_order_execution,
-        restore_withdrawal_update,
+        restore_close_order_tab, restore_deposit_update, restore_liquidation_order_execution,
+        restore_margin_update, restore_note_split, restore_open_order_tab,
+        restore_perp_order_execution, restore_spot_order_execution, restore_withdrawal_update,
     },
     tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info, split_hashmap},
     tx_batch_structs::{get_price_info, GlobalConfig},
@@ -296,6 +298,7 @@ impl TransactionBatch {
         let tabs_state_tree = self.order_tabs_state_tree.clone();
         let partial_fill_tracker = self.partial_fill_tracker.clone();
         let updated_note_hashes = self.updated_note_hashes.clone();
+        let updated_tab_hashes = self.updated_tab_hashes.clone();
         let swap_output_json = self.swap_output_json.clone();
         let blocked_order_ids = self.blocked_order_ids.clone();
         let rollback_safeguard = self.rollback_safeguard.clone();
@@ -308,6 +311,7 @@ impl TransactionBatch {
                 tabs_state_tree,
                 partial_fill_tracker,
                 updated_note_hashes,
+                updated_tab_hashes,
                 swap_output_json,
                 blocked_order_ids,
                 rollback_safeguard,
@@ -833,6 +837,7 @@ impl TransactionBatch {
         let updated_tab_hashes = self.updated_tab_hashes.clone();
         let session = self.firebase_session.clone();
         let backup_storage = self.backup_storage.clone();
+        let swap_output_json = self.swap_output_json.clone();
 
         let handle = thread::spawn(move || {
             if tab_action_message.open_order_tab_req.is_some() {
@@ -846,13 +851,35 @@ impl TransactionBatch {
                     &updated_note_hashes,
                     &tabs_state_tree,
                     &updated_tab_hashes,
+                    &swap_output_json,
                 );
 
                 let order_tab_action_response = OrderTabActionResponse {
                     new_order_tab: Some(new_order_tab),
+                    modified_tab_response: None,
                     return_notes: None,
                 };
 
+                return order_tab_action_response;
+            } else if tab_action_message.modify_order_tab_req.is_some() {
+                let modify_order_tab_req = tab_action_message.modify_order_tab_req.unwrap();
+
+                let modified_tab_response = modify_order_tab(
+                    &session,
+                    &backup_storage,
+                    modify_order_tab_req,
+                    &state_tree,
+                    &updated_note_hashes,
+                    &tabs_state_tree,
+                    &updated_tab_hashes,
+                    &swap_output_json,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    new_order_tab: None,
+                    modified_tab_response: Some(modified_tab_response),
+                    return_notes: None,
+                };
                 return order_tab_action_response;
             } else {
                 let close_order_tab_req = tab_action_message.close_order_tab_req.unwrap();
@@ -865,10 +892,12 @@ impl TransactionBatch {
                     &updated_note_hashes,
                     &tabs_state_tree,
                     &updated_tab_hashes,
+                    &swap_output_json,
                 );
 
                 let order_tab_action_response = OrderTabActionResponse {
                     new_order_tab: None,
+                    modified_tab_response: None,
                     return_notes: Some(new_notes),
                 };
 
@@ -1150,6 +1179,7 @@ impl TransactionBatch {
                 .unwrap()
                 .as_str()
                 .unwrap();
+
             match transaction_type {
                 "deposit" => {
                     let deposit_notes = transaction
@@ -1193,6 +1223,8 @@ impl TransactionBatch {
                     restore_spot_order_execution(
                         &self.state_tree,
                         &self.updated_note_hashes,
+                        &self.order_tabs_state_tree,
+                        &self.updated_tab_hashes,
                         &transaction,
                         true,
                     );
@@ -1202,6 +1234,8 @@ impl TransactionBatch {
                     restore_spot_order_execution(
                         &self.state_tree,
                         &self.updated_note_hashes,
+                        &self.order_tabs_state_tree,
+                        &self.updated_tab_hashes,
                         &transaction,
                         false,
                     );
@@ -1250,6 +1284,22 @@ impl TransactionBatch {
                 "note_split" => {
                     restore_note_split(&self.state_tree, &self.updated_note_hashes, &transaction)
                 }
+                "open_order_tab" => {
+                    restore_open_order_tab(
+                        &self.state_tree,
+                        &self.updated_note_hashes,
+                        &self.order_tabs_state_tree,
+                        &self.updated_tab_hashes,
+                        &transaction,
+                    );
+                }
+                "close_order_tab" => restore_close_order_tab(
+                    &self.state_tree,
+                    &self.updated_note_hashes,
+                    &self.order_tabs_state_tree,
+                    &self.updated_tab_hashes,
+                    &transaction,
+                ),
 
                 _ => {
                     panic!("Invalid transaction type");

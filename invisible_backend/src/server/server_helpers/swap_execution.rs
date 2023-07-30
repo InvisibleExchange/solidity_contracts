@@ -32,7 +32,7 @@ use crate::utils::storage::BackupStorage;
 
 use tokio::sync::{mpsc::Sender as MpscSender, oneshot::Sender as OneshotSender};
 
-use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
+use tokio::task::JoinHandle as TokioJoinHandle;
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType};
 use super::super::server_helpers::get_order_side;
@@ -184,9 +184,6 @@ pub async fn execute_swap(
                     OrderFillResponse::from_swap_response(&swap_res, fee_taken_a, true);
                 let fill_res_b =
                     OrderFillResponse::from_swap_response(&swap_res, fee_taken_b, false);
-
-                // let spent_amount_a = swap_res.spent_amount_a;
-                // let spent_amount_b = swap_res.spent_amount_b;
 
                 // ? Return the swap response to be sent over the websocket in the engine
                 let json_msg_a = json!({
@@ -367,15 +364,10 @@ pub async fn process_and_execute_spot_swaps(
     processed_res: &mut Vec<std::result::Result<Success, Failed>>,
 ) -> std::result::Result<
     (
-        Vec<
-            std::result::Result<
-                (
-                    Option<((Message, Message), (u64, u64), Message)>,
-                    Option<SwapErrorInfo>,
-                ),
-                JoinError,
-            >,
-        >,
+        Vec<(
+            Option<((Message, Message), (u64, u64), Message)>,
+            Option<SwapErrorInfo>,
+        )>,
         u64,
     ),
     String,
@@ -389,7 +381,7 @@ pub async fn process_and_execute_spot_swaps(
     let processed_result = res.unwrap();
 
     // ? Execute the swaps if any orders were matched
-    let mut handles = Vec::new();
+    let mut results = Vec::new();
     if let Some(swaps) = processed_result.swaps {
         for (swap, user_id_a, user_id_b) in swaps {
             let mpsc_tx = mpsc_tx.clone();
@@ -398,7 +390,8 @@ pub async fn process_and_execute_spot_swaps(
             let session = session.clone();
             let backup_storage = backup_storage.clone();
 
-            let handle = tokio::spawn(execute_swap(
+            // let handle = tokio::spawn(execute_swap(
+            let res = execute_swap(
                 swap,
                 mpsc_tx,
                 rollback_safeguard_clone,
@@ -406,15 +399,16 @@ pub async fn process_and_execute_spot_swaps(
                 (user_id_a, user_id_b),
                 session,
                 backup_storage,
-            ));
+            )
+            .await;
 
-            let res = handle.await;
+            // let res = handle.await;
 
-            handles.push(res);
+            results.push(res);
         }
     }
 
-    return Ok((handles, processed_result.new_order_id));
+    return Ok((results, processed_result.new_order_id));
 }
 
 pub async fn process_limit_order_request(
@@ -457,45 +451,12 @@ pub async fn process_limit_order_request(
     return processed_res;
 }
 
-// pub async fn process_batch_order_request(
-//     order_book: &Arc<TokioMutex<OrderBook>>,
-//     limit_order: LimitOrder,
-//     side: OBOrderSide,
-//     signature: Signature,
-//     prices: Vec<f64>,
-//     amounts: Vec<u64>,
-//     user_id: u64,
-// ) -> Vec<std::result::Result<Success, Failed>> {
-//     // ? Create a new OrderRequest object
-//     let order_ = Order::Spot(limit_order);
-//     let order_request = new_batch_order_request(
-//         side,
-//         order_,
-//         signature,
-//         prices,
-//         amounts,
-//         SystemTime::now(),
-//         user_id,
-//     );
-
-//     // ? Insert the order into the book and get back the matched results if any
-//     let mut order_book_m = order_book.lock().await;
-//     let processed_res = order_book_m.process_order(order_request);
-
-//     drop(order_book_m);
-
-//     return processed_res;
-// }
-
 use async_recursion::async_recursion;
 
-type SwapExecutionResultMessage = std::result::Result<
-    (
-        Option<((Message, Message), (u64, u64), Message)>,
-        Option<SwapErrorInfo>,
-    ),
-    JoinError,
->;
+type SwapExecutionResultMessage = (
+    Option<((Message, Message), (u64, u64), Message)>,
+    Option<SwapErrorInfo>,
+);
 
 pub async fn await_swap_handles(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
@@ -506,12 +467,9 @@ pub async fn await_swap_handles(
     // ? Wait for the swaps to finish
     let mut retry_messages = Vec::new();
     for msg_ in messages {
-        if let Err(_) = msg_ {
-            continue;
-        }
         // If the swap was successful, send the messages to the users
-        if msg_.as_ref().unwrap().0.is_some() {
-            let ((msg_a, msg_b), (user_id_a, user_id_b), fill_msg) = msg_.unwrap().0.unwrap();
+        if msg_.0.is_some() {
+            let ((msg_a, msg_b), (user_id_a, user_id_b), fill_msg) = msg_.0.unwrap();
 
             // ? Send a message to the user_id websocket
             if let Err(_) = send_direct_message(ws_connections, user_id_a, msg_a).await {
@@ -531,8 +489,8 @@ pub async fn await_swap_handles(
             };
         }
         // If there was an error in the swap, retry the order
-        else if msg_.as_ref().unwrap().1.is_some() {
-            let error_res = msg_.unwrap().1.unwrap();
+        else if msg_.1.is_some() {
+            let error_res = msg_.1.unwrap();
 
             let msg = json!({
                 "message_id": "PERP_SWAP_ERROR",
@@ -614,7 +572,7 @@ pub async fn retry_failed_swaps(
         )
         .await;
 
-        let new_handles;
+        let new_results;
         match process_and_execute_spot_swaps(
             mpsc_tx,
             rollback_safeguard,
@@ -626,7 +584,7 @@ pub async fn retry_failed_swaps(
         .await
         {
             Ok((h, _oid)) => {
-                new_handles = h;
+                new_results = h;
             }
             Err(err) => {
                 return Err(err);
@@ -637,7 +595,7 @@ pub async fn retry_failed_swaps(
         match await_swap_handles(
             ws_connections,
             privileged_ws_connections,
-            new_handles,
+            new_results,
             user_id,
         )
         .await

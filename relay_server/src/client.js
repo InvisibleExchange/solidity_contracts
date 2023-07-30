@@ -172,6 +172,28 @@ app.post("/change_position_margin", (req, res) => {
   });
 });
 
+// *  OPEN NEW ORDER TAB -----------------------------------------------------------
+app.post("/open_order_tab", (req, res) => {
+  client.open_order_tab(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
+// *  CLOSE ORDER TAB -----------------------------------------------------------
+app.post("/close_order_tab", (req, res) => {
+  client.close_order_tab(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
 // * GET LIQUIDITY ---------------------------------------------------------------------
 app.post("/get_liquidity", (req, res) => {
   client.get_liquidity(req.body, function (err, response) {

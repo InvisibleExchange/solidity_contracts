@@ -16,7 +16,7 @@ use super::super::{
         GrpcMessage, GrpcTxResponse, MessageType,
     },
     server_helpers::{
-        engine_helpers::{store_output_json, verify_tab_existence},
+        engine_helpers::store_output_json,
         get_market_id_and_order_side,
         perp_swap_execution::{
             process_and_execute_perp_swaps, process_perp_order_request, retry_failed_perp_swaps,
@@ -135,11 +135,11 @@ pub async fn submit_limit_order_inner(
         }
 
         // ? Verify the order tab exist in the state tree
-        if let Err(err_msg) =
-            verify_tab_existence(&limit_order.order_tab.as_ref().unwrap(), &state_tree)
-        {
-            return send_order_error_reply(err_msg);
-        }
+        // if let Err(err_msg) =
+        //     verify_tab_existence(&limit_order.order_tab.as_ref().unwrap(), &tab_state_tree)
+        // {
+        //     return send_order_error_reply(err_msg);
+        // }
     }
 
     let mut processed_res = process_limit_order_request(
@@ -157,7 +157,7 @@ pub async fn submit_limit_order_inner(
     .await;
 
     // This matches the orders and creates the swaps that can be executed
-    let handles;
+    let reults;
     let new_order_id;
     match process_and_execute_spot_swaps(
         &mpsc_tx,
@@ -170,7 +170,7 @@ pub async fn submit_limit_order_inner(
     .await
     {
         Ok((h, oid)) => {
-            handles = h;
+            reults = h;
             new_order_id = oid;
         }
         Err(err) => {
@@ -180,16 +180,11 @@ pub async fn submit_limit_order_inner(
 
     // this executes the swaps in parallel
     let retry_messages;
-    match await_swap_handles(
-        &ws_connections,
-        &privileged_ws_connections,
-        handles,
-        user_id,
-    )
-    .await
-    {
+    match await_swap_handles(&ws_connections, &privileged_ws_connections, reults, user_id).await {
         Ok(rm) => retry_messages = rm,
-        Err(e) => return send_order_error_reply(e),
+        Err(e) => {
+            return send_order_error_reply(e);
+        }
     };
 
     if retry_messages.len() > 0 {

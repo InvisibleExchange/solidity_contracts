@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
 use parking_lot::Mutex;
+use serde_json::Value;
 use starknet::curve::AffinePoint;
 
 use firestore_db_and_auth::ServiceSession;
@@ -14,7 +15,10 @@ use crate::{
 
 use crate::utils::crypto_utils::{verify, EcPoint, Signature};
 
-use super::{db_updates::open_tab_db_updates, state_updates::open_tab_state_updates, OrderTab};
+use super::{
+    db_updates::open_tab_db_updates, json_output::open_tab_json_output,
+    state_updates::open_tab_state_updates, OrderTab,
+};
 
 // TODO: Check that the notes exist just before you update the state tree not in the beginning
 
@@ -26,6 +30,7 @@ pub fn open_order_tab(
     updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
     order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    swap_output_json_m: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
 ) -> std::result::Result<OrderTab, String> {
     let sig_pub_key: BigUint;
 
@@ -158,7 +163,18 @@ pub fn open_order_tab(
         return Err("Invalid Signature".to_string());
     }
 
-    // ? UPDATE THE DATABASE
+    // ? GENERATE THE JSON_OUTPUT -----------------------------------------------------------------
+    open_tab_json_output(
+        &swap_output_json_m,
+        &base_notes_in,
+        &base_refund_note,
+        &quote_notes_in,
+        &quote_refund_note,
+        &order_tab,
+        &signature,
+    );
+
+    // ? UPDATE THE DATABASE ----------------------------------------------------------------------
     open_tab_db_updates(
         session,
         backup_storage,
@@ -169,7 +185,7 @@ pub fn open_order_tab(
         quote_refund_note.clone(),
     );
 
-    // ? UPDATE THE STATE
+    // ? UPDATE THE STATE TREE --------------------------------------------------------------------
     open_tab_state_updates(
         state_tree,
         updated_note_hashes,

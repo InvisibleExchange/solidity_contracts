@@ -37,7 +37,7 @@ use crate::utils::{errors::PerpSwapExecutionError, notes::Note};
 
 use tokio::sync::{mpsc::Sender as MpscSender, oneshot::Sender as OneshotSender};
 
-use tokio::task::{JoinError, JoinHandle as TokioJoinHandle};
+use tokio::task::JoinHandle as TokioJoinHandle;
 
 use super::super::grpc::{GrpcMessage, GrpcTxResponse, MessageType, RollbackMessage};
 use super::{
@@ -348,7 +348,8 @@ pub async fn process_and_execute_perp_swaps(
             let session = session.clone();
             let backup_storage = backup_storage.clone();
 
-            let handle = tokio::spawn(execute_perp_swap(
+            // let handle = tokio::spawn(execute_perp_swap(
+            let res = execute_perp_swap(
                 swap,
                 mpsc_tx,
                 perp_rollback_safeguard_clone,
@@ -356,9 +357,8 @@ pub async fn process_and_execute_perp_swaps(
                 (user_id_a, user_id_b),
                 session,
                 backup_storage,
-            ));
-
-            let res = handle.await;
+            )
+            .await;
 
             let (retry_msg, position_pair) =
                 await_perp_handle(ws_connections, privileged_ws_connections, res, user_id).await;
@@ -414,18 +414,15 @@ pub async fn process_perp_order_request(
     return processed_res;
 }
 
-type HandleResult = std::result::Result<
-    (
-        Option<(
-            (Message, Message),
-            (u64, u64),
-            (Option<PerpPosition>, Option<PerpPosition>),
-            Message,
-        )>,
-        Option<SwapErrorInfo>,
-    ),
-    JoinError,
->;
+type HandleResult = (
+    Option<(
+        (Message, Message),
+        (u64, u64),
+        (Option<PerpPosition>, Option<PerpPosition>),
+        Message,
+    )>,
+    Option<SwapErrorInfo>,
+);
 
 pub async fn await_perp_handle(
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
@@ -439,9 +436,9 @@ pub async fn await_perp_handle(
     // ? Wait for the swaps to finish
 
     // If the swap was successful, send the messages to the users
-    if handle_res.as_ref().unwrap().0.is_some() {
+    if handle_res.0.is_some() {
         let ((msg_a, msg_b), (user_id_a, user_id_b), position_pair, fill_msg) =
-            handle_res.unwrap().0.unwrap();
+            handle_res.0.unwrap();
 
         // ? Send a message to the user_id websocket
         if let Err(_) = send_direct_message(ws_connections, user_id_a, msg_a).await {
@@ -508,8 +505,8 @@ pub async fn await_perp_handle(
 
         return (None, Some(position_pair));
     // If the taker swap failed, try matching it again with another order
-    } else if handle_res.as_ref().unwrap().1.is_some() {
-        let error_res = handle_res.unwrap().1.unwrap();
+    } else if handle_res.1.is_some() {
+        let error_res = handle_res.1.unwrap();
 
         let msg = json!({
             "message_id": "PERP_SWAP_ERROR",

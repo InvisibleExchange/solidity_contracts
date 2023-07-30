@@ -184,6 +184,15 @@ pub fn consistency_checks(
     if order_a.amount_spent < spent_amount_a - dust_amount_a
         || order_b.amount_spent < spent_amount_b - dust_amount_b
     {
+        println!(
+            "order_a.amount_spent: {:?}, spent_amount_a: {:?}, dust_amount_a: {:?}",
+            order_a.amount_spent, spent_amount_a, dust_amount_a
+        );
+        println!(
+            "order_b.amount_spent: {:?}, spent_amount_b: {:?}, dust_amount_b: {:?}",
+            order_b.amount_spent, spent_amount_b, dust_amount_b
+        );
+
         return Err(send_swap_error(
             "Amounts swapped exceed order amounts".to_string(),
             None,
@@ -219,6 +228,22 @@ pub fn consistency_checks(
     let b2 = spent_amount_a as u128 * order_b.amount_spent as u128;
 
     if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
+        println!(
+            "a1: {:?}, a2: {:?}, b1: {:?}, b2: {:?}",
+            a1 / multiplier,
+            a2 / multiplier,
+            b1 / multiplier,
+            b2 / multiplier
+        );
+        println!(
+            "spent_amount_a: {:?}, order_a.amount_received: {:?}",
+            spent_amount_a, order_a.amount_received
+        );
+        println!(
+            "spent_amount_b: {:?}, order_a.amount_spent: {:?}",
+            spent_amount_b, order_a.amount_spent
+        );
+
         return Err(send_swap_error(
             "Amount swapped ratios are inconsistent".to_string(),
             None,

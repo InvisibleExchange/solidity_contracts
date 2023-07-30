@@ -4,6 +4,7 @@ use num_bigint::BigUint;
 use parking_lot::Mutex;
 
 use firestore_db_and_auth::ServiceSession;
+use serde_json::Value;
 
 use crate::{
     perpetual::perp_order::CloseOrderFields,
@@ -14,7 +15,10 @@ use crate::{
 
 use crate::utils::crypto_utils::{verify, Signature};
 
-use super::{db_updates::close_tab_db_updates, state_updates::close_tab_state_updates, OrderTab};
+use super::{
+    db_updates::close_tab_db_updates, json_output::close_tab_json_output,
+    state_updates::close_tab_state_updates, OrderTab,
+};
 
 pub fn close_order_tab(
     session: &Arc<Mutex<ServiceSession>>,
@@ -24,6 +28,7 @@ pub fn close_order_tab(
     updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
     order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    swap_output_json_m: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
 ) -> std::result::Result<(Note, Note), String> {
     if close_order_tab_req.order_tab.is_none() {
         return Err("order tab is missing".to_string());
@@ -65,7 +70,7 @@ pub fn close_order_tab(
         &order_tab,
         &base_close_order_fields,
         &quote_close_order_fields,
-        signature,
+        &signature,
     );
 
     let base_token = order_tab.tab_header.base_token;
@@ -80,20 +85,31 @@ pub fn close_order_tab(
 
     let base_return_note = Note::new(
         zero_idx1,
-        base_close_order_fields.dest_received_address,
+        base_close_order_fields.dest_received_address.clone(),
         base_token,
         base_amount,
-        base_close_order_fields.dest_received_blinding,
+        base_close_order_fields.dest_received_blinding.clone(),
     );
     let quote_return_note = Note::new(
         zero_idx2,
-        quote_close_order_fields.dest_received_address,
+        quote_close_order_fields.dest_received_address.clone(),
         quote_token,
         quote_amount,
-        quote_close_order_fields.dest_received_blinding,
+        quote_close_order_fields.dest_received_blinding.clone(),
     );
 
     drop(tab_state_tree_m);
+
+    // ? GENERATE THE JSON_OUTPUT ----------------------------------------------------------
+    close_tab_json_output(
+        &swap_output_json_m,
+        &base_return_note,
+        &quote_return_note,
+        &base_close_order_fields,
+        &quote_close_order_fields,
+        &order_tab,
+        &signature,
+    );
 
     // ? UPDATE THE STATE -----------------------------------------------------------------
     close_tab_state_updates(
@@ -123,7 +139,7 @@ pub fn verfiy_close_order_hash(
     order_tab: &OrderTab,
     base_close_order_fields: &CloseOrderFields,
     quote_close_order_fields: &CloseOrderFields,
-    signature: Signature,
+    signature: &Signature,
 ) -> bool {
     // & header_hash = H({order_tab_hash, base_close_order_fields.hash, quote_close_order_fields.hash})
 
@@ -138,7 +154,7 @@ pub fn verfiy_close_order_hash(
 
     let hash = pedersen_on_vec(&hash_inputs);
 
-    let valid = verify(&order_tab.tab_header.pub_key, &hash, &signature);
+    let valid = verify(&order_tab.tab_header.pub_key, &hash, signature);
 
     return valid;
 }

@@ -6,9 +6,9 @@ use std::time::{self, SystemTime};
 use num_bigint::BigUint;
 use parking_lot::Mutex;
 
+use crate::order_tab::OrderTab;
 use crate::perpetual::perp_position::PerpPosition;
 use crate::utils::crypto_utils::Signature;
-use crate::order_tab::OrderTab;
 
 use super::domain::{Order, OrderSide, OrderWrapper};
 use super::orders::amend_inner;

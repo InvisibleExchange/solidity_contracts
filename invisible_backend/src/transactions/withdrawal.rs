@@ -197,6 +197,7 @@ impl Transaction for Withdrawal {
         _: Arc<Mutex<SuperficialTree>>,
         _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
         updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
+        _: Arc<Mutex<HashMap<u32, BigUint>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
