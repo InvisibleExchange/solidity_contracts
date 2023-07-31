@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
+use num_traits::Zero;
 use parking_lot::Mutex;
 use serde_json::Value;
 use starknet::curve::AffinePoint;
@@ -10,7 +11,7 @@ use firestore_db_and_auth::ServiceSession;
 use crate::{
     server::grpc::engine_proto::OpenOrderTabReq,
     trees::superficial_tree::SuperficialTree,
-    utils::{notes::Note, storage::BackupStorage},
+    utils::{crypto_utils::pedersen_on_vec, notes::Note, storage::BackupStorage},
 };
 
 use crate::utils::crypto_utils::{verify, EcPoint, Signature};
@@ -90,6 +91,10 @@ pub fn open_order_tab(
             return Err("token missmatch".to_string());
         }
 
+        if note_.index != base_notes_in[0].index {
+            return Err("refund note index missmatch".to_string());
+        }
+
         base_amount -= note_.amount;
 
         base_refund_note = Note::try_from(note_.clone()).ok();
@@ -130,6 +135,10 @@ pub fn open_order_tab(
             return Err("token missmatch".to_string());
         }
 
+        if note_.index != quote_notes_in[0].index {
+            return Err("refund note index missmatch".to_string());
+        }
+
         quote_amount -= note_.amount;
         quote_refund_note = Note::try_from(note_.clone()).ok();
     }
@@ -157,7 +166,13 @@ pub fn open_order_tab(
     // ? Verify the signature ---------------------------------------------------------------------
     let signature = Signature::try_from(open_order_tab_req.signature.unwrap_or_default())
         .map_err(|err| err.to_string())?;
-    let valid = verify(&sig_pub_key, &order_tab.hash, &signature);
+    let valid = verfiy_open_order_sig(
+        &order_tab,
+        &base_refund_note,
+        &quote_refund_note,
+        &sig_pub_key,
+        &signature,
+    );
 
     if !valid {
         return Err("Invalid Signature".to_string());
@@ -204,3 +219,38 @@ pub fn open_order_tab(
 //
 
 // * HELPERS =======================================================================================
+
+/// Verify the signature for the order tab hash
+pub fn verfiy_open_order_sig(
+    order_tab: &OrderTab,
+    base_refund_note: &Option<Note>,
+    quote_refund_note: &Option<Note>,
+    pub_key: &BigUint,
+    signature: &Signature,
+) -> bool {
+    // & header_hash = H({order_tab_hash, base_close_order_fields.hash, quote_close_order_fields.hash})
+
+    let mut hash_inputs: Vec<&BigUint> = Vec::new();
+
+    hash_inputs.push(&order_tab.hash);
+
+    let z = BigUint::zero();
+    let base_refund_note_hash = if base_refund_note.is_some() {
+        &base_refund_note.as_ref().unwrap().hash
+    } else {
+        &z
+    };
+    hash_inputs.push(&base_refund_note_hash);
+    let quote_refund_note_hash = if quote_refund_note.is_some() {
+        &quote_refund_note.as_ref().unwrap().hash
+    } else {
+        &z
+    };
+    hash_inputs.push(&quote_refund_note_hash);
+
+    let hash = pedersen_on_vec(&hash_inputs);
+
+    let valid = verify(pub_key, &hash, signature);
+
+    return valid;
+}

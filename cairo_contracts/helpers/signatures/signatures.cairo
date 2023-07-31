@@ -7,6 +7,7 @@ from starkware.cairo.common.ec_point import EcPoint
 from helpers.utils import Note
 from perpetuals.order.order_structs import PerpOrder, OpenOrderFields, PerpPosition
 
+// * SPOT SIGNATURES * //
 func verify_spot_signature{ecdsa_ptr: SignatureBuiltin*}(
     tx_hash: felt, notes_len: felt, notes: Note*
 ) -> (pub_key_sum: EcPoint) {
@@ -45,7 +46,7 @@ func verify_sig{ecdsa_ptr: SignatureBuiltin*}(tx_hash: felt, pub_key: EcPoint) {
     return ();
 }
 
-// * PERPETUAL SIGNATURES BELOW * #
+// * PERPETUAL SIGNATURES * //
 
 func verify_open_order_signature{ecdsa_ptr: SignatureBuiltin*}(
     order_hash: felt, notes_len: felt, notes: Note*
@@ -119,6 +120,99 @@ func verify_margin_change_signature{pedersen_ptr: HashBuiltin*, ecdsa_ptr: Signa
     }
 
     return ();
+}
+
+// * ORDER TAB SIGNATURES * //
+func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
+    tab_hash: felt,
+    base_notes_len: felt,
+    base_notes: Note*,
+    base_refund_hash: felt,
+    quote_notes_len: felt,
+    quote_notes: Note*,
+    quote_refund_hash: felt,
+) {
+    alloc_locals;
+
+    let (pub_key_sum: EcPoint) = sum_pub_keys(base_notes_len, base_notes, EcPoint(0, 0));
+    let (pub_key_sum: EcPoint) = sum_pub_keys(quote_notes_len, quote_notes, pub_key_sum);
+
+    let hash = _get_open_tab_hash_internal(tab_hash, base_refund_hash, quote_refund_hash);
+
+    local sig_r: felt;
+    local sig_s: felt;
+    %{
+        ids.sig_r = int(signature[0]) 
+        ids.sig_s = int(signature[1])
+    %}
+
+    verify_ecdsa_signature(
+        message=hash, public_key=pub_key_sum.x, signature_r=sig_r, signature_s=sig_s
+    );
+
+    return ();
+}
+
+func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
+    tab_hash: felt,
+    base_close_order_fields: CloseOrderFields*,
+    quote_close_order_fields: CloseOrderFields*,
+    pub_key: felt,
+) {
+    alloc_locals;
+
+    let (base_fields_hash: felt) = _hash_close_order_fields(base_close_order_fields);
+    let (quote_fields_hash: felt) = _hash_close_order_fields(quote_close_order_fields);
+
+    let hash = _get_close_tab_hash_internal(tab_hash, base_fields_hash, quote_fields_hash);
+
+    local sig_r: felt;
+    local sig_s: felt;
+    %{
+        ids.sig_r = int(signature[0]) 
+        ids.sig_s = int(signature[1])
+    %}
+
+    verify_ecdsa_signature(message=hash, public_key=pub_key, signature_r=sig_r, signature_s=sig_s);
+
+    return ();
+}
+
+// helpers
+func _get_open_tab_hash_internal{pedersen_ptr: HashBuiltin*}(
+    tab_hash: felt, base_refund_hash: felt, quote_refund_hash: felt
+) -> felt {
+    alloc_locals;
+
+    let hash_ptr = pedersen_ptr;
+    with hash_ptr {
+        let (hash_state_ptr) = hash_init();
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_refund_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_refund_hash);
+
+        let (res) = hash_finalize(hash_state_ptr);
+        let pedersen_ptr = hash_ptr;
+        return res;
+    }
+}
+
+func _get_close_tab_hash_internal{pedersen_ptr: HashBuiltin*}(
+    tab_hash: felt, base_fields_hash: felt, quote_fields_hash: felt
+) -> felt {
+    alloc_locals;
+
+    let hash_ptr = pedersen_ptr;
+    with hash_ptr {
+        let (hash_state_ptr) = hash_init();
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_fields_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_fields_hash);
+
+        let (res) = hash_finalize(hash_state_ptr);
+        let pedersen_ptr = hash_ptr;
+        return res;
+    }
 }
 
 // HELPERS ================================================= #

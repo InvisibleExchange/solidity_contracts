@@ -142,6 +142,7 @@ impl OrderBook {
                     ts: SystemTime::now(),
                 }));
 
+                // ? If the order tab already exists as part of a different order link this order to that Mutex
                 if let Order::Spot(limit_order) = &mut order.order {
                     if limit_order.order_tab.is_some() {
                         let tab = limit_order.order_tab.as_ref().unwrap().lock();
@@ -159,8 +160,6 @@ impl OrderBook {
                                 limit_order.order_tab = order_tab_mutex;
                             }
                         }
-
-                        // TODO: Check if the order_tab gets updated in other orders as well
                     }
                 }
 
@@ -1143,40 +1142,40 @@ impl OrderBook {
     ) {
         let mut max_order_id: u64 = 0;
 
-        // for order in spot_bid_orders {
-        //     if order.amount
-        //         <= order.order.as_ref().unwrap().amount_received
-        //             - DUST_AMOUNT_PER_ASSET
-        //                 [&order.order.as_ref().unwrap().token_received.to_string()]
-        //     {
-        //         continue;
-        //     };
+        for order in spot_bid_orders {
+            if order.amount
+                <= order.order.as_ref().unwrap().amount_received
+                    - DUST_AMOUNT_PER_ASSET
+                        [&order.order.as_ref().unwrap().token_received.to_string()]
+            {
+                continue;
+            };
 
-        //     max_order_id = if order.order_id > max_order_id {
-        //         order.order_id
-        //     } else {
-        //         max_order_id
-        //     };
+            max_order_id = if order.order_id > max_order_id {
+                order.order_id
+            } else {
+                max_order_id
+            };
 
-        //     self._restore_spot_inner(order, OrderSide::Bid);
-        // }
+            self._restore_spot_inner(order, OrderSide::Bid);
+        }
 
-        // for order in spot_ask_orders {
-        //     if order.amount
-        //         <= order.order.as_ref().unwrap().amount_spent
-        //             - DUST_AMOUNT_PER_ASSET[&order.order.as_ref().unwrap().token_spent.to_string()]
-        //     {
-        //         continue;
-        //     };
+        for order in spot_ask_orders {
+            if order.amount
+                <= order.order.as_ref().unwrap().amount_spent
+                    - DUST_AMOUNT_PER_ASSET[&order.order.as_ref().unwrap().token_spent.to_string()]
+            {
+                continue;
+            };
 
-        //     max_order_id = if order.order_id > max_order_id {
-        //         order.order_id
-        //     } else {
-        //         max_order_id
-        //     };
+            max_order_id = if order.order_id > max_order_id {
+                order.order_id
+            } else {
+                max_order_id
+            };
 
-        //     self._restore_spot_inner(order, OrderSide::Ask);
-        // }
+            self._restore_spot_inner(order, OrderSide::Ask);
+        }
 
         let max_seq_id = max_order_id / 2_u64.pow(16);
 
@@ -1249,15 +1248,40 @@ impl OrderBook {
         .unwrap();
         let user_id = order.order.as_ref().unwrap().user_id;
 
-        if let Ok(limit_order) = LimitOrder::try_from(order.order.unwrap()) {
+        if let Ok(mut limit_order) = LimitOrder::try_from(order.order.unwrap()) {
             let order_id = order.order_id;
             let amount = order.amount;
             let price = order.price;
             let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(order.timestamp);
 
+            // ? If the order tab already exists as part of a different order link this order to that Mutex
+            if limit_order.order_tab.is_some() {
+                let tab = limit_order.order_tab.as_ref().unwrap().lock();
+                let order_tab_mutex = self.bid_queue.get_tab_mutex(&tab.hash);
+                drop(tab);
+
+                if order_tab_mutex.is_some() {
+                    limit_order.order_tab = order_tab_mutex;
+                } else {
+                    let tab = limit_order.order_tab.as_ref().unwrap().lock();
+                    let order_tab_mutex = self.ask_queue.get_tab_mutex(&tab.hash);
+                    drop(tab);
+
+                    if order_tab_mutex.is_some() {
+                        limit_order.order_tab = order_tab_mutex;
+                    }
+                }
+            }
+
+            let order = Order::Spot(limit_order);
+
+            if order.has_expired() {
+                return;
+            }
+
             let wrapper = OrderWrapper {
                 order_id,
-                order: Order::Spot(limit_order),
+                order,
                 order_side,
                 qty_left: amount,
                 signature,

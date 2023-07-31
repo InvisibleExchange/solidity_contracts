@@ -48,7 +48,8 @@ pub fn modify_order_tab(
 
     let prev_order_tab = order_tab.clone();
 
-    if modify_order_tab_req.base_amount == 0 && modify_order_tab_req.quote_amount == 0 {
+    if modify_order_tab_req.base_amount_change == 0 && modify_order_tab_req.quote_amount_change == 0
+    {
         return Err("amounts cannot be zero".to_string());
     }
 
@@ -167,8 +168,8 @@ pub fn modify_order_tab(
         // ? Get the public key from the sum of the notes
         sig_pub_key = EcPoint::from(&pub_key_sum).x.to_biguint().unwrap();
 
-        if base_amount != modify_order_tab_req.base_amount
-            || quote_amount != modify_order_tab_req.quote_amount
+        if base_amount != modify_order_tab_req.base_amount_change
+            || quote_amount != modify_order_tab_req.quote_amount_change
         {
             return Err("amount missmatch".to_string());
         }
@@ -189,8 +190,8 @@ pub fn modify_order_tab(
         let base_close_fields = base_close_order_fields_.as_ref().unwrap();
         let quote_close_fields = quote_close_order_fields_.as_ref().unwrap();
 
-        if order_tab.base_amount < modify_order_tab_req.base_amount
-            || order_tab.quote_amount < modify_order_tab_req.quote_amount
+        if order_tab.base_amount < modify_order_tab_req.base_amount_change
+            || order_tab.quote_amount < modify_order_tab_req.quote_amount_change
         {
             return Err("amounts to reduce are to large".to_string());
         }
@@ -204,14 +205,14 @@ pub fn modify_order_tab(
             zero_idx1,
             base_close_fields.dest_received_address.clone(),
             base_token,
-            modify_order_tab_req.base_amount,
+            modify_order_tab_req.base_amount_change,
             base_close_fields.dest_received_blinding.clone(),
         ));
         quote_return_note = Some(Note::new(
             zero_idx2,
             quote_close_fields.dest_received_address.clone(),
             quote_token,
-            modify_order_tab_req.quote_amount,
+            modify_order_tab_req.quote_amount_change,
             quote_close_fields.dest_received_blinding.clone(),
         ));
 
@@ -220,22 +221,25 @@ pub fn modify_order_tab(
 
         sig_pub_key = order_tab.tab_header.pub_key.clone();
 
-        order_tab.base_amount -= modify_order_tab_req.base_amount;
-        order_tab.quote_amount -= modify_order_tab_req.quote_amount;
+        order_tab.base_amount -= modify_order_tab_req.base_amount_change;
+        order_tab.quote_amount -= modify_order_tab_req.quote_amount_change;
     }
+
+    // ? Update the order_tab hash
+    order_tab.update_hash();
 
     // ? Verify the signature --------------------------------------------------------------
     let signature = Signature::try_from(modify_order_tab_req.signature.unwrap_or_default())
         .map_err(|err| err.to_string())?;
     verify_modify_signature(
         modify_order_tab_req.is_add,
-        &order_tab.hash,
+        &prev_order_tab.hash,
         &base_refund_note,
         &quote_refund_note,
         &base_close_order_fields,
         &quote_close_order_fields,
-        modify_order_tab_req.base_amount,
-        modify_order_tab_req.quote_amount,
+        modify_order_tab_req.base_amount_change,
+        modify_order_tab_req.quote_amount_change,
         &sig_pub_key,
         &signature,
     );
@@ -244,6 +248,8 @@ pub fn modify_order_tab(
     modifiy_tab_json_output(
         &swap_output_json_m,
         modify_order_tab_req.is_add,
+        modify_order_tab_req.base_amount_change,
+        modify_order_tab_req.quote_amount_change,
         &prev_order_tab,
         &base_notes_in,
         &base_refund_note,

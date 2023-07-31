@@ -262,8 +262,8 @@ message ModifyOrderTabReq {
     GrpcCloseOrderFields base_close_order_fields = 5;
     GrpcCloseOrderFields quote_close_order_fields = 6;
     GrpcOrderTab order_tab = 7;
-    uint64 base_amount = 8;
-    uint64 quote_amount = 9;
+    uint64 base_amount_change = 8;
+    uint64 quote_amount_change = 9;
     bool is_add = 10;
     Signature signature = 11;
     uint32 market_id = 12;

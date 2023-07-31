@@ -42,6 +42,7 @@ pub fn close_order_tab(
         return Err("signature is missing".to_string());
     }
 
+
     let order_tab = OrderTab::try_from(close_order_tab_req.order_tab.unwrap());
     let base_close_order_fields =
         CloseOrderFields::try_from(close_order_tab_req.base_close_order_fields.unwrap());
@@ -55,6 +56,7 @@ pub fn close_order_tab(
     let base_close_order_fields = base_close_order_fields.unwrap();
     let quote_close_order_fields = quote_close_order_fields.unwrap();
 
+
     // ? Check that the order_tab_exists
     let tab_state_tree_m = order_tabs_state_tree.lock();
 
@@ -62,6 +64,9 @@ pub fn close_order_tab(
     if leaf_hash != order_tab.hash {
         return Err("order tab does not exist".to_string());
     }
+
+    drop(tab_state_tree_m);
+
 
     // ? Verify the signature --------------------------------------------------------------
     let signature = Signature::try_from(close_order_tab_req.signature.unwrap_or_default())
@@ -73,6 +78,7 @@ pub fn close_order_tab(
         &signature,
     );
 
+
     let base_token = order_tab.tab_header.base_token;
     let base_amount = order_tab.base_amount;
     let quote_token = order_tab.tab_header.quote_token;
@@ -82,6 +88,7 @@ pub fn close_order_tab(
 
     let zero_idx1 = state_tree_m.first_zero_idx();
     let zero_idx2 = state_tree_m.first_zero_idx();
+    drop(state_tree_m);
 
     let base_return_note = Note::new(
         zero_idx1,
@@ -97,8 +104,6 @@ pub fn close_order_tab(
         quote_amount,
         quote_close_order_fields.dest_received_blinding.clone(),
     );
-
-    drop(tab_state_tree_m);
 
     // ? GENERATE THE JSON_OUTPUT ----------------------------------------------------------
     close_tab_json_output(

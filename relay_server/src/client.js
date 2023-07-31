@@ -80,7 +80,7 @@ app.post("/submit_limit_order", (req, res) => {
     } else {
       res.send({ response: response });
 
-      // Todo: storeSpotOrder(db, response.order_id, req.body);
+      storeSpotOrder(db, response.order_id, req.body);
     }
   });
 });
@@ -102,7 +102,7 @@ app.post("/submit_perpetual_order", (req, res) => {
     if (err) {
       console.log(err);
     } else {
-      // Todo: storePerpOrder(db, response.order_id, req.body);
+      storePerpOrder(db, response.order_id, req.body);
 
       res.send({ response: response });
     }
@@ -186,6 +186,17 @@ app.post("/open_order_tab", (req, res) => {
 // *  CLOSE ORDER TAB -----------------------------------------------------------
 app.post("/close_order_tab", (req, res) => {
   client.close_order_tab(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
+// *  MODIFY ORDER TAB -----------------------------------------------------------
+app.post("/modify_order_tab", (req, res) => {
+  client.modify_order_tab(req.body, function (err, response) {
     if (err) {
       console.log(err);
     } else {

@@ -43,7 +43,6 @@ func python_define_utils() {
         DEST_RECEIVED_BLINDING_OFFSET = ids.Invisibl3Order.dest_received_blinding
 
         # * PERPETUAL ORDER ==========================================================
-
         PERP_ORDER_SIZE = ids.PerpOrder.SIZE
         PERP_ORDER_ID_OFFSET = ids.PerpOrder.order_id
         PERP_EXPIRATION_TIMESTAMP_OFFSET = ids.PerpOrder.expiration_timestamp
@@ -84,6 +83,28 @@ func python_define_utils() {
         PERP_POSITION_INDEX_OFFSET = ids.PerpPosition.index
         PERP_POSITION_HASH_OFFSET = ids.PerpPosition.hash
         PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET = ids.PerpPosition.allow_partial_liquidations
+
+
+        # * ORDER TAB ================================================================
+        ORDER_TAB_SIZE = ids.OrderTab.SIZE
+        ORDER_TAB_TAB_IDX_OFFSET = ids.OrderTab.tab_idx
+        ORDER_TAB_TAB_HEADER_OFFSET = ids.OrderTab.tab_header
+        ORDER_TAB_BASE_AMOUNT_OFFSET = ids.OrderTab.base_amount
+        ORDER_TAB_QUOTE_AMOUNT_OFFSET = ids.OrderTab.quote_amount
+        ORDER_TAB_HASH_OFFSET = ids.OrderTab.hash
+
+        # * TAB HEADER ================================================================
+        TAB_HEADER_SIZE = ids.TabHeader.SIZE
+        TAB_HEADER_EXPIRATION_TIMESTAMP_OFFSET = ids.TabHeader.expiration_timestamp
+        TAB_HEADER_IS_PERP_OFFSET = ids.TabHeader.is_perp
+        TAB_HEADER_IS_SMART_CONTRACT_OFFSET = ids.TabHeader.is_smart_contract
+        TAB_HEADER_BASE_TOKEN_OFFSET = ids.TabHeader.base_token
+        TAB_HEADER_QUOTE_TOKEN_OFFSET = ids.TabHeader.quote_token
+        TAB_HEADER_BASE_BLINDING_OFFSET = ids.TabHeader.base_blinding
+        TAB_HEADER_QUOTE_BLINDING_OFFSET = ids.TabHeader.quote_blinding
+        TAB_HEADER_PUB_KEY_OFFSET = ids.TabHeader.pub_key
+        TAB_HEADER_HASH_OFFSET = ids.TabHeader.hash
+
 
         # * WITHDRAWAL ================================================================
         WITHDRAWAL_SIZE = ids.Withdrawal.SIZE

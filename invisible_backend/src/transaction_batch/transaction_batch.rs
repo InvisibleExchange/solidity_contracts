@@ -64,8 +64,9 @@ use super::{
     },
     restore_state_helpers::{
         restore_close_order_tab, restore_deposit_update, restore_liquidation_order_execution,
-        restore_margin_update, restore_note_split, restore_open_order_tab,
-        restore_perp_order_execution, restore_spot_order_execution, restore_withdrawal_update,
+        restore_margin_update, restore_modify_order_tab, restore_note_split,
+        restore_open_order_tab, restore_perp_order_execution, restore_spot_order_execution,
+        restore_withdrawal_update,
     },
     tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info, split_hashmap},
     tx_batch_structs::{get_price_info, GlobalConfig},
@@ -1300,7 +1301,13 @@ impl TransactionBatch {
                     &self.updated_tab_hashes,
                     &transaction,
                 ),
-
+                "modify_order_tab" => restore_modify_order_tab(
+                    &self.state_tree,
+                    &self.updated_note_hashes,
+                    &self.order_tabs_state_tree,
+                    &self.updated_tab_hashes,
+                    &transaction,
+                ),
                 _ => {
                     panic!("Invalid transaction type");
                 }

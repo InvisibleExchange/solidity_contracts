@@ -48,11 +48,10 @@ async function restoreOrderbooks(db) {
           amount_spent: row.amount_spent,
           amount_received: row.amount_received,
           fee_limit: row.fee_limit,
-          dest_received_address: JSON.parse(row.dest_received_address),
-          dest_received_blinding: row.dest_received_blinding,
-          dest_spent_blinding: row.dest_spent_blinding,
-          notes_in: JSON.parse(row.notes_in),
-          refund_note: JSON.parse(row.refund_note),
+          spot_note_info: row.spot_note_info
+            ? JSON.parse(row.spot_note_info)
+            : null,
+          order_tab: row.order_tab ? JSON.parse(row.order_tab) : null,
           signature: JSON.parse(row.signature),
           user_id: row.user_id,
         };

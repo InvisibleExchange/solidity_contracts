@@ -22,7 +22,6 @@ struct Invisibl3Order {
     dest_received_blinding: felt,
 }
 
-// ? Transaction hash is basicaly just order_hash
 func hash_transaction{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     invisibl3_order: Invisibl3Order, notes_in_len: felt, notes_in: Note*, refund_note: Note
 ) -> (hash: felt) {

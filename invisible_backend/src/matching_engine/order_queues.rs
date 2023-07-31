@@ -226,24 +226,12 @@ impl OrderQueue {
 
     pub fn get_tab_mutex(&self, tab_hash: &BigUint) -> Option<Arc<Mutex<OrderTab>>> {
         for (_, ord_) in self.orders.iter() {
-            match &ord_.order {
-                Order::Spot(ord) => {
-                    if let Some(tab) = &ord.order_tab {
-                        let tab_lock = tab.lock();
-                        if tab_lock.hash == *tab_hash {
-                            return Some(tab.clone());
-                        }
+            if let Order::Spot(ord) = &ord_.order {
+                if let Some(tab) = &ord.order_tab {
+                    let tab_lock = tab.lock();
+                    if tab_lock.hash == *tab_hash {
+                        return Some(tab.clone());
                     }
-                }
-
-                Order::Perp(_ord) => {
-                    // TODO
-                    // if let Some(tab) = ord.order_tab {
-                    //     let tab_lock = tab.lock();
-                    //     if tab_lock.hash == tab_hash {
-                    //         return Some(tab.clone());
-                    //     }
-                    // }
                 }
             }
         }
@@ -257,7 +245,7 @@ impl OrderQueue {
             return;
         }
 
-        let mut order = self.orders.get_mut(&id).unwrap();
+        let order = self.orders.get_mut(&id).unwrap();
 
         order.qty_left += increase_qty;
     }

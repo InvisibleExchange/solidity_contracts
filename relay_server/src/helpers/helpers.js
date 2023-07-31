@@ -213,7 +213,6 @@ function compileLiqUpdateMessage(orderBooks) {
     let { bidQueue, askQueue, isBidQueueSame, isAskQueueSame } =
       book.updateAndCompare();
 
-
     if (!isBidQueueSame || !isAskQueueSame) {
       updates.push(
         JSON.stringify({
@@ -234,8 +233,13 @@ function compileLiqUpdateMessage(orderBooks) {
 const path = require("path");
 const { restoreOrderbooks } = require("./restoreOrderBooks");
 function storeSpotOrder(db, order_id, orderObject) {
-  let command =
-    "INSERT OR REPLACE INTO spotOrders (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, dest_received_address, dest_received_blinding,  notes_in, refund_note, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)";
+
+  let command = `
+    INSERT OR REPLACE INTO spotOrders
+      (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received,
+      fee_limit, spot_note_info, order_tab, signature, user_id) 
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `;
 
   try {
     db.run(command, [
@@ -247,12 +251,11 @@ function storeSpotOrder(db, order_id, orderObject) {
       orderObject.amount_received,
       orderObject.fee_limit,
       // spot_note_info
-      JSON.stringify(orderObject.dest_received_address),
-      orderObject.dest_received_blinding,
-      JSON.stringify(orderObject.notes_in),
-      JSON.stringify(orderObject.refund_note),
+      orderObject.spot_note_info
+        ? JSON.stringify(orderObject.spot_note_info)
+        : null,
       // order_tab
-
+      orderObject.order_tab ? JSON.stringify(orderObject.order_tab) : null,
       //
       JSON.stringify(orderObject.signature),
       orderObject.user_id,
@@ -263,8 +266,12 @@ function storeSpotOrder(db, order_id, orderObject) {
 }
 
 function storePerpOrder(db, order_id, orderObject) {
-  let command =
-    "INSERT OR REPLACE INTO perpOrders (order_id, expiration_timestamp, position, position_effect_type, order_side, synthetic_token, synthetic_amount, collateral_amount, fee_limit, open_order_fields, close_order_fields, signature, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)";
+  let command = `
+    INSERT OR REPLACE INTO perpOrders 
+      (order_id, expiration_timestamp, position, position_effect_type, order_side, synthetic_token, synthetic_amount, 
+      collateral_amount, fee_limit, open_order_fields, close_order_fields, signature, user_id) 
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `;
 
   try {
     db.run(command, [
@@ -305,6 +312,7 @@ function initDb() {
     signature TEXT NOT NULL, 
     user_id INTEGER )`;
 
+  // spot_note_info = {dest_received_address, dest_received_blinding, notes_in, refund_note}
   const createSpotTableCommand = `
   CREATE TABLE IF NOT EXISTS spotOrders
   (order_id INTEGER PRIMARY KEY NOT NULL, 
@@ -313,11 +321,9 @@ function initDb() {
   token_received INTEGER NOT NULL, 
   amount_spent INTEGER NOT NULL,  
   amount_received INTEGER NOT NULL,  
-  fee_limit INTEGER NOT NULL,  
-  dest_received_address TEXT NOT NULL, 
-  dest_received_blinding TEXT NOT NULL,  
-  notes_in TEXT NOT NULL, 
-  refund_note TEXT,
+  fee_limit INTEGER NOT NULL, 
+  spot_note_info TEXT,
+  order_tab TEXT,
   signature TEXT NOT NULL, 
   user_id INTEGER )  `;
 

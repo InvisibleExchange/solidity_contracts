@@ -112,26 +112,39 @@ pub fn close_tab_json_output(
 pub fn modifiy_tab_json_output(
     swap_output_json_m: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
     is_add: bool,
+    base_amount_change: u64,
+    quote_amount_change: u64,
     prev_order_tab: &OrderTab,
+    //
     base_notes_in: &Vec<Note>,
     base_refund_note: &Option<Note>,
     quote_notes_in: &Vec<Note>,
     quote_refund_note: &Option<Note>,
+    //
     base_close_order_fields: &Option<CloseOrderFields>,
     quote_close_order_fields: &Option<CloseOrderFields>,
     base_return_note: &Option<Note>,
     quote_return_note: &Option<Note>,
+    //
     order_tab: &OrderTab,
     signature: &Signature,
 ) {
     let mut json_map = serde_json::map::Map::new();
     json_map.insert(
         String::from("transaction_type"),
-        serde_json::to_value(&"open_order_tab").unwrap(),
+        serde_json::to_value(&"modify_order_tab").unwrap(),
     );
     json_map.insert(
         String::from("is_add"),
         serde_json::to_value(&is_add).unwrap(),
+    );
+    json_map.insert(
+        String::from("base_amount_change"),
+        serde_json::to_value(&base_amount_change).unwrap(),
+    );
+    json_map.insert(
+        String::from("quote_amount_change"),
+        serde_json::to_value(&quote_amount_change).unwrap(),
     );
     json_map.insert(
         String::from("prev_order_tab"),

@@ -1172,3 +1172,110 @@ pub fn restore_close_order_tab(
     drop(tabs_state_tree_m);
     drop(updated_tab_hashes_m);
 }
+
+// * MODIFY ORDER TAB RESTORE FUNCTIONS ================================================================================
+
+pub fn restore_modify_order_tab(
+    tree_m: &Arc<Mutex<SuperficialTree>>,
+    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
+    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    transaction: &Map<String, Value>,
+) {
+    let mut state_tree = tree_m.lock();
+    let mut updated_note_hashes = updated_note_hashes_m.lock();
+
+    let is_add = transaction.get("is_add").unwrap().as_bool().unwrap();
+
+    if is_add {
+        let base_notes_in = transaction
+            .get("base_notes_in")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let base_refund_note = transaction.get("base_refund_note").unwrap();
+        let quote_notes_in = transaction
+            .get("quote_notes_in")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let quote_refund_note = transaction.get("quote_refund_note").unwrap();
+
+        // ? Base notes
+        for note in base_notes_in {
+            let idx = note.get("index").unwrap().as_u64().unwrap();
+            // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
+            state_tree.update_leaf_node(&BigUint::zero(), idx);
+            updated_note_hashes.insert(idx, BigUint::zero());
+        }
+        if !base_refund_note.is_null() {
+            let idx = base_refund_note.get("index").unwrap().as_u64().unwrap();
+            let note_out_hash =
+                BigUint::from_str(base_refund_note.get("hash").unwrap().as_str().unwrap()).unwrap();
+            state_tree.update_leaf_node(&note_out_hash, idx);
+            updated_note_hashes.insert(idx, note_out_hash);
+        }
+
+        // ? Quote notes
+        for note in quote_notes_in {
+            let idx = note.get("index").unwrap().as_u64().unwrap();
+            // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
+            state_tree.update_leaf_node(&BigUint::zero(), idx);
+            updated_note_hashes.insert(idx, BigUint::zero());
+        }
+        if !quote_refund_note.is_null() {
+            let idx = quote_refund_note.get("index").unwrap().as_u64().unwrap();
+            let note_out_hash =
+                BigUint::from_str(quote_refund_note.get("hash").unwrap().as_str().unwrap())
+                    .unwrap();
+            state_tree.update_leaf_node(&note_out_hash, idx);
+            updated_note_hashes.insert(idx, note_out_hash);
+        }
+    } else {
+        let base_return_note_index = transaction.get("base_return_note_idx").unwrap();
+        let base_return_note_hash = transaction.get("base_return_note_hash").unwrap();
+        let base_return_note_hash =
+            BigUint::from_str(base_return_note_hash.as_str().unwrap()).unwrap();
+
+        let quote_return_note_index = transaction.get("quote_return_note_idx").unwrap();
+        let quote_refund_note_hash = transaction.get("quote_return_note_hash").unwrap();
+        let quote_refund_note_hash =
+            BigUint::from_str(quote_refund_note_hash.as_str().unwrap()).unwrap();
+
+        state_tree.update_leaf_node(
+            &base_return_note_hash,
+            base_return_note_index.as_u64().unwrap(),
+        );
+        updated_note_hashes.insert(
+            base_return_note_index.as_u64().unwrap(),
+            base_return_note_hash,
+        );
+
+        state_tree.update_leaf_node(
+            &quote_refund_note_hash,
+            quote_return_note_index.as_u64().unwrap(),
+        );
+        updated_note_hashes.insert(
+            quote_return_note_index.as_u64().unwrap(),
+            quote_refund_note_hash,
+        );
+    }
+
+    drop(state_tree);
+    drop(updated_note_hashes);
+
+    // ? Order tab ---------- ------------ ----------------- ----------------
+    let mut tabs_state_tree_m = tabs_state_tree.lock();
+    let mut updated_tab_hashes_m = updated_tab_hashes.lock();
+
+    let order_tab = transaction.get("prev_order_tab").unwrap();
+    let idx: u64 = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
+    let new_tab_hash = transaction.get("new_tab_hash").unwrap().as_str().unwrap();
+    let new_tab_hash = BigUint::from_str(new_tab_hash).unwrap();
+
+    tabs_state_tree_m.update_leaf_node(&new_tab_hash, idx);
+    updated_tab_hashes_m.insert(idx as u32, new_tab_hash);
+
+    drop(tabs_state_tree_m);
+    drop(updated_tab_hashes_m);
+}
