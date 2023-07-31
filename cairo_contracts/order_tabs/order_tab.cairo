@@ -54,6 +54,32 @@ func hash_order_tab{pedersen_ptr: HashBuiltin*, range_check_ptr}(order_tab: Orde
     }
 }
 
+func update_order_tab_hash{pedersen_ptr: HashBuiltin*, range_check_ptr}(
+    tab_header: TabHeader*, base_amount: felt, quote_amount: felt
+) -> felt {
+    alloc_locals;
+
+    let (base_commitment: felt) = hash2{hash_ptr=pedersen_ptr}(
+        base_amount, tab_header.base_blinding
+    );
+
+    let (quote_commitment: felt) = hash2{hash_ptr=pedersen_ptr}(
+        quote_amount, tab_header.quote_blinding
+    );
+
+    let hash_ptr = pedersen_ptr;
+    with hash_ptr {
+        let (hash_state_ptr) = hash_init();
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_commitment);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_commitment);
+
+        let (res) = hash_finalize(hash_state_ptr);
+        let pedersen_ptr = hash_ptr;
+        return res;
+    }
+}
+
 func hash_tab_header{pedersen_ptr: HashBuiltin*, range_check_ptr}(tab_header: TabHeader*) -> felt {
     alloc_locals;
 

@@ -42,32 +42,6 @@ use tokio::sync::{
 };
 use tonic::{Request, Response, Status};
 
-// mpsc_tx: &MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
-// session: &Arc<Mutex<ServiceSession>>,
-// //
-// main_storage: &Arc<Mutex<MainStorage>>,
-// backup_storage: &Arc<Mutex<BackupStorage>>,
-// swap_output_json: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
-// //
-// state_tree: &Arc<Mutex<SuperficialTree>>,
-// perp_state_tree: &Arc<Mutex<SuperficialTree>>,
-// //
-// partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-// perpetual_partial_fill_tracker: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
-// //
-// rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-// perp_rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>,
-// //
-// order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
-// perp_order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
-// //
-// ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
-// privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
-// //
-// semaphore: &Semaphore,
-// is_paused: &Arc<TokioMutex<bool>>,
-
-//
 // * ===================================================================================================================================
 //
 

@@ -26,7 +26,7 @@ from helpres.signatures.signatures import verify_open_order_tab_signature
 from rollup.output_structs import ZeroOutput, NoteDiffOutput
 from rollup.global_config import GlobalConfig
 
-from order_tabs.order_tab import OrderTab, hash_tab_header, hash_order_tab
+from order_tabs.order_tab import OrderTab, hash_tab_header, hash_order_tab, update_order_tab_hash
 from order_tabs.update_dicts import open_tab_state_note_updates, update_tab_from_state
 from order_tabs.close_order_tab import (
     handle_order_tab_input,
@@ -96,7 +96,11 @@ func modify_order_tab{
             assert quote_amount = quote_amount_change;
         }
 
-        // TODO: Update the order tab
+        let updated_base_amount = order_tab.base_amount + base_amount;
+        let updated_quote_amount = order_tab.quote_amount + quote_amount;
+        let updated_order_hash = update_order_tab_hash(
+            &order_tab.tab_header, updated_base_amount, updated_quote_amount
+        );
 
         // ? Update the dictionaries
         open_tab_state_note_updates(
