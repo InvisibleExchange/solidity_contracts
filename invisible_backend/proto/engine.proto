@@ -29,8 +29,6 @@ service Engine {
     // Order tabs --------------- ----------------- ----------------
     rpc open_order_tab (OpenOrderTabReq) returns (OpenOrderTabRes);
 
-    rpc modify_order_tab (ModifyOrderTabReq) returns (ModifyOrderTabRes);
-
     rpc close_order_tab (CloseOrderTabReq) returns (CloseOrderTabRes);
 
     // admin --------------- ----------------- ----------------
@@ -59,7 +57,7 @@ service Engine {
 
 message DepositMessage {
     uint64 deposit_id = 1;
-    uint64 deposit_token = 2;
+    uint32 deposit_token = 2;
     uint64 deposit_amount = 3;
     string stark_key = 4;
     repeated GrpcNote notes = 5;
@@ -78,8 +76,8 @@ message DepositResponse {
 
 message LimitOrderMessage {
     uint64 expiration_timestamp = 1;
-    uint64 token_spent= 2;
-    uint64 token_received = 3;
+    uint32 token_spent= 2;
+    uint32 token_received = 3;
     uint64 amount_spent = 4;
     uint64 amount_received = 5;
     uint64 fee_limit = 6;
@@ -145,7 +143,7 @@ message AmendOrderResponse {
 
 message WithdrawalMessage {
     uint32 withdrawal_chain_id = 1;
-    uint64 withdrawal_token = 2;
+    uint32 withdrawal_token = 2;
     uint64 withdrawal_amount = 3;
     string stark_key = 4;
     repeated GrpcNote notes_in = 5;
@@ -166,8 +164,8 @@ message PerpOrderMessage {
     GrpcPerpPosition position = 2;
     uint32 position_effect_type = 3; // 0-open, 1-modify, 2-close, 3-liquidate
     uint32 order_side = 4; // 0-buy, 1-sell
-    uint64 synthetic_token = 5;
-    uint64 collateral_token = 6;
+    uint32 synthetic_token = 5;
+    uint32 collateral_token = 6;
     uint64 synthetic_amount = 7;
     uint64 collateral_amount = 8;
     uint64 fee_limit = 9;
@@ -180,8 +178,8 @@ message PerpOrderMessage {
 
 message GrpcPerpPosition {
     uint32 order_side = 1;
-    uint64 synthetic_token = 2;
-    uint64 collateral_token = 3;
+    uint32 synthetic_token = 2;
+    uint32 collateral_token = 3;
     uint64 position_size = 4;
     uint64 margin = 5;
     uint64 entry_price = 6;
@@ -202,7 +200,7 @@ message GrpcPerpPosition {
 message LiquidationOrderMessage {
     GrpcPerpPosition position = 2;
     uint32 order_side = 4; // 0-buy, 1-sell
-    uint64 synthetic_token = 5;
+    uint32 synthetic_token = 5;
     uint64 synthetic_amount = 7;
     uint64 collateral_amount = 8;
     GrpcOpenOrderFields open_order_fields = 10;
@@ -229,8 +227,9 @@ message OpenOrderTabReq {
     repeated GrpcNote quote_notes_in = 3;
     GrpcNote quote_refund_note = 4;
     GrpcOrderTab order_tab = 5;
-    Signature signature = 6;
-    uint32 market_id = 7;
+    bool add_only = 6;
+    Signature signature = 7;
+    uint32 market_id = 8;
 }
 
 message OpenOrderTabRes {
@@ -245,6 +244,9 @@ message CloseOrderTabReq {
     Signature signature = 2;
     GrpcCloseOrderFields base_close_order_fields = 3;
     GrpcCloseOrderFields quote_close_order_fields = 4;
+    uint64 base_amount_change = 5;
+    uint64 quote_amount_change = 6;
+
 }
 
 message CloseOrderTabRes {
@@ -254,28 +256,7 @@ message CloseOrderTabRes {
     GrpcNote quote_return_note = 4;
 }
 
-message ModifyOrderTabReq {
-    repeated GrpcNote base_notes_in = 1;
-    GrpcNote base_refund_note = 2;
-    repeated GrpcNote quote_notes_in = 3;
-    GrpcNote quote_refund_note = 4;
-    GrpcCloseOrderFields base_close_order_fields = 5;
-    GrpcCloseOrderFields quote_close_order_fields = 6;
-    GrpcOrderTab order_tab = 7;
-    uint64 base_amount_change = 8;
-    uint64 quote_amount_change = 9;
-    bool is_add = 10;
-    Signature signature = 11;
-    uint32 market_id = 12;
-}
 
-message ModifyOrderTabRes {
-    bool successful = 1;
-    string error_message = 2;
-    GrpcOrderTab order_tab = 3;
-    GrpcNote base_return_note = 4;
-    GrpcNote quote_return_note = 5;
-}
 // ------
 
 
@@ -289,11 +270,10 @@ message GrpcOrderTab {
 }
 
 message GrpcTabHeader {
-    uint64 expiration_timestamp = 1;
     bool is_perp = 2;
     bool is_smart_contract = 3;
-    uint64 base_token = 4;
-    uint64 quote_token = 5;
+    uint32 base_token = 4;
+    uint32 quote_token = 5;
     string base_blinding = 6;
     string quote_blinding = 7;
     string pub_key = 8;
@@ -344,7 +324,7 @@ message RestoreOrderBookMessage {
 
 message GrpcOpenOrderFields {
     uint64 initial_margin = 1;
-    uint64 collateral_token = 2;
+    uint32 collateral_token = 2;
     repeated GrpcNote notes_in = 3;
     GrpcNote refund_note = 4;
     string position_address = 5;
@@ -359,7 +339,7 @@ message GrpcCloseOrderFields {
 message GrpcNote {
     uint64 index = 1;
     Address address = 2;
-    uint64 token = 3;
+    uint32 token = 3;
     uint64 amount = 4;
     string blinding = 5;
 }
@@ -408,7 +388,7 @@ message FundingRes {
 }
 
 message FundingInfo {
-    uint64 token = 1;
+    uint32 token = 1;
     repeated int64 funding_rates = 2;
     repeated uint64 funding_prices = 3;
 }
@@ -472,8 +452,8 @@ message ActiveOrder {
     uint64 expiration_timestamp = 2;
     uint64 qty_left = 3;
     double price = 4;
-    uint64 base_asset = 5;
-    uint64 quote_asset = 6;
+    uint32 base_asset = 5;
+    uint32 quote_asset = 6;
     bool order_side = 7;  // true-BID, false-ASK
     uint64 fee_limit = 8;
     repeated GrpcNote notes_in = 9;
@@ -487,7 +467,7 @@ message ActivePerpOrder {
     uint64 expiration_timestamp = 2;
     uint64 qty_left = 3;
     double price = 4;
-    uint64 synthetic_token = 5;
+    uint32 synthetic_token = 5;
     bool order_side = 6;  // true-BID, false-ASK
     uint32 position_effect_type = 7;
     uint64 fee_limit = 8;
@@ -518,7 +498,7 @@ message OracleUpdateReq {
 
 
 message GrpcOracleUpdate {
-    uint64 token = 1;
+    uint32 token = 1;
     uint32 timestamp = 2;
     repeated uint32 observer_ids = 3;
     repeated uint64 prices = 4;

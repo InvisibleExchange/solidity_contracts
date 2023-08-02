@@ -134,7 +134,7 @@ pub fn verify_margin_change_signature(margin_change: &ChangeMarginMessage) -> Re
         }
     } else {
         let valid = verify(
-            &margin_change.position.position_address,
+            &margin_change.position.position_header.position_address,
             &msg_hash,
             &margin_change.signature,
         );
@@ -263,7 +263,13 @@ pub async fn handle_margin_change_repsonse(
                     //
 
                     let market_id = PERP_MARKET_IDS
-                        .get(&margin_change_response.position.synthetic_token.to_string())
+                        .get(
+                            &margin_change_response
+                                .position
+                                .position_header
+                                .synthetic_token
+                                .to_string(),
+                        )
                         .unwrap();
                     let mut perp_book = perp_order_books.get(market_id).unwrap().lock().await;
                     perp_book.update_order_positions(
@@ -275,9 +281,16 @@ pub async fn handle_margin_change_repsonse(
                     store_output_json(&swap_output_json, &main_storage);
 
                     let pos = Some((
-                        margin_change_response.position.position_address.to_string(),
+                        margin_change_response
+                            .position
+                            .position_header
+                            .position_address
+                            .to_string(),
                         margin_change_response.position.index,
-                        margin_change_response.position.synthetic_token,
+                        margin_change_response
+                            .position
+                            .position_header
+                            .synthetic_token,
                         margin_change_response.position.order_side == OrderSide::Long,
                         margin_change_response.position.liquidation_price,
                     ));

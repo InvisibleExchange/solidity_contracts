@@ -93,8 +93,8 @@ pub struct FillInfo {
     pub amount: u64,
     pub price: u64,
     pub timestamp: u64,
-    pub base_token: u64,
-    pub quote_token: u64,
+    pub base_token: u32,
+    pub quote_token: u32,
     pub is_buy: bool,
 }
 
@@ -105,6 +105,6 @@ pub struct PerpFillInfo {
     pub amount: u64,
     pub price: u64,
     pub timestamp: u64,
-    pub synthetic_token: u64,
+    pub synthetic_token: u32,
     pub is_buy: bool,
 }

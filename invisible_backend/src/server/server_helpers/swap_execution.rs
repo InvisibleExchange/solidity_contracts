@@ -102,8 +102,8 @@ pub async fn execute_swap(
     let fee_taken_a = swap.fee_taken_a;
     let fee_taken_b = swap.fee_taken_b;
 
-    let base_asset: u64;
-    let quote_asset: u64;
+    let base_asset: u32;
+    let quote_asset: u32;
     let book__ = order_book.lock().await;
     let side_a = get_order_side(
         &book__,

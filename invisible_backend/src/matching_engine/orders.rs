@@ -11,16 +11,16 @@ use super::{
 #[derive(Debug, Clone)]
 pub enum OrderRequest {
     // NewMarketOrder {
-    //     order_asset: u64,
-    //     price_asset: u64,
+    //     order_asset: u32,
+    //     price_asset: u32,
     //     side: OrderSide,
     //     qty: u64,
     //     order: OrderWrapper,
     //     ts: SystemTime,
     // },
     NewLimitOrder {
-        order_asset: u64,
-        price_asset: u64,
+        order_asset: u32,
+        price_asset: u32,
         side: OrderSide,
         price: f64,
         qty: u64,

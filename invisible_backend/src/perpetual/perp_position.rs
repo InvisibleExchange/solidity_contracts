@@ -18,31 +18,28 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 // position should have address or something
 #[derive(Debug, Clone)]
 pub struct PerpPosition {
-    // ? Immutable fields
-    pub order_side: OrderSide, // Long or Short
-    pub synthetic_token: u64,  // type of asset being traded
-    pub collateral_token: u64, // collateral asset type
+    pub index: u32, // index of the position in the state (merkle tree)
+    pub position_header: PositionHeader,
     // ? Mutable fields
-    pub position_size: u64, // nominal size of synthetic tokens
-    pub margin: u64,        // margin in collateral token
-    // ? Derived fields
+    pub order_side: OrderSide, // Long or Short
+    pub position_size: u64,    // nominal size of synthetic tokens
+    pub margin: u64,           // margin in collateral token
+
     pub entry_price: u64,       // average buy/sell price of the position
     pub liquidation_price: u64, // price at which position will be liquidated
     pub bankruptcy_price: u64,  // price at which the position has zero margin left
-    pub allow_partial_liquidations: bool, // if true, allow partial liquidations
-    // ? =======
-    pub position_address: BigUint, // address of the position (for signatures)
+
     pub last_funding_idx: u32, // last index when funding payment was updated in the state (in cairo)
+    //
     pub hash: BigUint,
-    pub index: u32, // index of the position in the state (merkle tree)
 }
 
 impl PerpPosition {
     pub fn new(
         order_side: OrderSide,
         position_size: u64,
-        synthetic_token: u64,
-        collateral_token: u64,
+        synthetic_token: u32,
+        _collateral_token: u32, // TODO: What to do with this?
         margin: u64,
         leverage: u64,
         allow_partial_liquidations: bool,
@@ -72,28 +69,29 @@ impl PerpPosition {
             allow_partial_liquidations,
         );
 
-        let hash: BigUint = _hash_position(
-            &order_side,
+        let position_header = PositionHeader::new(
             synthetic_token,
+            allow_partial_liquidations,
+            position_address,
+        );
+
+        let hash: BigUint = _hash_position(
+            &position_header.hash,
+            &order_side,
             position_size,
             entry_price,
             liquidation_price,
-            &position_address,
             current_funding_idx,
-            allow_partial_liquidations,
         );
 
         PerpPosition {
+            position_header,
             order_side,
             position_size,
-            synthetic_token,
-            collateral_token,
             margin,
             entry_price,
             liquidation_price,
             bankruptcy_price,
-            allow_partial_liquidations,
-            position_address,
             last_funding_idx: current_funding_idx,
             hash,
             index,
@@ -111,11 +109,11 @@ impl PerpPosition {
         fee_taken: u64,
     ) {
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let decimal_conversion = *synthetic_decimals + *synthetic_price_decimals
@@ -145,26 +143,24 @@ impl PerpPosition {
             margin as u64,
             self.position_size + added_size,
             &self.order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
             margin as u64,
             self.position_size + added_size,
             &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             self.position_size + added_size,
             average_entry_price as u64,
             new_liquidation_price,
-            &self.position_address,
             self.last_funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -205,26 +201,24 @@ impl PerpPosition {
             self.margin - fee_taken,
             self.position_size + added_size,
             &self.order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
         let new_liquidation_price: u64 = _get_liquidation_price(
             average_entry_price as u64,
             self.margin - fee_taken,
             self.position_size + added_size,
             &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             self.position_size + added_size,
             average_entry_price as u64,
             new_liquidation_price,
-            &self.position_address,
             funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -253,11 +247,11 @@ impl PerpPosition {
         self.apply_funding(funding_rates, prices, funding_idx);
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let new_size = self.position_size - reduction_size;
@@ -287,7 +281,7 @@ impl PerpPosition {
             updated_margin,
             new_size,
             &self.order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
 
         let new_liquidation_price: u64 = _get_liquidation_price(
@@ -295,19 +289,17 @@ impl PerpPosition {
             updated_margin,
             new_size,
             &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             new_size,
             self.entry_price,
             new_liquidation_price,
-            &self.position_address,
             funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -335,11 +327,11 @@ impl PerpPosition {
         self.apply_funding(funding_rates, prices, funding_idx);
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let new_size = reduction_size - self.position_size;
@@ -372,26 +364,24 @@ impl PerpPosition {
             updated_margin,
             new_size,
             &new_order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
         let new_liquidation_price: u64 = _get_liquidation_price(
             price,
             updated_margin,
             new_size,
             &new_order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &new_order_side,
-            self.synthetic_token,
             new_size,
             price,
             new_liquidation_price,
-            &self.position_address,
             funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -422,11 +412,11 @@ impl PerpPosition {
         // & returns part of the collateral and pnl
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let updated_size = self.position_size - reduction_size;
@@ -462,14 +452,12 @@ impl PerpPosition {
         let margin = self.margin - reduction_margin;
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             updated_size,
             self.entry_price,
             self.liquidation_price,
-            &self.position_address,
             funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -522,16 +510,17 @@ impl PerpPosition {
             return (false, 0);
         }
 
-        if self.allow_partial_liquidations
+        if self.position_header.allow_partial_liquidations
             && self.position_size
-                > MIN_PARTIAL_LIQUIDATION_SIZE[self.synthetic_token.to_string().as_str()]
+                > MIN_PARTIAL_LIQUIDATION_SIZE
+                    [self.position_header.synthetic_token.to_string().as_str()]
         {
             let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-                .get(self.synthetic_token.to_string().as_str())
+                .get(self.position_header.synthetic_token.to_string().as_str())
                 .unwrap();
 
             let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-                .get(self.synthetic_token.to_string().as_str())
+                .get(self.position_header.synthetic_token.to_string().as_str())
                 .unwrap();
 
             // & price_delta = entry_price - market_price for long and market_price - entry_price for short
@@ -591,9 +580,10 @@ impl PerpPosition {
         // & apply funding
         self.apply_funding(funding_rates, prices, funding_idx);
 
-        if self.allow_partial_liquidations
+        if self.position_header.allow_partial_liquidations
             && self.position_size
-                > MIN_PARTIAL_LIQUIDATION_SIZE[self.synthetic_token.to_string().as_str()]
+                > MIN_PARTIAL_LIQUIDATION_SIZE
+                    [self.position_header.synthetic_token.to_string().as_str()]
         {
             let (liquidator_fee, liquidated_size) =
                 self.partially_liquidate_position(market_price)?;
@@ -615,11 +605,11 @@ impl PerpPosition {
         market_price: u64,
     ) -> Result<(u64, u64), PerpSwapExecutionError> {
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         // & price_delta = entry_price - market_price for long and market_price - entry_price for short
@@ -659,7 +649,7 @@ impl PerpPosition {
             self.margin - liquidator_fee,
             new_size as u64,
             &self.order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
 
         let new_liquidation_price: u64 = _get_liquidation_price(
@@ -667,19 +657,17 @@ impl PerpPosition {
             self.margin - liquidator_fee,
             new_size as u64,
             &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             new_size as u64,
             self.entry_price,
             new_liquidation_price,
-            &self.position_address,
             self.last_funding_idx,
-            self.allow_partial_liquidations,
         );
 
         self.position_size = new_size as u64;
@@ -699,11 +687,11 @@ impl PerpPosition {
         market_price: u64,
     ) -> Result<(i64, u64), PerpSwapExecutionError> {
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         // & get the profit/loss to add/subtract from the margin
@@ -744,7 +732,7 @@ impl PerpPosition {
         // ? Verify the margin_change is valid
         if margin_change == 0
             || self.margin as i64 + margin_change
-                <= DUST_AMOUNT_PER_ASSET[&self.collateral_token.to_string()] as i64
+                <= DUST_AMOUNT_PER_ASSET[&VALID_COLLATERAL_TOKENS[0].to_string()] as i64
         {
             return Err("Invalid margin change".to_string());
         }
@@ -758,7 +746,7 @@ impl PerpPosition {
             margin,
             self.position_size,
             &self.order_side,
-            self.synthetic_token,
+            self.position_header.synthetic_token,
         );
 
         let new_liquidation_price: u64 = _get_liquidation_price(
@@ -766,19 +754,17 @@ impl PerpPosition {
             margin,
             self.position_size,
             &self.order_side,
-            self.synthetic_token,
-            self.allow_partial_liquidations,
+            self.position_header.synthetic_token,
+            self.position_header.allow_partial_liquidations,
         );
 
         let new_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             self.position_size,
             self.entry_price,
             new_liquidation_price,
-            &self.position_address,
             self.last_funding_idx,
-            self.allow_partial_liquidations,
         );
 
         // ? Make updates to the position
@@ -794,11 +780,11 @@ impl PerpPosition {
 
     pub fn get_pnl(&self, index_price: u64) -> i64 {
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         // & get the profit/loss to add/subtract from the margin
@@ -833,11 +819,11 @@ impl PerpPosition {
         let pnl: i64 = self.get_pnl(index_price);
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let decimal_conversion = *synthetic_decimals + *synthetic_price_decimals
@@ -869,11 +855,11 @@ impl PerpPosition {
         }
 
         let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-            .get(self.synthetic_token.to_string().as_str())
+            .get(self.position_header.synthetic_token.to_string().as_str())
             .unwrap();
 
         // & get the profit/loss to add/subtract from the margin
@@ -908,14 +894,12 @@ impl PerpPosition {
 
     pub fn hash_position(&self) -> BigUint {
         let position_hash: BigUint = _hash_position(
+            &self.position_header.hash,
             &self.order_side,
-            self.synthetic_token,
             self.position_size,
             self.entry_price,
             self.liquidation_price,
-            &self.position_address,
             self.last_funding_idx,
-            self.allow_partial_liquidations,
         );
 
         return position_hash;
@@ -923,6 +907,38 @@ impl PerpPosition {
 
     //
 }
+
+#[derive(Debug, Clone)]
+pub struct PositionHeader {
+    pub synthetic_token: u32, // type of asset being traded
+    // pub collateral_token: u32,            // collateral asset type
+    pub position_address: BigUint, // address of the position (for signatures)
+    pub allow_partial_liquidations: bool, // if true, allow partial liquidations
+    pub hash: BigUint,             // hash of the position
+}
+
+impl PositionHeader {
+    pub fn new(
+        synthetic_token: u32,
+        allow_partial_liquidations: bool,
+        position_address: BigUint,
+    ) -> Self {
+        let header_hash = _hash_position_header(
+            synthetic_token,
+            allow_partial_liquidations,
+            &position_address,
+        );
+
+        PositionHeader {
+            allow_partial_liquidations,
+            synthetic_token,
+            position_address,
+            hash: header_hash,
+        }
+    }
+}
+
+// * =============================================================================================================
 
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
@@ -933,19 +949,13 @@ impl Serialize for PerpPosition {
     {
         let mut position = serializer.serialize_struct("PerpPosition", 12)?;
 
+        position.serialize_field("position_header", &self.position_header)?;
         position.serialize_field("order_side", &self.order_side)?;
-        position.serialize_field("synthetic_token", &self.synthetic_token)?;
-        position.serialize_field("collateral_token", &self.collateral_token)?;
         position.serialize_field("position_size", &self.position_size)?;
         position.serialize_field("margin", &self.margin)?;
         position.serialize_field("entry_price", &self.entry_price)?;
         position.serialize_field("liquidation_price", &self.liquidation_price)?;
         position.serialize_field("bankruptcy_price", &self.bankruptcy_price)?;
-        position.serialize_field(
-            "allow_partial_liquidations",
-            &self.allow_partial_liquidations,
-        )?;
-        position.serialize_field("position_address", &self.position_address.to_string())?;
         position.serialize_field("last_funding_idx", &self.last_funding_idx)?;
         position.serialize_field("hash", &self.hash.to_string())?;
         position.serialize_field("index", &self.index)?;
@@ -954,11 +964,33 @@ impl Serialize for PerpPosition {
     }
 }
 
+// * ---------------------------------------------
+
+impl Serialize for PositionHeader {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut header = serializer.serialize_struct("PositionHeader", 5)?;
+
+        header.serialize_field("synthetic_token", &self.synthetic_token)?;
+        // header.serialize_field("collateral_token", &self.collateral_token)?;
+        header.serialize_field(
+            "allow_partial_liquidations",
+            &self.allow_partial_liquidations,
+        )?;
+        header.serialize_field("position_address", &self.position_address.to_string())?;
+        header.serialize_field("hash", &self.hash.to_string())?;
+
+        return header.end();
+    }
+}
+
 // ---------------------------------------------
 
 use serde::de::{Deserialize, Deserializer};
 
-use super::DUST_AMOUNT_PER_ASSET;
+use super::{DUST_AMOUNT_PER_ASSET, VALID_COLLATERAL_TOKENS};
 
 impl<'de> Deserialize<'de> for PerpPosition {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
@@ -967,16 +999,13 @@ impl<'de> Deserialize<'de> for PerpPosition {
     {
         #[derive(DeserializeTrait)]
         struct Helper {
+            position_header: PositionHeader,
             order_side: String,
-            synthetic_token: u64,
-            collateral_token: u64,
             position_size: u64,
             margin: u64,
             entry_price: u64,
             liquidation_price: u64,
             bankruptcy_price: u64,
-            allow_partial_liquidations: bool,
-            position_address: String,
             last_funding_idx: u32,
             hash: String,
             index: u32,
@@ -985,20 +1014,17 @@ impl<'de> Deserialize<'de> for PerpPosition {
         let helper = Helper::deserialize(deserializer)?;
 
         Ok(PerpPosition {
+            position_header: helper.position_header,
             order_side: if helper.order_side == "Long" {
                 OrderSide::Long
             } else {
                 OrderSide::Short
             },
-            synthetic_token: helper.synthetic_token,
-            collateral_token: helper.collateral_token,
             position_size: helper.position_size,
             margin: helper.margin,
             entry_price: helper.entry_price,
             liquidation_price: helper.liquidation_price,
             bankruptcy_price: helper.bankruptcy_price,
-            allow_partial_liquidations: helper.allow_partial_liquidations,
-            position_address: BigUint::from_str(&helper.position_address).unwrap(),
             last_funding_idx: helper.last_funding_idx,
             hash: BigUint::from_str(&helper.hash).unwrap(),
             index: helper.index,
@@ -1006,45 +1032,58 @@ impl<'de> Deserialize<'de> for PerpPosition {
     }
 }
 
+impl<'de> Deserialize<'de> for PositionHeader {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(DeserializeTrait)]
+        struct Helper {
+            synthetic_token: u32,
+            // collateral_token: u32,
+            position_address: String,
+            allow_partial_liquidations: bool,
+            hash: String,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+
+        Ok(PositionHeader {
+            synthetic_token: helper.synthetic_token,
+            // collateral_token: helper.collateral_token,
+            position_address: BigUint::from_str(&helper.position_address).unwrap(),
+            allow_partial_liquidations: helper.allow_partial_liquidations,
+            hash: BigUint::from_str(&helper.hash).unwrap(),
+        })
+    }
+}
+
 // * ---------------------------------------------
 
 fn _hash_position(
+    header_hash: &BigUint,
     order_side: &OrderSide,
-    synthetic_token: u64,
     position_size: u64,
     entry_price: u64,
     liquidation_price: u64,
-    position_address: &BigUint,
     current_funding_idx: u32,
-    allow_partial_liquidations: bool,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    let input_one: u8 = if *order_side == OrderSide::Long {
-        if allow_partial_liquidations {
-            3
-        } else {
-            2
-        }
-    } else {
-        if allow_partial_liquidations {
-            1
-        } else {
-            0
-        }
-    };
-    let input_one = BigUint::from_u8(input_one).unwrap();
-    hash_inputs.push(&input_one);
-    let synthetic_token = BigUint::from_u64(synthetic_token).unwrap();
-    hash_inputs.push(&synthetic_token);
+    // & hash = H({header_hash, order_side, position_size, entry_price, liquidation_price, current_funding_idx})
+
+    hash_inputs.push(&header_hash);
+
+    let order_side = BigUint::from_u8(if *order_side == OrderSide::Long { 1 } else { 0 }).unwrap();
+    hash_inputs.push(&order_side);
+
     let position_size = BigUint::from_u64(position_size).unwrap();
     hash_inputs.push(&position_size);
     let entry_price = BigUint::from_u64(entry_price).unwrap();
     hash_inputs.push(&entry_price);
     let liquidation_price = BigUint::from_u64(liquidation_price).unwrap();
     hash_inputs.push(&liquidation_price);
-    let addr_x = position_address;
-    hash_inputs.push(addr_x);
+
     let current_funding_idx = BigUint::from_u32(current_funding_idx).unwrap();
     hash_inputs.push(&current_funding_idx);
 
@@ -1053,7 +1092,30 @@ fn _hash_position(
     return position_hash;
 }
 
-fn _get_entry_price(initial_margin: u64, leverage: u64, size: u64, synthetic_token: u64) -> u64 {
+fn _hash_position_header(
+    synthetic_token: u32,
+    allow_partial_liquidations: bool,
+    position_address: &BigUint,
+) -> BigUint {
+    let mut hash_inputs: Vec<&BigUint> = Vec::new();
+
+    // & hash = H({allow_partial_liquidations, synthetic_token, position_address })
+
+    let allow_partial_liquidations =
+        BigUint::from_u8(if allow_partial_liquidations { 1 } else { 0 }).unwrap();
+    hash_inputs.push(&allow_partial_liquidations);
+
+    let synthetic_token = BigUint::from_u32(synthetic_token).unwrap();
+    hash_inputs.push(&synthetic_token);
+
+    hash_inputs.push(position_address);
+
+    let position_hash = pedersen_on_vec(&hash_inputs);
+
+    return position_hash;
+}
+
+fn _get_entry_price(initial_margin: u64, leverage: u64, size: u64, synthetic_token: u32) -> u64 {
     // ? Assuming the collateral token is USD pegged and has 4 decimal places
 
     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
@@ -1083,7 +1145,7 @@ fn _get_liquidation_price(
     margin: u64,
     position_size: u64,
     order_side: &OrderSide,
-    synthetic_token: u64,
+    synthetic_token: u32,
     is_partial_liquidation: bool,
 ) -> u64 {
     // maintenance margin
@@ -1142,7 +1204,7 @@ fn _get_bankruptcy_price(
     margin: u64,
     size: u64,
     order_side: &OrderSide,
-    synthetic_token: u64,
+    synthetic_token: u32,
 ) -> u64 {
     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
         .get(synthetic_token.to_string().as_str())
@@ -1174,89 +1236,3 @@ fn _get_bankruptcy_price(
         return bp;
     }
 }
-
-// if self.order_side == OrderSide::Long {
-//     new_bankruptcy_price =
-//         self.entry_price - (updated_margin * multiplier1 / new_size as u128) as u64;
-//     new_liquidation_price = new_bankruptcy_price + (mm_rate * self.entry_price / 100) as u64
-// } else {
-//     new_bankruptcy_price =
-//         self.entry_price + (updated_margin * multiplier1 / new_size as u128) as u64;
-//     new_liquidation_price = new_bankruptcy_price - (mm_rate * self.entry_price / 100) as u64
-// }
-
-// * ---------------------------------------------
-
-//
-// /// * Partially fill a liquidation order
-// pub fn liquidate_position_partially(
-//     &mut self,
-//     liquidation_size: u64,
-//     market_price: u64,
-//     index_price: u64,
-//     funding_idx: u32,
-// ) -> Result<i64, PerpSwapExecutionError> {
-//     // & liquidates part of the position updating the margin and position size
-//     // & returns part of the leftover margin (if positive add to IF else subtract from IF)
-//     // ? Verifies that the position is liquidatable
-//     if (self.order_side == OrderSide::Long && index_price > self.liquidation_price)
-//         || self.order_side == OrderSide::Short && index_price < self.liquidation_price
-//     {
-//         return Err(send_perp_swap_error(
-//             "Market price is not worse than the liquidation price".to_string(),
-//             None,
-//             None,
-//         ));
-//     }
-//     let synthetic_price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
-//         .get(self.synthetic_token.to_string().as_str())
-//         .unwrap();
-
-//     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
-//         .get(self.synthetic_token.to_string().as_str())
-//         .unwrap();
-
-//     // & get the profit/loss to add/subtract from the margin
-//     let decimal_conversion =
-//         *synthetic_price_decimals + *synthetic_decimals - COLLATERAL_TOKEN_DECIMALS;
-//     let multiplier = 10_i128.pow(decimal_conversion as u32);
-
-//     let updated_size = self.position_size - liquidation_size;
-
-//     let reduction_margin = (liquidation_size * self.margin) / self.position_size;
-//     let margin = self.margin - reduction_margin;
-
-//     // let liquidator_fee =
-//     //     market_price as i128 * liquidation_size as i128 / (100 * multiplier) as i128;
-
-//     let leftover_value: i128;
-//     if self.order_side == OrderSide::Long {
-//         leftover_value = (market_price as i64 - self.bankruptcy_price as i64) as i128
-//             * liquidation_size as i128
-//             / multiplier as i128;
-//         // - liquidator_fee;
-//     } else {
-//         leftover_value = (self.bankruptcy_price as i64 - market_price as i64) as i128
-//             * liquidation_size as i128
-//             / multiplier as i128;
-//         // - liquidator_fee;
-//     }
-
-//     let new_hash: BigUint = _hash_position(
-//         &self.order_side,
-//         self.synthetic_token,
-//         updated_size,
-//         self.entry_price,
-//         self.liquidation_price,
-//         &self.position_address,
-//         funding_idx,
-//     );
-
-//     // ? Make updates to the position
-//     self.position_size = updated_size;
-//     self.margin = margin;
-//     self.last_funding_idx = funding_idx;
-//     self.hash = new_hash;
-
-//     return Ok(leftover_value as i64);
-// }

@@ -9,7 +9,6 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 pub mod close_tab;
 pub mod db_updates;
 pub mod json_output;
-pub mod modify_tab;
 pub mod open_tab;
 pub mod state_updates;
 
@@ -47,7 +46,7 @@ impl OrderTab {
 fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({expiration_timestamp, is_perp, is_smart_contract, base_token, quote_token, base_blinding, quote_bliding, pub_key})
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, base_blinding, quote_bliding, pub_key})
     // & H({header_hash, base_amount, quote_amount, position_hash})
 
     hash_inputs.push(&tab_header.hash);
@@ -71,11 +70,10 @@ fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigU
 
 #[derive(Debug, Clone)]
 pub struct TabHeader {
-    pub expiration_timestamp: u64,
     pub is_perp: bool,
     pub is_smart_contract: bool,
-    pub base_token: u64,
-    pub quote_token: u64,
+    pub base_token: u32,
+    pub quote_token: u32,
     pub base_blinding: BigUint,
     pub quote_blinding: BigUint,
     pub pub_key: BigUint,
@@ -85,17 +83,15 @@ pub struct TabHeader {
 
 impl TabHeader {
     pub fn new(
-        expiration_timestamp: u64,
         is_perp: bool,
         is_smart_contract: bool,
-        base_token: u64,
-        quote_token: u64,
+        base_token: u32,
+        quote_token: u32,
         base_blinding: BigUint,
         quote_blinding: BigUint,
         pub_key: BigUint,
     ) -> TabHeader {
         let hash = hash_header(
-            expiration_timestamp,
             is_perp,
             is_smart_contract,
             base_token,
@@ -106,7 +102,6 @@ impl TabHeader {
         );
 
         TabHeader {
-            expiration_timestamp,
             is_perp,
             is_smart_contract,
             base_token,
@@ -120,19 +115,16 @@ impl TabHeader {
 }
 
 fn hash_header(
-    expiration_timestamp: u64,
     is_perp: bool,
     is_smart_contract: bool,
-    base_token: u64,
-    quote_token: u64,
+    base_token: u32,
+    quote_token: u32,
     base_blinding: &BigUint,
     quote_blinding: &BigUint,
     pub_key: &BigUint,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    let expiration_timestamp = BigUint::from_u64(expiration_timestamp).unwrap();
-    hash_inputs.push(&expiration_timestamp);
     let is_perp = if is_perp {
         BigUint::one()
     } else {
@@ -145,9 +137,9 @@ fn hash_header(
         BigUint::zero()
     };
     hash_inputs.push(&is_smart_contract);
-    let base_token = BigUint::from_u64(base_token).unwrap();
+    let base_token = BigUint::from_u32(base_token).unwrap();
     hash_inputs.push(&base_token);
-    let quote_token = BigUint::from_u64(quote_token).unwrap();
+    let quote_token = BigUint::from_u32(quote_token).unwrap();
     hash_inputs.push(&quote_token);
     hash_inputs.push(&base_blinding);
     hash_inputs.push(&quote_blinding);
@@ -187,7 +179,6 @@ impl Serialize for TabHeader {
     {
         let mut tab_header = serializer.serialize_struct("TabHeader", 8)?;
 
-        tab_header.serialize_field("expiration_timestamp", &self.expiration_timestamp)?;
         tab_header.serialize_field("is_perp", &self.is_perp)?;
         tab_header.serialize_field("is_smart_contract", &self.is_smart_contract)?;
         tab_header.serialize_field("base_token", &self.base_token)?;
@@ -212,11 +203,10 @@ impl<'de> Deserialize<'de> for TabHeader {
     {
         #[derive(DeserializeTrait)]
         struct Helper {
-            expiration_timestamp: u64,
             is_perp: bool,
             is_smart_contract: bool,
-            base_token: u64,
-            quote_token: u64,
+            base_token: u32,
+            quote_token: u32,
             base_blinding: String,
             quote_blinding: String,
             pub_key: String,
@@ -225,7 +215,6 @@ impl<'de> Deserialize<'de> for TabHeader {
 
         let helper = Helper::deserialize(deserializer)?;
         Ok(TabHeader {
-            expiration_timestamp: helper.expiration_timestamp,
             is_perp: helper.is_perp,
             is_smart_contract: helper.is_smart_contract,
             base_token: helper.base_token,

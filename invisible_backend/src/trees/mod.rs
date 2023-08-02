@@ -4,7 +4,6 @@ use std::{
     fmt::Debug,
     fs::{self, File},
     io::{Read, Write},
-    ops::Deref,
     path::Path,
     str::FromStr,
     sync::Arc,
@@ -642,7 +641,7 @@ fn build_next_row(
             } else {
                 prev_left_hash = left_hash.clone();
             }
-            let prev_right_hash = prev_res.deref();
+            let prev_right_hash = *prev_res;
 
             drop(tree);
 

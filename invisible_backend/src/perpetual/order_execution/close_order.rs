@@ -99,7 +99,7 @@ fn close_position(
 
     if let Some(pos) = &order.position {
         let mut pf_positions = partially_filled_positions_m.lock();
-        let pf_pos = pf_positions.remove(&pos.position_address.to_string());
+        let pf_pos = pf_positions.remove(&pos.position_header.position_address.to_string());
         if let Some(position_) = pf_pos {
             prev_spent_synthetic = position_.1;
         }
@@ -112,7 +112,7 @@ fn close_position(
     }
 
     // ? Verify order signature
-    order.verify_order_signature(signature, Some(&position.position_address))?;
+    order.verify_order_signature(signature, Some(&position.position_header.position_address))?;
 
     if spent_synthetic > position.position_size {
         return Err(send_perp_swap_error(
@@ -125,7 +125,7 @@ fn close_position(
         ));
     }
 
-    if prev_position.synthetic_token != order.synthetic_token {
+    if prev_position.position_header.synthetic_token != order.synthetic_token {
         return Err(send_perp_swap_error(
             "Position and order should have same synthetic token".to_string(),
             Some(order.order_id),

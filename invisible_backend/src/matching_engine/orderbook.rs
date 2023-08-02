@@ -75,8 +75,8 @@ pub enum Failed {
 }
 
 pub struct OrderBook {
-    pub order_asset: u64,
-    pub price_asset: u64,
+    pub order_asset: u32,
+    pub price_asset: u32,
     pub bid_queue: OrderQueue,
     pub ask_queue: OrderQueue,
     seq: sequence::TradeSequence,
@@ -85,7 +85,7 @@ pub struct OrderBook {
 }
 
 impl OrderBook {
-    pub fn new(order_asset: u64, price_asset: u64, market_id: u16) -> Self {
+    pub fn new(order_asset: u32, price_asset: u32, market_id: u16) -> Self {
         OrderBook {
             order_asset,
             price_asset,
@@ -315,8 +315,8 @@ impl OrderBook {
         &mut self,
         results: &mut OrderProcessingResult,
         order_id: u64,
-        order_asset: u64,
-        price_asset: u64,
+        order_asset: u32,
+        price_asset: u32,
         side: OrderSide,
         price: f64,
         qty: u64,

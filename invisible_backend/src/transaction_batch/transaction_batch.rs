@@ -14,9 +14,7 @@ use std::{
 use error_stack::Result;
 
 use crate::{
-    order_tab::{
-        close_tab::close_order_tab, modify_tab::modify_order_tab, open_tab::open_order_tab,
-    },
+    order_tab::{close_tab::close_order_tab, open_tab::open_order_tab},
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
@@ -104,18 +102,18 @@ pub struct TransactionBatch {
     pub order_tabs_state_tree: Arc<Mutex<SuperficialTree>>, // current order tabs state tree (superficial tree only stores the leaves)
     pub updated_tab_hashes: Arc<Mutex<HashMap<u32, BigUint>>>, // info to get merkle proofs at the end of the batch
     //
-    pub latest_index_price: HashMap<u64, u64>,
-    pub min_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the min price, OracleUpdate info of this batch
-    pub max_index_price_data: HashMap<u64, (u64, OracleUpdate)>, // maps asset id to the max price, OracleUpdate info of this batch
+    pub latest_index_price: HashMap<u32, u64>,
+    pub min_index_price_data: HashMap<u32, (u64, OracleUpdate)>, // maps asset id to the min price, OracleUpdate info of this batch
+    pub max_index_price_data: HashMap<u32, (u64, OracleUpdate)>, // maps asset id to the max price, OracleUpdate info of this batch
     //
-    pub running_funding_tick_sums: HashMap<u64, i64>, // maps asset id to the sum of all funding ticks in this batch (used for TWAP)
+    pub running_funding_tick_sums: HashMap<u32, i64>, // maps asset id to the sum of all funding ticks in this batch (used for TWAP)
     pub current_funding_count: u16, // maps asset id to the number of funding ticks applied already (used for TWAP, goes up to 480)
 
-    pub funding_rates: HashMap<u64, Vec<i64>>, // maps asset id to an array of funding rates (not reset at new batch)
-    pub funding_prices: HashMap<u64, Vec<u64>>, // maps asset id to an array of funding prices (corresponding to the funding rates) (not reset at new batch)
+    pub funding_rates: HashMap<u32, Vec<i64>>, // maps asset id to an array of funding rates (not reset at new batch)
+    pub funding_prices: HashMap<u32, Vec<u64>>, // maps asset id to an array of funding prices (corresponding to the funding rates) (not reset at new batch)
     pub current_funding_idx: u32, // the current index of the funding rates and prices arrays
-    pub funding_idx_shift: HashMap<u64, u32>, // maps asset id to an funding idx shift
-    pub min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>, // the min funding index of a position being updated in this batch for each asset
+    pub funding_idx_shift: HashMap<u32, u32>, // maps asset id to an funding idx shift
+    pub min_funding_idxs: Arc<Mutex<HashMap<u32, u32>>>, // the min funding index of a position being updated in this batch for each asset
     //
     pub n_deposits: u32,    // number of deposits in this batch
     pub n_withdrawals: u32, // number of withdrawals in this batch
@@ -152,15 +150,15 @@ impl TransactionBatch {
 
         let order_tabs_state_tree = SuperficialTree::new(16);
 
-        let mut latest_index_price: HashMap<u64, u64> = HashMap::new();
-        let mut min_index_price_data: HashMap<u64, (u64, OracleUpdate)> = HashMap::new();
-        let mut max_index_price_data: HashMap<u64, (u64, OracleUpdate)> = HashMap::new();
+        let mut latest_index_price: HashMap<u32, u64> = HashMap::new();
+        let mut min_index_price_data: HashMap<u32, (u64, OracleUpdate)> = HashMap::new();
+        let mut max_index_price_data: HashMap<u32, (u64, OracleUpdate)> = HashMap::new();
 
-        let mut running_funding_tick_sums: HashMap<u64, i64> = HashMap::new();
-        let mut funding_rates: HashMap<u64, Vec<i64>> = HashMap::new();
-        let mut funding_prices: HashMap<u64, Vec<u64>> = HashMap::new();
-        let mut min_funding_idxs: HashMap<u64, u32> = HashMap::new();
-        let mut funding_idx_shift: HashMap<u64, u32> = HashMap::new();
+        let mut running_funding_tick_sums: HashMap<u32, i64> = HashMap::new();
+        let mut funding_rates: HashMap<u32, Vec<i64>> = HashMap::new();
+        let mut funding_prices: HashMap<u32, Vec<u64>> = HashMap::new();
+        let mut min_funding_idxs: HashMap<u32, u32> = HashMap::new();
+        let mut funding_idx_shift: HashMap<u32, u32> = HashMap::new();
 
         let session = create_session();
         let session = Arc::new(Mutex::new(session));
@@ -664,7 +662,7 @@ impl TransactionBatch {
     ) -> std::result::Result<(u64, PerpPosition), String> {
         let current_index_price = *self
             .latest_index_price
-            .get(&margin_change.position.synthetic_token)
+            .get(&margin_change.position.position_header.synthetic_token)
             .unwrap();
 
         verify_margin_change_signature(&margin_change)?;
@@ -679,11 +677,18 @@ impl TransactionBatch {
             .map_err(|e| e.to_string())?;
 
         // ? Check that leverage is valid relative to the notional position size after increasing size
-        if get_max_leverage(position.synthetic_token, position.position_size) < leverage {
+        if get_max_leverage(
+            position.position_header.synthetic_token,
+            position.position_size,
+        ) < leverage
+        {
             println!(
                 "Leverage would be too high {} > {}",
                 leverage,
-                get_max_leverage(position.synthetic_token, position.position_size),
+                get_max_leverage(
+                    position.position_header.synthetic_token,
+                    position.position_size
+                ),
             );
             return Err("Leverage would be too high".to_string());
         }
@@ -766,7 +771,7 @@ impl TransactionBatch {
                     .unwrap()
                     .dest_received_address
                     .clone(),
-                position.collateral_token,
+                VALID_COLLATERAL_TOKENS[0],
                 margin_change.margin_change.abs() as u64,
                 margin_change
                     .close_order_fields
@@ -856,50 +861,28 @@ impl TransactionBatch {
                 );
 
                 let order_tab_action_response = OrderTabActionResponse {
-                    new_order_tab: Some(new_order_tab),
-                    modified_tab_response: None,
-                    return_notes: None,
+                    open_tab_response: Some(new_order_tab),
+                    close_tab_response: None,
                 };
 
-                return order_tab_action_response;
-            } else if tab_action_message.modify_order_tab_req.is_some() {
-                let modify_order_tab_req = tab_action_message.modify_order_tab_req.unwrap();
-
-                let modified_tab_response = modify_order_tab(
-                    &session,
-                    &backup_storage,
-                    modify_order_tab_req,
-                    &state_tree,
-                    &updated_note_hashes,
-                    &tabs_state_tree,
-                    &updated_tab_hashes,
-                    &swap_output_json,
-                );
-
-                let order_tab_action_response = OrderTabActionResponse {
-                    new_order_tab: None,
-                    modified_tab_response: Some(modified_tab_response),
-                    return_notes: None,
-                };
                 return order_tab_action_response;
             } else {
                 let close_order_tab_req = tab_action_message.close_order_tab_req.unwrap();
 
-                let new_notes = close_order_tab(
+                let close_tab_response = close_order_tab(
                     &session,
                     &backup_storage,
-                    close_order_tab_req,
                     &state_tree,
                     &updated_note_hashes,
                     &tabs_state_tree,
                     &updated_tab_hashes,
                     &swap_output_json,
+                    close_order_tab_req,
                 );
 
                 let order_tab_action_response = OrderTabActionResponse {
-                    new_order_tab: None,
-                    modified_tab_response: None,
-                    return_notes: Some(new_notes),
+                    open_tab_response: None,
+                    close_tab_response: Some(close_tab_response),
                 };
 
                 return order_tab_action_response;
@@ -1318,7 +1301,7 @@ impl TransactionBatch {
     // * FUNDING CALCULATIONS * //
 
     pub fn per_minute_funding_updates(&mut self, funding_update: FundingUpdateMessage) {
-        let mut running_sums: Vec<(u64, i64)> = Vec::new();
+        let mut running_sums: Vec<(u32, i64)> = Vec::new();
         for tup in self.running_funding_tick_sums.drain() {
             running_sums.push(tup);
         }
@@ -1439,7 +1422,7 @@ impl TransactionBatch {
         Ok(())
     }
 
-    pub fn get_index_price(&self, token: u64) -> u64 {
+    pub fn get_index_price(&self, token: u32) -> u64 {
         // returns latest oracle price
 
         return self.latest_index_price.get(&token).unwrap().clone();

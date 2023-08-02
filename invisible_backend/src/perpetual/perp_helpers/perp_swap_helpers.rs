@@ -26,7 +26,7 @@ use super::super::perp_order::PerpOrder;
 
 /// Constructs the new pfr note
 pub fn refund_partial_fill(
-    collateral_token: u64,
+    collateral_token: u32,
     blinding: &BigUint,
     pub_key_sum: EcPoint,
     unspent_margin: u64,
@@ -46,7 +46,7 @@ pub fn refund_partial_fill(
 }
 
 /// Gets the maximum leverage for a given token and amount
-pub fn get_max_leverage(token: u64, amount: u64) -> u64 {
+pub fn get_max_leverage(token: u32, amount: u64) -> u64 {
     let [min_bound, max_bound] = LEVERAGE_BOUNDS_PER_ASSET
         .get(token.to_string().as_str())
         .unwrap();
@@ -258,7 +258,12 @@ pub fn finalize_updates(
             // ? Store the partially filled position for the next fill
             let mut partialy_filled_positions = partialy_filled_positions_m.lock();
             partialy_filled_positions.insert(
-                new_position.as_ref().unwrap().position_address.to_string(),
+                new_position
+                    .as_ref()
+                    .unwrap()
+                    .position_header
+                    .position_address
+                    .to_string(),
                 (
                     new_position.as_ref().unwrap().clone(),
                     new_filled_synthetic_amount,
@@ -274,7 +279,12 @@ pub fn finalize_updates(
             // ? Store the partially filled position for the next fill
             let mut partialy_filled_positions = partialy_filled_positions_m.lock();
             partialy_filled_positions.insert(
-                new_position.as_ref().unwrap().position_address.to_string(),
+                new_position
+                    .as_ref()
+                    .unwrap()
+                    .position_header
+                    .position_address
+                    .to_string(),
                 (
                     new_position.as_ref().unwrap().clone(),
                     new_filled_synthetic_amount,
@@ -355,7 +365,13 @@ pub fn consistency_checks(
     }
 
     if order_a.position.is_some()
-        && order_a.position.as_ref().unwrap().synthetic_token != order_a.synthetic_token
+        && order_a
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .synthetic_token
+            != order_a.synthetic_token
     {
         return Err(send_perp_swap_error(
             "order and position token mismatch".to_string(),
@@ -367,7 +383,13 @@ pub fn consistency_checks(
         ));
     }
     if order_b.position.is_some()
-        && order_b.position.as_ref().unwrap().synthetic_token != order_b.synthetic_token
+        && order_b
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .synthetic_token
+            != order_b.synthetic_token
     {
         return Err(send_perp_swap_error(
             "order and position token mismatch".to_string(),
@@ -492,18 +514,25 @@ pub fn consistency_checks(
         ));
     }
 
+    let address_a = &order_a
+        .position
+        .as_ref()
+        .unwrap()
+        .position_header
+        .position_address;
+    let address_b = &order_b
+        .position
+        .as_ref()
+        .unwrap()
+        .position_header
+        .position_address;
     // ? Check that the positions being modified are different (different addresses)
     if order_a.position.is_some() && order_b.position.is_some() {
-        if order_a.position.as_ref().unwrap().position_address
-            == order_b.position.as_ref().unwrap().position_address
-        {
+        if *address_a == *address_b {
             return Err(send_perp_swap_error(
                 "Positions are the same".to_string(),
                 None,
-                Some(format!(
-                    "positions are the same: {:?}",
-                    order_a.position.as_ref().unwrap().position_address
-                )),
+                Some(format!("positions are the same: {:?}", address_a)),
             ));
         }
     }
@@ -514,9 +543,7 @@ pub fn consistency_checks(
     let mut valid_b = true;
 
     if order_a.position.is_some() && order_b.position.is_some() {
-        if order_a.position.as_ref().unwrap().position_address
-            == order_b.position.as_ref().unwrap().position_address
-        {
+        if *address_a == *address_b {
             return Err(send_perp_swap_error(
                 "Positions are the same".to_string(),
                 None,

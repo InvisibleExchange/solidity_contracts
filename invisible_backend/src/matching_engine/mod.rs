@@ -12,8 +12,8 @@ pub mod validation;
 pub fn get_quote_qty(
     qty: u64,
     price: f64,
-    base_asset: u64,
-    quote_asset: u64,
+    base_asset: u32,
+    quote_asset: u32,
     _side: Option<OrderSide>,
 ) -> u64 {
     let base_decimals = DECIMALS_PER_ASSET[base_asset.to_string().as_str()];
@@ -42,7 +42,7 @@ pub fn get_quote_qty(
     // }
 }
 
-pub fn get_qty_from_quote(quote_qty: u64, price: f64, base_asset: u64, quote_asset: u64) -> u64 {
+pub fn get_qty_from_quote(quote_qty: u64, price: f64, base_asset: u32, quote_asset: u32) -> u64 {
     let base_decimals = DECIMALS_PER_ASSET[base_asset.to_string().as_str()];
     let quote_decimals = DECIMALS_PER_ASSET[quote_asset.to_string().as_str()];
 

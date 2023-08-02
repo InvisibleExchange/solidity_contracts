@@ -35,6 +35,7 @@ func open_order_tab{
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
     note_dict: DictAccess*,
+    order_tab_dict: DictAccess*,
     fee_tracker_dict: DictAccess*,
     zero_note_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
@@ -66,6 +67,9 @@ func open_order_tab{
         &quote_refund_note,
     );
 
+    local add_only: felt;
+    %{ ids.add_only = current_tab_interaction["add_only"] %}
+
     // ?
     let (base_amounts_sum: felt) = sum_notes(
         base_notes_in_len, base_notes_in, order_tab.base_token, 0
@@ -80,26 +84,60 @@ func open_order_tab{
     let base_amount = base_amounts_sum - base_refund_note_amount;
     let quote_amount = quote_amounts_sum - quote_refund_note_amount;
 
-    with_attr error_message("INVALID AMOUNTS IN OPEN ORDER TAB") {
-        assert base_amount = order_tab.base_amount;
-        assert quote_amount = order_tab.quote_amount;
-    }
-
     with_attr error_message("ORDER TAB HASH IS INVALID") {
         assert order_tab.tab_header.hash = hash_tab_header(&order_tab.tab_header);
-        assert quote_amount = hash_order_tab(&order_tab);
+        assert order_tab.hash = hash_order_tab(&order_tab);
     }
 
-    // ? Verify the signature
-    verify_open_order_tab_signature(
-        order_tab.hash,
-        base_notes_in_len,
-        base_notes_in,
-        base_refund_note.hash,
-        quote_notes_in_len,
-        quote_notes_in,
-        quote_refund_note.hash,
-    );
+    if (add_only == 1) {
+        // & ADDING TO EXISTING ORDER TAB
+        let prev_tab_hash = order_tab.hash;
+
+        let updated_base_amount = order_tab.base_amount + base_amount;
+        let updated_quote_amount = order_tab.quote_amount + quote_amount;
+
+        let updated_tab_hash = update_order_tab_hash(
+            &order_tab.tab_header, updated_base_amount, updated_quote_amount
+        );
+
+        // ? Verify the signature
+        verify_open_order_tab_signature(
+            prev_tab_hash,
+            updated_tab_hash,
+            base_notes_in_len,
+            base_notes_in,
+            base_refund_note.hash,
+            quote_notes_in_len,
+            quote_notes_in,
+            quote_refund_note.hash,
+        );
+
+        // ? Update the dictionaries
+        update_tab_in_state(
+            &order_tab, updated_base_amount, updated_quote_amount, updated_tab_hash
+        );
+    } else {
+        // & OPENING NEW ORDER TAB
+        with_attr error_message("INVALID AMOUNTS IN OPEN ORDER TAB") {
+            assert base_amount = order_tab.base_amount;
+            assert quote_amount = order_tab.quote_amount;
+        }
+
+        // ? Verify the signature
+        verify_open_order_tab_signature(
+            0,
+            order_tab.hash,
+            base_notes_in_len,
+            base_notes_in,
+            base_refund_note.hash,
+            quote_notes_in_len,
+            quote_notes_in,
+            quote_refund_note.hash,
+        );
+
+        // ? Update the dictionaries
+        add_new_tab_to_state(order_tab);
+    }
 
     // ? Update the dictionaries
     open_tab_state_note_updates(
@@ -110,9 +148,6 @@ func open_order_tab{
         base_refund_note,
         quote_refund_note,
     );
-
-    &add_new_tab_to_state(order_tab);
-
 }
 
 func handle_inputs{pedersen_ptr: HashBuiltin*}(

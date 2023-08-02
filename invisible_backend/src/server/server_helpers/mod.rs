@@ -28,9 +28,9 @@ use crate::{
 
 use tokio_tungstenite::tungstenite::{Message, Result as WsResult};
 
-const BTC: u64 = 12345;
-const ETH: u64 = 54321;
-const USDC: u64 = 55555;
+const BTC: u32 = 12345;
+const ETH: u32 = 54321;
+const USDC: u32 = 55555;
 
 pub static SPOT_MARKET_IDS: phf::Map<&'static str, u16> = phf_map! {
  "12345" => 11, // BTC
@@ -77,8 +77,8 @@ pub fn init_order_books() -> (
 }
 
 pub fn get_market_id_and_order_side(
-    token_spent: u64,
-    token_received: u64,
+    token_spent: u32,
+    token_received: u32,
 ) -> Option<(u16, OBOrderSide)> {
     let option1 = SPOT_MARKET_IDS.get(&token_spent.to_string());
 
@@ -97,8 +97,8 @@ pub fn get_market_id_and_order_side(
 
 pub fn get_order_side(
     order_book: &OrderBook,
-    token_spent: u64,
-    token_received: u64,
+    token_spent: u32,
+    token_received: u32,
 ) -> Option<OBOrderSide> {
     if order_book.order_asset == token_spent && order_book.price_asset == token_received {
         return Some(OBOrderSide::Ask);
@@ -400,7 +400,6 @@ pub fn proccess_perp_matching_result(
                         ts: _,
                         user_id,
                     } => {
-
                         if let Order::Perp(perp_order) = order {
                             if side == OBOrderSide::Ask {
                                 // The synthetic exchnaged in the swap

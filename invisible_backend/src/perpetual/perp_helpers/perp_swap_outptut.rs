@@ -130,7 +130,7 @@ pub struct PerpOrderFillResponse {
     pub position: Option<PerpPosition>,
     pub new_pfr_info: (Option<Note>, u64, u64),
     pub return_collateral_note: Option<Note>,
-    pub synthetic_token: u64,
+    pub synthetic_token: u32,
     pub qty: u64,
     pub fee_taken: u64,
 }
@@ -140,7 +140,7 @@ impl PerpOrderFillResponse {
         req: &PerpSwapResponse,
         is_a: bool,
         qty: u64,
-        synthetic_token: u64,
+        synthetic_token: u32,
         fee_taken: u64,
     ) -> Self {
         if is_a {

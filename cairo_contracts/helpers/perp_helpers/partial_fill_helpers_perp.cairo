@@ -10,7 +10,7 @@ from starkware.cairo.common.math_cmp import is_le
 from helpers.utils import Note, construct_new_note, sum_notes, hash_note
 from perpetuals.order.order_structs import PerpOrder
 
-func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
+func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
     order: PerpOrder,
     address: felt,
     blinding: felt,
@@ -31,17 +31,20 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
 
     let note_dict = note_dict + DictAccess.SIZE;
 
-    // write_new_note_to_output(pfr_note);
-    %{
-        output_notes[ids.pfr_note.index] = {
-               "address": {"x": ids.pfr_note.address.x, "y": ids.pfr_note.address.y},
-               "hash": ids.pfr_note.hash,
-               "index": ids.pfr_note.index,
-               "blinding": ids.pfr_note.blinding_factor,
-               "token": ids.pfr_note.token,
-               "amount": ids.pfr_note.amount,
-           }
-    %}
+    // ? store to an array used for program outputs
+    assert note_updates[0] = pfr_note;
+    note_updates = &note_updates[1];
+
+    // %{
+    //     output_notes[ids.pfr_note.index] = {
+    //            "address": {"x": ids.pfr_note.address.x, "y": ids.pfr_note.address.y},
+    //            "hash": ids.pfr_note.hash,
+    //            "index": ids.pfr_note.index,
+    //            "blinding": ids.pfr_note.blinding_factor,
+    //            "token": ids.pfr_note.token,
+    //            "amount": ids.pfr_note.amount,
+    //        }
+    // %}
 
     return ();
 }
@@ -63,13 +66,20 @@ func partial_fill_updates{pedersen_ptr: HashBuiltin*}(
     return (pfr_note,);
 }
 
-func remove_prev_pfr_note{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(prev_pfr_note: Note) {
+func remove_prev_pfr_note{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
+    prev_pfr_note: Note
+) {
     alloc_locals;
 
     let note_dict_ptr = note_dict;
     assert note_dict_ptr.key = prev_pfr_note.index;
     assert note_dict_ptr.prev_value = prev_pfr_note.hash;
     assert note_dict_ptr.new_value = 0;
+
+    // ? store to an array used for program outputs
+    let (zero_note) = get_zero_note(prev_pfr_note.index);
+    assert note_updates[0] = zero_note;
+    note_updates = &note_updates[1];
 
     let note_dict = note_dict + DictAccess.SIZE;
 

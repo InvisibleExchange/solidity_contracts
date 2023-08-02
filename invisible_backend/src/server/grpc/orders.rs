@@ -149,7 +149,6 @@ impl TryFrom<GrpcTabHeader> for TabHeader {
 
     fn try_from(req: GrpcTabHeader) -> Result<Self, GrpcMessageError> {
         let header = TabHeader::new(
-            req.expiration_timestamp,
             req.is_perp,
             req.is_smart_contract,
             req.base_token,
@@ -166,7 +165,6 @@ impl TryFrom<GrpcTabHeader> for TabHeader {
 impl From<OrderTab> for GrpcOrderTab {
     fn from(req: OrderTab) -> Self {
         let header = GrpcTabHeader {
-            expiration_timestamp: req.tab_header.expiration_timestamp,
             is_perp: req.tab_header.is_perp,
             is_smart_contract: req.tab_header.is_smart_contract,
             base_token: req.tab_header.base_token,

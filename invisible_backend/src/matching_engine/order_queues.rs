@@ -373,8 +373,17 @@ impl OrderQueue {
                 if wrapper.user_id == user_id {
                     if let Order::Perp(ord) = &mut wrapper.order {
                         if ord.position.is_some()
-                            && ord.position.as_ref().unwrap().position_address
-                                == new_position.as_ref().unwrap().position_address
+                            && ord
+                                .position
+                                .as_ref()
+                                .unwrap()
+                                .position_header
+                                .position_address
+                                == new_position
+                                    .as_ref()
+                                    .unwrap()
+                                    .position_header
+                                    .position_address
                         {
                             ord.position = new_position.clone();
                         }

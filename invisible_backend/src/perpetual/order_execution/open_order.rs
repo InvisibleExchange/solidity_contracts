@@ -299,7 +299,7 @@ fn add_margin_to_position(
     }
 
     let prev_position: PerpPosition = position.clone();
-    if prev_position.synthetic_token != order.synthetic_token {
+    if prev_position.position_header.synthetic_token != order.synthetic_token {
         return Err(send_perp_swap_error(
             "Position and order should have same synthetic token".to_string(),
             Some(order.order_id),

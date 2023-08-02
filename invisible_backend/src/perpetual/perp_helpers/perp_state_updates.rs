@@ -176,7 +176,7 @@ pub fn return_collateral_on_position_close(
     updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     idx: u64,
     collateral_return_amount: u64,
-    collateral_token: u64,
+    collateral_token: u32,
     collateral_returned_address: &EcPoint,
     collateral_returned_blinding: &BigUint,
 ) -> Result<Note, PerpSwapExecutionError> {

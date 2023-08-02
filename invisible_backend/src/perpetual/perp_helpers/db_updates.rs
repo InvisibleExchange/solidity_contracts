@@ -104,6 +104,7 @@ pub fn update_db_after_perp_swap(
                     .position
                     .as_ref()
                     .unwrap()
+                    .position_header
                     .position_address
                     .to_string(),
                 order_a.position.as_ref().unwrap().index.to_string(),
@@ -123,6 +124,7 @@ pub fn update_db_after_perp_swap(
                     .position
                     .as_ref()
                     .unwrap()
+                    .position_header
                     .position_address
                     .to_string(),
                 order_b.position.as_ref().unwrap().index.to_string(),
@@ -168,7 +170,7 @@ pub fn store_perp_fill(
     price: u64,
     user_id_a: u64,
     user_id_b: u64,
-    synthetic_token: u64,
+    synthetic_token: u32,
     is_buy: bool,
     timestamp: u64,
 ) {

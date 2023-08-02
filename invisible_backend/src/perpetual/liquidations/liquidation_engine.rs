@@ -64,7 +64,7 @@ impl LiquidationSwap {
         insurance_fund: Arc<Mutex<i64>>,
         //
         index_price: u64,
-        min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
+        min_funding_idxs: Arc<Mutex<HashMap<u32, u32>>>,
         swap_funding_info: SwapFundingInfo,
         //
         session: Arc<Mutex<ServiceSession>>,
@@ -121,7 +121,7 @@ impl LiquidationSwap {
 
             // * UPDATE STATE AFTER SWAP ——————————————————————————————————————————
 
-            let mut insurance_fund_m = &mut insurance_fund.lock();
+            let mut insurance_fund_m = insurance_fund.lock();
             let fund_amount: &mut i64 = &mut insurance_fund_m;
             *fund_amount += leftover_collateral;
             drop(insurance_fund_m);
@@ -200,7 +200,12 @@ impl LiquidationSwap {
 
         return Ok(LiquidationResponse {
             liquidated_position_index: self.liquidation_order.position.index,
-            liquidated_position_address: self.liquidation_order.position.position_address.clone(),
+            liquidated_position_address: self
+                .liquidation_order
+                .position
+                .position_header
+                .position_address
+                .clone(),
             liquidated_position,
             new_position,
         });

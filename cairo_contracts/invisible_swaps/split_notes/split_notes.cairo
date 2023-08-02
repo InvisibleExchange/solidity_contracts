@@ -50,9 +50,9 @@ func execute_note_split{pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: 
     return ();
 }
 
-func write_notes_out_over_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
-    notes_in_len: felt, notes_in: Note*, notes_out_len: felt, notes_out: Note*, len: felt
-) {
+func write_notes_out_over_notes_in{
+    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
+}(notes_in_len: felt, notes_in: Note*, notes_out_len: felt, notes_out: Note*, len: felt) {
     if (len == 0) {
         return ();
     }
@@ -68,16 +68,20 @@ func write_notes_out_over_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAc
     assert note_dict_ptr.prev_value = note_in.hash;
     assert note_dict_ptr.new_value = note_out.hash;
 
-    %{
-        output_notes[ids.note_in.index] = {
-               "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
-               "hash": ids.note_out.hash,
-               "index": ids.note_in.index,
-               "blinding": ids.note_out.blinding_factor,
-               "token": ids.note_out.token,
-               "amount": ids.note_out.amount,
-           }
-    %}
+    // %{
+    //     output_notes[ids.note_in.index] = {
+    //            "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
+    //            "hash": ids.note_out.hash,
+    //            "index": ids.note_in.index,
+    //            "blinding": ids.note_out.blinding_factor,
+    //            "token": ids.note_out.token,
+    //            "amount": ids.note_out.amount,
+    //        }
+    // %}
+
+    // ? store to an array used for program outputs
+    assert note_updates[0] = note_out;
+    note_updates = &note_updates[1];
 
     let note_dict = note_dict + DictAccess.SIZE;
 
@@ -86,9 +90,9 @@ func write_notes_out_over_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAc
     );
 }
 
-func write_notes_out_over_empty{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
-    notes_out_len: felt, notes_out: Note*
-) {
+func write_notes_out_over_empty{
+    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
+}(notes_out_len: felt, notes_out: Note*) {
     alloc_locals;
 
     if (notes_out_len == 0) {
@@ -106,23 +110,27 @@ func write_notes_out_over_empty{pedersen_ptr: HashBuiltin*, note_dict: DictAcces
     assert note_dict_ptr.prev_value = 0;
     assert note_dict_ptr.new_value = note_out.hash;
 
-    %{
-        output_notes[ids.zero_idx] = {
-               "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
-               "hash": ids.note_out.hash,
-               "index": ids.zero_idx,
-               "blinding": ids.note_out.blinding_factor,
-               "token": ids.note_out.token,
-               "amount": ids.note_out.amount,
-           }
-    %}
+    // ? store to an array used for program outputs
+    assert note_updates[0] = note_out;
+    note_updates = &note_updates[1];
+
+    // %{
+    //     output_notes[ids.zero_idx] = {
+    //            "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
+    //            "hash": ids.note_out.hash,
+    //            "index": ids.zero_idx,
+    //            "blinding": ids.note_out.blinding_factor,
+    //            "token": ids.note_out.token,
+    //            "amount": ids.note_out.amount,
+    //        }
+    // %}
 
     let note_dict = note_dict + DictAccess.SIZE;
 
     return write_notes_out_over_empty(notes_out_len - 1, &notes_out[1]);
 }
 
-func remove_extra_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
+func remove_extra_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
     notes_in_len: felt, notes_in: Note*
 ) {
     if (notes_in_len == 0) {
@@ -136,6 +144,11 @@ func remove_extra_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
     assert note_dict_ptr.key = note_in.index;
     assert note_dict_ptr.prev_value = note_in.hash;
     assert note_dict_ptr.new_value = 0;
+
+    // ? store to an array used for program outputs
+    let (zero_note) = get_zero_note(note_in.index);
+    assert note_updates[0] = zero_note;
+    note_updates = &note_updates[1];
 
     let note_dict = note_dict + DictAccess.SIZE;
 

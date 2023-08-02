@@ -7,7 +7,7 @@ use super::super::grpc::{
     OrderTabActionResponse,
 };
 use super::super::grpc::{
-    engine_proto::{CloseOrderTabRes, ModifyOrderTabReq, ModifyOrderTabRes, OpenOrderTabRes},
+    engine_proto::{CloseOrderTabRes, OpenOrderTabRes},
     OrderTabActionMessage,
 };
 use super::super::{
@@ -15,10 +15,7 @@ use super::super::{
     server_helpers::engine_helpers::store_output_json,
 };
 use crate::utils::errors::{send_close_tab_error_reply, send_open_tab_error_reply};
-use crate::{
-    matching_engine::orderbook::OrderBook,
-    utils::{errors::send_modify_tab_error_reply, storage::MainStorage},
-};
+use crate::{matching_engine::orderbook::OrderBook, utils::storage::MainStorage};
 
 use tokio::sync::{
     mpsc::Sender as MpscSender,
@@ -88,7 +85,6 @@ pub async fn open_order_tab_inner(
         grpc_message.msg_type = MessageType::OrderTabAction;
         grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
             open_order_tab_req: Some(req),
-            modify_order_tab_req: None,
             close_order_tab_req: None,
         });
 
@@ -106,7 +102,7 @@ pub async fn open_order_tab_inner(
     let order_action_response = order_action_handle.join();
 
     match order_action_response {
-        Ok(res) => match res.new_order_tab.unwrap() {
+        Ok(res) => match res.open_tab_response.unwrap() {
             Ok(order_tab) => {
                 store_output_json(&swap_output_json, &main_storage);
 
@@ -141,99 +137,6 @@ pub async fn open_order_tab_inner(
 // * ===================================================================================================================================
 //
 
-pub async fn modify_order_tab_inner(
-    mpsc_tx: &MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
-    main_storage: &Arc<Mutex<MainStorage>>,
-    swap_output_json: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
-    semaphore: &Semaphore,
-    is_paused: &Arc<TokioMutex<bool>>,
-    //
-    req: Request<ModifyOrderTabReq>,
-) -> Result<Response<ModifyOrderTabRes>, Status> {
-    let _permit = semaphore.acquire().await.unwrap();
-
-    let lock = is_paused.lock().await;
-    drop(lock);
-
-    tokio::task::yield_now().await;
-
-    let req: ModifyOrderTabReq = req.into_inner();
-
-    if req.order_tab.is_none() || req.order_tab.as_ref().unwrap().tab_header.is_none() {
-        return send_modify_tab_error_reply("Order tab is undefined".to_string());
-    }
-
-    let transaction_mpsc_tx = mpsc_tx.clone();
-
-    let handle: TokioJoinHandle<JoinHandle<OrderTabActionResponse>> = tokio::spawn(async move {
-        let (resp_tx, resp_rx) = oneshot::channel();
-
-        let mut grpc_message = GrpcMessage::new();
-        grpc_message.msg_type = MessageType::OrderTabAction;
-        grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
-            open_order_tab_req: None,
-            modify_order_tab_req: Some(req),
-            close_order_tab_req: None,
-        });
-
-        transaction_mpsc_tx
-            .send((grpc_message, resp_tx))
-            .await
-            .ok()
-            .unwrap();
-        let res = resp_rx.await.unwrap();
-
-        return res.order_tab_action_response.unwrap();
-    });
-
-    let order_action_handle = handle.await.unwrap();
-    let order_action_response = order_action_handle.join();
-
-    match order_action_response {
-        Ok(res) => match res.modified_tab_response.unwrap() {
-            Ok((order_tab, base_return_note, quote_return_note)) => {
-                store_output_json(&swap_output_json, &main_storage);
-
-                let order_tab = GrpcOrderTab::from(order_tab);
-                let base_return_note = if base_return_note.is_some() {
-                    Some(GrpcNote::from(base_return_note.unwrap()))
-                } else {
-                    None
-                };
-                let quote_return_note = if quote_return_note.is_some() {
-                    Some(GrpcNote::from(quote_return_note.unwrap()))
-                } else {
-                    None
-                };
-
-                let reply = ModifyOrderTabRes {
-                    successful: true,
-                    error_message: "".to_string(),
-                    order_tab: Some(order_tab),
-                    base_return_note,
-                    quote_return_note,
-                };
-
-                return Ok(Response::new(reply));
-            }
-            Err(err) => {
-                println!("Error in open order tab execution: {}", err);
-
-                return send_modify_tab_error_reply(
-                    "Error occurred in the open order tab execution".to_string() + &err,
-                );
-            }
-        },
-        Err(_e) => {
-            println!("Unknown Error in open order tab execution");
-
-            return send_modify_tab_error_reply(
-                "Unknown Error occurred in the open order tab execution".to_string(),
-            );
-        }
-    }
-}
-
 //
 // * ===================================================================================================================================
 //
@@ -265,7 +168,6 @@ pub async fn close_order_tab_inner(
         grpc_message.msg_type = MessageType::OrderTabAction;
         grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
             open_order_tab_req: None,
-            modify_order_tab_req: None,
             close_order_tab_req: Some(req),
         });
 
@@ -283,7 +185,7 @@ pub async fn close_order_tab_inner(
     let order_action_response = order_action_handle.join();
 
     match order_action_response {
-        Ok(res) => match res.return_notes.unwrap() {
+        Ok(res) => match res.close_tab_response.unwrap() {
             Ok((base_r_note, quote_r_note)) => {
                 store_output_json(&swap_output_json, &main_storage);
 

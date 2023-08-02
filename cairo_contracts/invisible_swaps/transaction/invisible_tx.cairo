@@ -159,6 +159,7 @@ func later_fills{
     fee_tracker_dict: DictAccess*,
     zero_note_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
+    note_updates: Note*,
 }(
     notes_in_len: felt,
     notes_in: Note*,
@@ -228,16 +229,20 @@ func later_fills{
 
     let note_dict = note_dict + DictAccess.SIZE;
 
-    %{
-        output_notes[ids.swap_note.index] = {
-               "address": {"x": ids.swap_note.address.x, "y": ids.swap_note.address.y},
-               "hash": ids.swap_note.hash,
-               "index": ids.swap_note.index,
-               "blinding": ids.swap_note.blinding_factor,
-               "token": ids.swap_note.token,
-               "amount": ids.swap_note.amount,
-           }
-    %}
+    // ? store to an array used for program outputs
+    assert note_updates[0] = swap_note;
+    note_updates = &note_updates[1];
+
+    // %{
+    //     output_notes[ids.swap_note.index] = {
+    //            "address": {"x": ids.swap_note.address.x, "y": ids.swap_note.address.y},
+    //            "hash": ids.swap_note.hash,
+    //            "index": ids.swap_note.index,
+    //            "blinding": ids.swap_note.blinding_factor,
+    //            "token": ids.swap_note.token,
+    //            "amount": ids.swap_note.amount,
+    //        }
+    // %}
 
     // ! if the order was filled partialy not completely ---------------------------
     let spend_amount_left = prev_fill_refund_note.amount - spend_amount;

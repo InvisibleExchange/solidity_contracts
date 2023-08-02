@@ -124,7 +124,8 @@ func verify_margin_change_signature{pedersen_ptr: HashBuiltin*, ecdsa_ptr: Signa
 
 // * ORDER TAB SIGNATURES * //
 func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
-    tab_hash: felt,
+    prev_tab_hash: felt,
+    new_tab_hash: felt,
     base_notes_len: felt,
     base_notes: Note*,
     base_refund_hash: felt,
@@ -134,10 +135,14 @@ func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
 ) {
     alloc_locals;
 
+    // & header_hash = H({prev_tab_hash, new_tab_hash, base_refund_note_hash, quote_refund_note_hash})
+
     let (pub_key_sum: EcPoint) = sum_pub_keys(base_notes_len, base_notes, EcPoint(0, 0));
     let (pub_key_sum: EcPoint) = sum_pub_keys(quote_notes_len, quote_notes, pub_key_sum);
 
-    let hash = _get_open_tab_hash_internal(tab_hash, base_refund_hash, quote_refund_hash);
+    let hash = _get_open_tab_hash_internal(
+        prev_tab_hash, new_tab_hash, base_refund_hash, quote_refund_hash
+    );
 
     local sig_r: felt;
     local sig_s: felt;
@@ -155,6 +160,8 @@ func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
 
 func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
     tab_hash: felt,
+    base_amount_change: felt,
+    quote_amount_change: felt,
     base_close_order_fields: CloseOrderFields*,
     quote_close_order_fields: CloseOrderFields*,
     pub_key: felt,
@@ -180,14 +187,15 @@ func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
 
 // helpers
 func _get_open_tab_hash_internal{pedersen_ptr: HashBuiltin*}(
-    tab_hash: felt, base_refund_hash: felt, quote_refund_hash: felt
+    prev_tab_hash: felt, new_tab_hash: felt, base_refund_hash: felt, quote_refund_hash: felt
 ) -> felt {
     alloc_locals;
 
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, prev_tab_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, new_tab_hash);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_refund_hash);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_refund_hash);
 
@@ -198,14 +206,21 @@ func _get_open_tab_hash_internal{pedersen_ptr: HashBuiltin*}(
 }
 
 func _get_close_tab_hash_internal{pedersen_ptr: HashBuiltin*}(
-    tab_hash: felt, base_fields_hash: felt, quote_fields_hash: felt
+    tab_hash: felt,
+    base_amount_change: felt,
+    quote_amount_change: felt,
+    base_fields_hash: felt,
+    quote_fields_hash: felt,
 ) -> felt {
     alloc_locals;
+    // & header_hash = H({order_tab_hash, base_amount_change, quote_amount_change, base_close_order_fields.hash, quote_close_order_fields.hash})
 
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_amount_change);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_amount_change);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, base_fields_hash);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, quote_fields_hash);
 

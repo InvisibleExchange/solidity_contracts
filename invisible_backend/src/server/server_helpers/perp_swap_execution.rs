@@ -464,10 +464,16 @@ pub async fn await_perp_handle(
                     .0
                     .as_ref()
                     .unwrap()
+                    .position_header
                     .position_address
                     .to_string(),
                 position_pair.0.as_ref().unwrap().index,
-                position_pair.0.as_ref().unwrap().synthetic_token,
+                position_pair
+                    .0
+                    .as_ref()
+                    .unwrap()
+                    .position_header
+                    .synthetic_token,
                 position_pair.0.as_ref().unwrap().order_side == OrderSide::Long,
                 position_pair.0.as_ref().unwrap().liquidation_price,
             ))
@@ -480,10 +486,16 @@ pub async fn await_perp_handle(
                     .1
                     .as_ref()
                     .unwrap()
+                    .position_header
                     .position_address
                     .to_string(),
                 position_pair.1.as_ref().unwrap().index,
-                position_pair.1.as_ref().unwrap().synthetic_token,
+                position_pair
+                    .1
+                    .as_ref()
+                    .unwrap()
+                    .position_header
+                    .synthetic_token,
                 position_pair.1.as_ref().unwrap().order_side == OrderSide::Long,
                 position_pair.1.as_ref().unwrap().liquidation_price,
             ))

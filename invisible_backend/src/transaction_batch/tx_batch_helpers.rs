@@ -24,7 +24,7 @@ use super::tx_batch_structs::{FundingInfo, GlobalConfig, GlobalDexState};
 // * HELPERS * //
 
 /// Initialize a map with the default values for all tokens
-pub fn _init_empty_tokens_map<T>(map: &mut HashMap<u64, T>)
+pub fn _init_empty_tokens_map<T>(map: &mut HashMap<u32, T>)
 where
     T: Default,
 {
@@ -335,11 +335,11 @@ pub fn _per_minute_funding_update_inner(
 /// # Returns
 /// * `HashMap<u64, i64>` - The funding rates for each token
 pub fn _calculate_funding_rates(
-    running_funding_tick_sums: &mut HashMap<u64, i64>,
-) -> HashMap<u64, i64> {
+    running_funding_tick_sums: &mut HashMap<u32, i64>,
+) -> HashMap<u32, i64> {
     // Should do once every 8 hours (480 minutes)
 
-    let mut funding_rates: HashMap<u64, i64> = HashMap::new();
+    let mut funding_rates: HashMap<u32, i64> = HashMap::new();
 
     for t in TOKENS {
         let twap_sum = running_funding_tick_sums.remove(&t).unwrap_or(0);
@@ -357,9 +357,9 @@ pub fn _calculate_funding_rates(
 
 /// Builds the funding info struct
 pub fn get_funding_info(
-    min_funding_idxs: &Arc<Mutex<HashMap<u64, u32>>>,
-    funding_rates: &HashMap<u64, Vec<i64>>,
-    funding_prices: &HashMap<u64, Vec<u64>>,
+    min_funding_idxs: &Arc<Mutex<HashMap<u32, u32>>>,
+    funding_rates: &HashMap<u32, Vec<i64>>,
+    funding_prices: &HashMap<u32, Vec<u64>>,
 ) -> FundingInfo {
     let min_funding_idxs = min_funding_idxs.lock().clone();
     FundingInfo::new(funding_rates, funding_prices, &min_funding_idxs)

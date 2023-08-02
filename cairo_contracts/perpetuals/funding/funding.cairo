@@ -34,8 +34,8 @@ func apply_funding{range_check_ptr, funding_info: FundingInfo*, global_config: G
 ) -> (new_margin: felt) {
     alloc_locals;
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals - 6;
     let (multiplier: felt) = pow(10, decimal_conversion);
@@ -46,7 +46,7 @@ func apply_funding{range_check_ptr, funding_info: FundingInfo*, global_config: G
         applicable_funding_prices_len: felt,
         applicable_funding_prices: felt*,
     ) = get_applicable_funding_arrays(
-        position.synthetic_token, position.last_funding_idx, new_funding_idx
+        position.position_header.synthetic_token, position.last_funding_idx, new_funding_idx
     );
 
     let (margin_after_funding: felt) = get_margin_after_funding(

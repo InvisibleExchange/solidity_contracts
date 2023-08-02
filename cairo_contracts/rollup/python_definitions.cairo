@@ -70,20 +70,22 @@ func python_define_utils() {
 
         # * PERPETUAL POSITION =======================================================
         PERP_POSITION_SIZE = ids.PerpPosition.SIZE
+        POSITION_HEADER_OFFSET = ids.PerpPosition.position_header
         PERP_POSITION_ORDER_SIDE_OFFSET = ids.PerpPosition.order_side
-        PERP_POSITION_SYNTHETIC_TOKEN_OFFSET = ids.PerpPosition.synthetic_token
-        PERP_POSITION_COLLATERAL_TOKEN_OFFSET = ids.PerpPosition.collateral_token
         PERP_POSITION_POSITION_SIZE_OFFSET = ids.PerpPosition.position_size
         PERP_POSITION_MARGIN_OFFSET = ids.PerpPosition.margin
         PERP_POSITION_ENTRY_PRICE_OFFSET = ids.PerpPosition.entry_price
         PERP_POSITION_LIQUIDATION_PRICE_OFFSET = ids.PerpPosition.liquidation_price
         PERP_POSITION_BANKRUPTCY_PRICE_OFFSET = ids.PerpPosition.bankruptcy_price
-        PERP_POSITION_ADDRESS_OFFSET = ids.PerpPosition.position_address
         PERP_POSITION_LAST_FUNDING_IDX_OFFSET = ids.PerpPosition.last_funding_idx
         PERP_POSITION_INDEX_OFFSET = ids.PerpPosition.index
         PERP_POSITION_HASH_OFFSET = ids.PerpPosition.hash
-        PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET = ids.PerpPosition.allow_partial_liquidations
 
+        # Position Header
+        POSITION_HEADER_SIZE = ids.PositionHeader.SIZE
+        HEADER_SYNTHETIC_TOKEN_OFFSET = ids.PositionHeader.synthetic_token
+        HEADER_POSITION_ADDRESS_OFFSET = ids.PositionHeader.position_address
+        HEADER_PARTIAL_LIQUIDATIONS_OFFSET = ids.PositionHeader.allow_partial_liquidations
 
         # * ORDER TAB ================================================================
         ORDER_TAB_SIZE = ids.OrderTab.SIZE
@@ -93,9 +95,8 @@ func python_define_utils() {
         ORDER_TAB_QUOTE_AMOUNT_OFFSET = ids.OrderTab.quote_amount
         ORDER_TAB_HASH_OFFSET = ids.OrderTab.hash
 
-        # * TAB HEADER ================================================================
+        # * Tab Header 
         TAB_HEADER_SIZE = ids.TabHeader.SIZE
-        TAB_HEADER_EXPIRATION_TIMESTAMP_OFFSET = ids.TabHeader.expiration_timestamp
         TAB_HEADER_IS_PERP_OFFSET = ids.TabHeader.is_perp
         TAB_HEADER_IS_SMART_CONTRACT_OFFSET = ids.TabHeader.is_smart_contract
         TAB_HEADER_BASE_TOKEN_OFFSET = ids.TabHeader.base_token
@@ -137,6 +138,37 @@ func python_define_utils() {
 
 
         # // * FUNCTIONS * //
+        def store_output_position(position_address, index):
+            header_address = position_address + POSITION_HEADER_OFFSET
+            output_positions[index] = {
+                "order_side": memory[position_address + PERP_POSITION_ORDER_SIDE_OFFSET],
+                "position_size": memory[position_address + PERP_POSITION_POSITION_SIZE_OFFSET],
+                "margin": memory[position_address + PERP_POSITION_MARGIN_OFFSET],
+                "entry_price": memory[position_address + PERP_POSITION_ENTRY_PRICE_OFFSET],
+                "liquidation_price": memory[position_address + PERP_POSITION_LIQUIDATION_PRICE_OFFSET],
+                "bankruptcy_price": memory[position_address + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET],
+                "last_funding_idx": memory[position_address + PERP_POSITION_LAST_FUNDING_IDX_OFFSET],
+                "index": memory[position_address + PERP_POSITION_INDEX_OFFSET],
+                "hash": memory[position_address + PERP_POSITION_HASH_OFFSET],
+                "synthetic_token": memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET],
+                "position_address": memory[header_address + HEADER_POSITION_ADDRESS_OFFSET],
+                "allow_partial_liquidations": memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET],
+            }
+
+        def store_output_order_tab(header_address, index, base_amount, quote_amount, new_updated_hash):
+            output_tabs[index] = {
+                "index": index,
+                "is_perp": memory[header_address + TAB_HEADER_IS_PERP_OFFSET],
+                "is_smart_contract": memory[header_address + TAB_HEADER_IS_SMART_CONTRACT_OFFSET],
+                "base_token": memory[header_address + TAB_HEADER_BASE_TOKEN_OFFSET],
+                "quote_token": memory[header_address + TAB_HEADER_QUOTE_TOKEN_OFFSET],
+                "base_blinding": memory[header_address + TAB_HEADER_BASE_BLINDING_OFFSET],
+                "quote_blinding": memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET],
+                "pub_key": memory[header_address + TAB_HEADER_PUB_KEY_OFFSET],
+                "base_amount": base_amount,
+                "quote_amount": quote_amount,
+                "hash": new_updated_hash,
+            }
 
         def print_position(position_address):
             print("order_side: ", memory[position_address + 0])

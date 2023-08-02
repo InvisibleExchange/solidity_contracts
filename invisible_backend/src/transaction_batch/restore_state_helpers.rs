@@ -662,7 +662,7 @@ pub fn rebuild_swap_note(transaction: &Map<String, Value>, is_a: bool) -> Note {
     return Note::new(
         swap_idx,
         address,
-        token_received,
+        token_received as u32,
         spent_amount_y - fee_taken_x,
         dest_received_blinding,
     );
@@ -765,7 +765,7 @@ pub fn restore_partial_fill_refund_note(
             )
             .unwrap(),
         ),
-        order.get("token_spent").unwrap().as_u64().unwrap(),
+        order.get("token_spent").unwrap().as_u64().unwrap() as u32,
         new_partial_refund_amount,
         BigUint::from_str(note0.get("blinding").unwrap().as_str().unwrap()).unwrap(),
     ));
@@ -958,7 +958,7 @@ fn rebuild_return_collateral_note(transaction: &Map<String, Value>) -> Note {
     )
     .unwrap();
 
-    Note::new(index, addr, token, amount, blinding)
+    Note::new(index, addr, token as u32, amount, blinding)
 }
 
 // * SPLIT NOTES RESTORE FUNCTIONS ================================================================================

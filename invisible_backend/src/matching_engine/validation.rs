@@ -15,16 +15,16 @@ const ERR_BAD_SEQ_ID: &str = "order ID out of range";
 /* Validators */
 
 pub struct OrderRequestValidator {
-    orderbook_order_asset: u64,
-    orderbook_price_asset: u64,
+    orderbook_order_asset: u32,
+    orderbook_price_asset: u32,
     min_sequence_id: u64,
     max_sequence_id: u64,
 }
 
 impl OrderRequestValidator {
     pub fn new(
-        orderbook_order_asset: u64,
-        orderbook_price_asset: u64,
+        orderbook_order_asset: u32,
+        orderbook_price_asset: u32,
         min_sequence_id: u64,
         max_sequence_id: u64,
     ) -> Self {
@@ -69,8 +69,8 @@ impl OrderRequestValidator {
 
     fn validate_order(
         &self,
-        order_asset: u64,
-        price_asset: u64,
+        order_asset: u32,
+        price_asset: u32,
         _qty: u64,
         order: &Order,
         signature: &Signature,
@@ -218,9 +218,10 @@ impl OrderRequestValidator {
                     PositionEffectType::Modify => {
                         if let Some(pos) = &perp_order.position {
                             // ? Verify order signature
-                            if let Err(_) = perp_order
-                                .verify_order_signature(signature, Some(&pos.position_address))
-                            {
+                            if let Err(_) = perp_order.verify_order_signature(
+                                signature,
+                                Some(&pos.position_header.position_address),
+                            ) {
                                 return Err("Invalid signature");
                             }
                         } else {
@@ -235,7 +236,12 @@ impl OrderRequestValidator {
                         }
 
                         // ? Check that order token matches synthetic token
-                        if perp_order.position.as_ref().unwrap().synthetic_token
+                        if perp_order
+                            .position
+                            .as_ref()
+                            .unwrap()
+                            .position_header
+                            .synthetic_token
                             != perp_order.synthetic_token
                         {
                             return Err("Position and order should have same synthetic token");
@@ -244,9 +250,10 @@ impl OrderRequestValidator {
                     PositionEffectType::Close => {
                         if let Some(pos) = &perp_order.position {
                             // ? Verify order signature
-                            if let Err(_) = perp_order
-                                .verify_order_signature(signature, Some(&pos.position_address))
-                            {
+                            if let Err(_) = perp_order.verify_order_signature(
+                                signature,
+                                Some(&pos.position_header.position_address),
+                            ) {
                                 return Err("Invalid signature");
                             }
                         } else {
@@ -261,7 +268,12 @@ impl OrderRequestValidator {
                         }
 
                         // ? Check that order token matches synthetic token
-                        if perp_order.position.as_ref().unwrap().synthetic_token
+                        if perp_order
+                            .position
+                            .as_ref()
+                            .unwrap()
+                            .position_header
+                            .synthetic_token
                             != perp_order.synthetic_token
                         {
                             return Err("Position and order should have same synthetic token");

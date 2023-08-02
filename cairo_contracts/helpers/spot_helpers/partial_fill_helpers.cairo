@@ -14,7 +14,7 @@ from invisible_swaps.order.invisible_order import Invisibl3Order
 
 from helpers.utils import Note, construct_new_note, sum_notes, hash_note, validate_fee_taken
 
-func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
+func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
     order: Invisibl3Order, address: felt, blinding: felt, unspent_amount: felt, prev_hash: felt
 ) {
     //
@@ -30,17 +30,20 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*}(
 
     let note_dict = note_dict + DictAccess.SIZE;
 
-    // write_new_note_to_output(pfr_note);
-    %{
-        output_notes[ids.pfr_note.index] = {
-               "address": {"x": ids.pfr_note.address.x, "y": ids.pfr_note.address.y},
-               "hash": ids.pfr_note.hash,
-               "index": ids.pfr_note.index,
-               "blinding": ids.pfr_note.blinding_factor,
-               "token": ids.pfr_note.token,
-               "amount": ids.pfr_note.amount,
-           }
-    %}
+    // ? store to an array used for program outputs
+    assert note_updates[0] = pfr_note;
+    note_updates = &note_updates[1];
+
+    // %{
+    //     output_notes[ids.pfr_note.index] = {
+    //            "address": {"x": ids.pfr_note.address.x, "y": ids.pfr_note.address.y},
+    //            "hash": ids.pfr_note.hash,
+    //            "index": ids.pfr_note.index,
+    //            "blinding": ids.pfr_note.blinding_factor,
+    //            "token": ids.pfr_note.token,
+    //            "amount": ids.pfr_note.amount,
+    //        }
+    // %}
 
     return ();
 }

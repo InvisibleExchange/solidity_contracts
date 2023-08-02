@@ -63,11 +63,10 @@ impl FirebaseNoteObject {
 pub struct OrderTabObject {
     pub index: u32,
     // header
-    pub expiration_timestamp: u64,
     pub is_perp: bool,
     pub is_smart_contract: bool,
-    pub base_token: u64,
-    pub quote_token: u64,
+    pub base_token: u32,
+    pub quote_token: u32,
     pub pub_key: String,
     //
     pub base_commitment: String,
@@ -102,7 +101,6 @@ impl OrderTabObject {
 
         return OrderTabObject {
             index: order_tab.tab_idx,
-            expiration_timestamp: order_tab.tab_header.expiration_timestamp,
             is_perp: order_tab.tab_header.is_perp,
             is_smart_contract: order_tab.tab_header.is_smart_contract,
             base_token: order_tab.tab_header.base_token,
@@ -301,7 +299,7 @@ fn store_new_position(
     // ? Store the position in the database
     let write_path = format!(
         "positions/{}/indexes",
-        position.position_address.to_string(),
+        position.position_header.position_address.to_string(),
     );
 
     let _res = documents::write(
@@ -323,7 +321,9 @@ fn store_new_position(
     // ? Store the position's liquidation price in the database
     let write_path = format!(
         "{}",
-        position.position_address.to_string() + "-" + position.index.to_string().as_str()
+        position.position_header.position_address.to_string()
+            + "-"
+            + position.index.to_string().as_str()
     );
 
     let _res = documents::write(
@@ -332,7 +332,7 @@ fn store_new_position(
         Some(write_path),
         &json!({
             "liquidation_price": &position.liquidation_price,
-            "synthetic_token": &position.synthetic_token,
+            "synthetic_token": &position.position_header. synthetic_token,
             "order_side": &position.order_side,
         }),
         documents::WriteOptions::default(),

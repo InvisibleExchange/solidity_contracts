@@ -19,8 +19,8 @@ use crate::utils::notes::Note;
 pub struct LimitOrder {
     pub order_id: u64,
     pub expiration_timestamp: u64,
-    pub token_spent: u64,
-    pub token_received: u64,
+    pub token_spent: u32,
+    pub token_received: u32,
     pub amount_spent: u64,
     pub amount_received: u64,
     pub fee_limit: u64,
@@ -35,8 +35,8 @@ impl LimitOrder {
     pub fn new(
         order_id: u64,
         expiration_timestamp: u64,
-        token_spent: u64,
-        token_received: u64,
+        token_spent: u32,
+        token_received: u32,
         amount_spent: u64,
         amount_received: u64,
         fee_limit: u64,
@@ -129,8 +129,8 @@ impl LimitOrder {
 
 fn hash_order(
     expiration_timestamp: u64,
-    token_spent: u64,
-    token_received: u64,
+    token_spent: u32,
+    token_received: u32,
     amount_spent: u64,
     amount_received: u64,
     fee_limit: u64,
@@ -141,9 +141,9 @@ fn hash_order(
 
     let expiration_timestamp = BigUint::from_u64(expiration_timestamp).unwrap();
     hash_inputs.push(&expiration_timestamp);
-    let token_spent = BigUint::from_u64(token_spent).unwrap();
+    let token_spent = BigUint::from_u32(token_spent).unwrap();
     hash_inputs.push(&token_spent);
-    let token_received = BigUint::from_u64(token_received).unwrap();
+    let token_received = BigUint::from_u32(token_received).unwrap();
     hash_inputs.push(&token_received);
     let amount_spent = BigUint::from_u64(amount_spent).unwrap();
     hash_inputs.push(&amount_spent);
@@ -316,8 +316,8 @@ impl<'de> Deserialize<'de> for LimitOrder {
         struct Helper {
             order_id: u64,
             expiration_timestamp: u64,
-            token_spent: u64,
-            token_received: u64,
+            token_spent: u32,
+            token_received: u32,
             amount_spent: u64,
             amount_received: u64,
             fee_limit: u64,

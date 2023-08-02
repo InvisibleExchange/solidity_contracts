@@ -45,7 +45,7 @@ pub async fn start_periodic_updates(
         'outer: loop {
             interval.tick().await;
 
-            let mut impact_prices: HashMap<u64, (u64, u64)> = HashMap::new();
+            let mut impact_prices: HashMap<u32, (u64, u64)> = HashMap::new();
             for (_, b) in perp_order_books_.iter() {
                 let book = b.lock().await;
 

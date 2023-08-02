@@ -11,7 +11,7 @@ use self::{
         submit_limit_order_inner, submit_liquidation_order_inner, submit_perpetual_order_inner,
     },
     order_interactions::{amend_order_inner, cancel_order_inner},
-    order_tabs::{close_order_tab_inner, modify_order_tab_inner, open_order_tab_inner},
+    order_tabs::{close_order_tab_inner, open_order_tab_inner},
     queries::{
         get_funding_info_inner, get_liquidity_inner, get_orders_inner, get_state_info_inner,
     },
@@ -27,10 +27,7 @@ use super::grpc::engine_proto::{
 };
 use super::grpc::{GrpcMessage, GrpcTxResponse};
 use super::{
-    grpc::engine_proto::{
-        engine_server::Engine, CloseOrderTabRes, ModifyOrderTabReq, ModifyOrderTabRes,
-        OpenOrderTabRes,
-    },
+    grpc::engine_proto::{engine_server::Engine, CloseOrderTabRes, OpenOrderTabRes},
     server_helpers::WsConnectionsMap,
 };
 use crate::perpetual::perp_helpers::perp_rollback::PerpRollbackInfo;
@@ -305,20 +302,20 @@ impl Engine for EngineService {
     // * ===================================================================================================================================
     //
 
-    async fn modify_order_tab(
-        &self,
-        req: Request<ModifyOrderTabReq>,
-    ) -> Result<Response<ModifyOrderTabRes>, Status> {
-        return modify_order_tab_inner(
-            &self.mpsc_tx,
-            &self.main_storage,
-            &self.swap_output_json,
-            &self.semaphore,
-            &self.is_paused,
-            req,
-        )
-        .await;
-    }
+    // async fn modify_order_tab(
+    //     &self,
+    //     req: Request<ModifyOrderTabReq>,
+    // ) -> Result<Response<ModifyOrderTabRes>, Status> {
+    //     return modify_order_tab_inner(
+    //         &self.mpsc_tx,
+    //         &self.main_storage,
+    //         &self.swap_output_json,
+    //         &self.semaphore,
+    //         &self.is_paused,
+    //         req,
+    //     )
+    //     .await;
+    // }
 
     //
     // * ===================================================================================================================================

@@ -15,7 +15,7 @@ use crate::utils::crypto_utils::{pedersen, pedersen_on_vec, verify, EcPoint, Sig
 pub struct LiquidationOrder {
     pub position: PerpPosition,
     pub order_side: OrderSide,
-    pub synthetic_token: u64,
+    pub synthetic_token: u32,
     pub synthetic_amount: u64,
     pub collateral_amount: u64,
     // You need to open a new position to liquidate the previous one
@@ -28,7 +28,7 @@ impl LiquidationOrder {
     pub fn new(
         position: PerpPosition,
         order_side: OrderSide,
-        synthetic_token: u64,
+        synthetic_token: u32,
         synthetic_amount: u64,
         collateral_amount: u64,
         open_order_fields: OpenOrderFields,
@@ -94,7 +94,10 @@ impl Serialize for LiquidationOrder {
     {
         let mut note = serializer.serialize_struct("PerpOrder", 13)?;
 
-        note.serialize_field("pos_addr", &self.position.position_address.to_string())?;
+        note.serialize_field(
+            "pos_addr",
+            &self.position.position_header.position_address.to_string(),
+        )?;
         note.serialize_field("order_side", &self.order_side)?;
         note.serialize_field("synthetic_token", &self.synthetic_token)?;
         note.serialize_field("synthetic_amount", &self.synthetic_amount)?;
@@ -115,7 +118,7 @@ impl Serialize for LiquidationOrder {
 
 fn hash_order(
     order_side: &OrderSide,
-    synthetic_token: u64,
+    synthetic_token: u32,
     synthetic_amount: u64,
     collateral_amount: u64,
     position: &PerpPosition,
@@ -123,7 +126,7 @@ fn hash_order(
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    let pos_addr_string = &position.position_address;
+    let pos_addr_string = &position.position_header.position_address;
     hash_inputs.push(pos_addr_string);
 
     let order_side: BigUint = if *order_side == OrderSide::Long {
@@ -133,7 +136,7 @@ fn hash_order(
     };
     hash_inputs.push(&order_side);
 
-    let synthetic_token = BigUint::from_u64(synthetic_token).unwrap();
+    let synthetic_token = BigUint::from_u32(synthetic_token).unwrap();
     hash_inputs.push(&synthetic_token);
     let synthetic_amount = BigUint::from_u64(synthetic_amount).unwrap();
     hash_inputs.push(&synthetic_amount);

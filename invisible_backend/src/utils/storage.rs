@@ -126,9 +126,9 @@ impl MainStorage {
 
     pub fn store_price_data(
         &self,
-        latest_index_price: &HashMap<u64, u64>,
-        min_index_price_data: &HashMap<u64, (u64, OracleUpdate)>,
-        max_index_price_data: &HashMap<u64, (u64, OracleUpdate)>,
+        latest_index_price: &HashMap<u32, u64>,
+        min_index_price_data: &HashMap<u32, (u64, OracleUpdate)>,
+        max_index_price_data: &HashMap<u32, (u64, OracleUpdate)>,
     ) {
         self.price_db
             .insert(
@@ -153,9 +153,9 @@ impl MainStorage {
     pub fn read_price_data(
         &self,
     ) -> Option<(
-        HashMap<u64, u64>,
-        HashMap<u64, (u64, OracleUpdate)>,
-        HashMap<u64, (u64, OracleUpdate)>,
+        HashMap<u32, u64>,
+        HashMap<u32, (u64, OracleUpdate)>,
+        HashMap<u32, (u64, OracleUpdate)>,
     )> {
         let latest_index_price = self.price_db.get("latest_index_price").unwrap();
         if let None = latest_index_price {
@@ -165,11 +165,11 @@ impl MainStorage {
         let min_index_price_data = self.price_db.get("min_index_price_data").unwrap().unwrap();
         let max_index_price_data = self.price_db.get("max_index_price_data").unwrap().unwrap();
 
-        let latest_index_price: HashMap<u64, u64> =
+        let latest_index_price: HashMap<u32, u64> =
             serde_json::from_slice(&latest_index_price.unwrap().to_vec()).unwrap();
-        let min_index_price_data: HashMap<u64, (u64, OracleUpdate)> =
+        let min_index_price_data: HashMap<u32, (u64, OracleUpdate)> =
             serde_json::from_slice(&min_index_price_data.to_vec()).unwrap();
-        let max_index_price_data: HashMap<u64, (u64, OracleUpdate)> =
+        let max_index_price_data: HashMap<u32, (u64, OracleUpdate)> =
             serde_json::from_slice(&max_index_price_data.to_vec()).unwrap();
 
         Some((
@@ -187,10 +187,10 @@ impl MainStorage {
     // pub min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
     pub fn store_funding_info(
         &self,
-        funding_rates: &HashMap<u64, Vec<i64>>,
-        funding_prices: &HashMap<u64, Vec<u64>>,
+        funding_rates: &HashMap<u32, Vec<i64>>,
+        funding_prices: &HashMap<u32, Vec<u64>>,
         current_funding_idx: &u32,
-        min_funding_idx: &HashMap<u64, u32>,
+        min_funding_idx: &HashMap<u32, u32>,
     ) {
         self.funding_db
             .insert("funding_rates", serde_json::to_vec(&funding_rates).unwrap())
@@ -220,10 +220,10 @@ impl MainStorage {
         &self,
     ) -> std::result::Result<
         (
-            HashMap<u64, Vec<i64>>,
-            HashMap<u64, Vec<u64>>,
+            HashMap<u32, Vec<i64>>,
+            HashMap<u32, Vec<u64>>,
             u32,
-            HashMap<u64, u32>,
+            HashMap<u32, u32>,
         ),
         String,
     > {
@@ -248,13 +248,13 @@ impl MainStorage {
             .unwrap()
             .ok_or("min_funding_idx not found in storage")?;
 
-        let funding_rates: HashMap<u64, Vec<i64>> =
+        let funding_rates: HashMap<u32, Vec<i64>> =
             serde_json::from_slice(&funding_rates.to_vec()).unwrap();
-        let funding_prices: HashMap<u64, Vec<u64>> =
+        let funding_prices: HashMap<u32, Vec<u64>> =
             serde_json::from_slice(&funding_prices.to_vec()).unwrap();
         let current_funding_idx: u32 =
             serde_json::from_slice(&current_funding_idx.to_vec()).unwrap();
-        let min_funding_idx: HashMap<u64, u32> =
+        let min_funding_idx: HashMap<u32, u32> =
             serde_json::from_slice(&min_funding_idx.to_vec()).unwrap();
 
         Ok((

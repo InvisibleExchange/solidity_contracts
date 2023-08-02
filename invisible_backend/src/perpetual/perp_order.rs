@@ -19,7 +19,7 @@ pub struct PerpOrder {
     pub position: Option<PerpPosition>,
     pub position_effect_type: PositionEffectType,
     pub order_side: OrderSide,
-    pub synthetic_token: u64,
+    pub synthetic_token: u32,
     pub synthetic_amount: u64,
     pub collateral_amount: u64,
     pub fee_limit: u64,
@@ -36,7 +36,7 @@ impl PerpOrder {
         order_id: u64,
         expiration_timestamp: u64,
         order_side: OrderSide,
-        synthetic_token: u64,
+        synthetic_token: u32,
         synthetic_amount: u64,
         collateral_amount: u64,
         fee_limit: u64,
@@ -80,7 +80,7 @@ impl PerpOrder {
         expiration_timestamp: u64,
         position: PerpPosition,
         order_side: OrderSide,
-        synthetic_token: u64,
+        synthetic_token: u32,
         synthetic_amount: u64,
         collateral_amount: u64,
         fee_limit: u64,
@@ -121,7 +121,7 @@ impl PerpOrder {
         expiration_timestamp: u64,
         position: PerpPosition,
         order_side: OrderSide,
-        synthetic_token: u64,
+        synthetic_token: u32,
         synthetic_amount: u64,
         collateral_amount: u64,
         fee_limit: u64,
@@ -253,7 +253,12 @@ impl Serialize for PerpOrder {
                 .position_address
                 .to_string()
         } else {
-            self.position.as_ref().unwrap().position_address.to_string()
+            self.position
+                .as_ref()
+                .unwrap()
+                .position_header
+                .position_address
+                .to_string()
         };
         note.serialize_field("pos_addr", &pos_addr_string)?;
         note.serialize_field("position_effect_type", &self.position_effect_type)?;
@@ -279,7 +284,7 @@ impl Serialize for PerpOrder {
 #[derive(Debug, Clone)]
 pub struct OpenOrderFields {
     pub initial_margin: u64,
-    pub collateral_token: u64,
+    pub collateral_token: u32,
     pub notes_in: Vec<Note>,
     pub refund_note: Option<Note>,
     pub position_address: BigUint,
@@ -313,7 +318,7 @@ impl OpenOrderFields {
         let initial_margin = BigUint::from_u64(self.initial_margin).unwrap();
         hash_inputs.push(&initial_margin);
 
-        let collateral_token = BigUint::from_u64(self.collateral_token).unwrap();
+        let collateral_token = BigUint::from_u32(self.collateral_token).unwrap();
         hash_inputs.push(&collateral_token);
 
         let addr_x = &self.position_address;
@@ -386,7 +391,7 @@ fn hash_order(
     expiration_timestamp: u64,
     position_effect_type: &PositionEffectType,
     order_side: &OrderSide,
-    synthetic_token: u64,
+    synthetic_token: u32,
     synthetic_amount: u64,
     collateral_amount: u64,
     fee_limit: u64,
@@ -401,7 +406,7 @@ fn hash_order(
     let pos_addr_string = if *position_effect_type == PositionEffectType::Open {
         &open_order_fields.as_ref().unwrap().position_address
     } else {
-        &position.as_ref().unwrap().position_address
+        &position.as_ref().unwrap().position_header.position_address
     };
     hash_inputs.push(pos_addr_string);
 
@@ -420,7 +425,7 @@ fn hash_order(
     };
     hash_inputs.push(&order_side);
 
-    let synthetic_token = BigUint::from_u64(synthetic_token).unwrap();
+    let synthetic_token = BigUint::from_u32(synthetic_token).unwrap();
     hash_inputs.push(&synthetic_token);
     let synthetic_amount = BigUint::from_u64(synthetic_amount).unwrap();
     hash_inputs.push(&synthetic_amount);

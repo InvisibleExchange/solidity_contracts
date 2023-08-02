@@ -120,8 +120,8 @@ pub fn store_spot_fill(
     price: u64,
     user_id_a: u64,
     user_id_b: u64,
-    base_token: u64,
-    quote_token: u64,
+    base_token: u32,
+    quote_token: u32,
     is_buy: bool,
     timestamp: u64,
 ) {
@@ -235,8 +235,7 @@ impl DbNoteUpdater<'_> {
         let mut added_notes = HashMap::new();
 
         for note in self.add_notes.iter() {
-            let handle =
-                start_add_note_thread(note.clone().clone(), self.session, self.backup_storage);
+            let handle = start_add_note_thread((*note).clone(), self.session, self.backup_storage);
             _handles.push(handle);
             added_notes.insert((note.index, note.address.x.to_string()), false);
         }

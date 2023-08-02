@@ -36,7 +36,7 @@ pub static OBSERVERS: [&'static str; 4] = [
 /// This is received from the oracle containing the new prices and signatures to update the index price
 #[derive(Clone, Default, Debug)]
 pub struct OracleUpdate {
-    pub token: u64,                 // Token id
+    pub token: u32,                 // Token id
     pub timestamp: u32,             // Timestamp of the update
     pub observer_ids: Vec<u32>, // indexes of observers that signed the update (for verifying against pub keys)
     pub prices: Vec<u64>,       // price observations made by the observers
@@ -156,7 +156,7 @@ impl<'de> Deserialize<'de> for OracleUpdate {
 
         #[derive(DeserializeTrait, Debug)]
         struct Helper {
-            token: u64,
+            token: u32,
             timestamp: u32,
             observer_idxs: Vec<u32>,
             prices: Vec<u64>,
@@ -205,9 +205,9 @@ pub struct FundingInfo {
 
 impl FundingInfo {
     pub fn new(
-        __funding_rates__: &HashMap<u64, Vec<i64>>,
-        __funding_prices__: &HashMap<u64, Vec<u64>>,
-        min_funding_idxs: &HashMap<u64, u32>,
+        __funding_rates__: &HashMap<u32, Vec<i64>>,
+        __funding_prices__: &HashMap<u32, Vec<u64>>,
+        min_funding_idxs: &HashMap<u32, u32>,
     ) -> FundingInfo {
         let mut funding_rates: Vec<i64> = Vec::new();
         let mut funding_prices: Vec<u64> = Vec::new();
@@ -226,7 +226,7 @@ impl FundingInfo {
             let prices = __funding_prices__.get(token).unwrap();
             let relevant_batch_fprices = prices[min_funding_idxs[token] as usize..].to_vec();
 
-            funding_prices.push(*token);
+            funding_prices.push(*token as u64);
             for price in relevant_batch_fprices {
                 funding_prices.push(price);
             }
@@ -253,11 +253,11 @@ pub struct SwapFundingInfo {
 
 impl SwapFundingInfo {
     pub fn new(
-        funding_rates: &HashMap<u64, Vec<i64>>,
-        funding_prices: &HashMap<u64, Vec<u64>>,
+        funding_rates: &HashMap<u32, Vec<i64>>,
+        funding_prices: &HashMap<u32, Vec<u64>>,
         current_funding_idx: u32,
-        funding_idx_shift: &HashMap<u64, u32>,
-        synthetic_token: u64,
+        funding_idx_shift: &HashMap<u32, u32>,
+        synthetic_token: u32,
         position_a: &Option<PerpPosition>,
         position_b: &Option<PerpPosition>,
     ) -> SwapFundingInfo {
@@ -326,7 +326,7 @@ impl SwapFundingInfo {
 /// The information about the min and max prices for each token this transaction batch. \
 /// This is constructed after each transaction batch finalization and used in the cairo program.
 pub struct PriceInfo<'a> {
-    pub token: u64,
+    pub token: u32,
     /// Price data for the min price this batch for each token
     pub min_index_price_data: &'a OracleUpdate,
     /// Price data for the max price this batch for each token
@@ -335,8 +335,8 @@ pub struct PriceInfo<'a> {
 
 /// Constructs the price info for the current batch
 pub fn get_price_info(
-    min_index_price_data: &HashMap<u64, (u64, OracleUpdate)>,
-    max_index_price_data: &HashMap<u64, (u64, OracleUpdate)>,
+    min_index_price_data: &HashMap<u32, (u64, OracleUpdate)>,
+    max_index_price_data: &HashMap<u32, (u64, OracleUpdate)>,
 ) -> Value {
     let mut price_info: Vec<PriceInfo> = Vec::new();
 
@@ -445,8 +445,8 @@ impl GlobalDexState {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalConfig {
-    pub assets: Vec<u64>,
-    pub collateral_token: u64,
+    pub assets: Vec<u32>,
+    pub collateral_token: u32,
     pub decimals_per_asset: Vec<u64>,
     pub price_decimals_per_asset: Vec<u64>,
     pub leverage_decimals: u8,

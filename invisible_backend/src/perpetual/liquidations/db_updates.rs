@@ -52,7 +52,11 @@ pub fn update_db_after_liquidation_swap(
         let handle = start_delete_position_thread(
             session,
             backup_storage,
-            liquidation_order.position.position_address.to_string(),
+            liquidation_order
+                .position
+                .position_header
+                .position_address
+                .to_string(),
             liquidation_order.position.index.to_string(),
         );
         position_handles.push(handle);

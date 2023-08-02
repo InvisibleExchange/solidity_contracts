@@ -16,6 +16,7 @@ from perpetuals.order.order_structs import (
     OpenOrderFields,
     CloseOrderFields,
     PerpPosition,
+    PositionHeader,
 )
 
 // * HASH VERIFICATION FUNCTIONS * #
@@ -64,16 +65,22 @@ func verify_close_order_hash{pedersen_ptr: HashBuiltin*}(
     return ();
 }
 
-func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
+func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition*) {
+    let header_hash = _hash_position_header(
+        &position.position_header.synthetic_token,
+        &position.position_header.allow_partial_liquidations,
+        &position.position_header.position_address,
+    );
+
+    assert header_hash = position.position_header.hash;
+
     let (position_hash: felt) = _hash_position_internal(
+        header_hash,
         position.order_side,
-        position.synthetic_token,
         position.position_size,
         position.entry_price,
         position.liquidation_price,
-        position.position_address,
         position.last_funding_idx,
-        position.allow_partial_liquidations,
     );
 
     assert position_hash = position.hash;
@@ -84,14 +91,32 @@ func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
 // * HASH FUNCTION HELPERS * #
 
 func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
+    header_hash: felt,
     order_side: felt,
-    synthetic_token: felt,
     position_size: felt,
     entry_price: felt,
     liquidation_price: felt,
-    position_address: felt,
     last_funding_idx: felt,
-    allow_partial_liquidations: felt,
+) -> (res: felt) {
+    alloc_locals;
+
+    let hash_ptr = pedersen_ptr;
+    with hash_ptr {
+        let (hash_state_ptr) = hash_init();
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, header_hash);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, order_side);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, position_size);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, entry_price);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, liquidation_price);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, last_funding_idx);
+        let (res) = hash_finalize(hash_state_ptr);
+        let pedersen_ptr = hash_ptr;
+        return (res=res);
+    }
+}
+
+func _hash_position_header{pedersen_ptr: HashBuiltin*}(
+    synthetic_token: felt, allow_partial_liquidations: felt, position_address: felt
 ) -> (res: felt) {
     alloc_locals;
 
@@ -100,13 +125,9 @@ func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, input_one);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, allow_partial_liquidations);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, synthetic_token);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, position_size);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, entry_price);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, liquidation_price);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, position_address);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, last_funding_idx);
         let (res) = hash_finalize(hash_state_ptr);
         let pedersen_ptr = hash_ptr;
         return (res=res);

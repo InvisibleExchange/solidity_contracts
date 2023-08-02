@@ -64,26 +64,35 @@ func main{
     // Define python hint functions and classes
     python_define_utils();
 
-    // * INITIALIZE DICTIONARIES ******************************************************
+    // * INITIALIZE DICTIONARIES ***********************************************
 
-    local note_dict: DictAccess*;  // Dictionary of updated notes (idx -> note)
+    local note_dict: DictAccess*;  // Dictionary of updated notes (idx -> note hash)
     local fee_tracker_dict: DictAccess*;  // Dictionary of fees collected (token -> fees collected)
-    local position_dict: DictAccess*;  // Dictionary of updated positions (idx -> position)
+    local position_dict: DictAccess*;  // Dictionary of updated positions (idx -> position hash)
+    local order_tab_dict: DictAccess*;  // Dictionary of updated order tabs (idx -> tab hash)
     local accumulated_deposit_hashes: DictAccess*;  // Dictionary of the accumulated deposit hashes (chain id -> hash)
     local accumulated_withdrawal_hashes: DictAccess*;  // Dictionary of the accumulated withdrawal hashes (chain id -> hash)
+
     %{
         ids.note_dict = segments.add()
         ids.fee_tracker_dict = segments.add()
         ids.position_dict = segments.add()
+        ids.order_tab_dict = segments.add()
         ids.accumulated_deposit_hashes = segments.add()
         ids.accumulated_withdrawal_hashes = segments.add()
     %}
     let note_dict_start = note_dict;
     let fee_tracker_dict_start = fee_tracker_dict;
     let position_dict_start = position_dict;
+    let order_tab_dict_start = order_tab_dict;
     let accumulated_deposit_hashes_start = accumulated_deposit_hashes;
     let accumulated_withdrawal_hashes_start = accumulated_withdrawal_hashes;
 
+    // ? Initialize state update arrays
+    let (local note_updates: Note*) = alloc();
+    let note_updates_start = note_updates;
+
+    // ? Initialize global config
     local global_config: GlobalConfig*;
     %{ ids.global_config = segments.add() %}
     init_global_config(global_config);
@@ -170,7 +179,7 @@ func main{
         print("batch execution time total: ", t2_end-t1_start)
     %}
 
-    // * Squash dictionaries =========================================================
+    // * Squash dictionaries =============================================================================
 
     local squashed_deposit_hashes_dict: DictAccess*;
     %{ ids.squashed_deposit_hashes_dict = segments.add() %}
@@ -211,14 +220,16 @@ func main{
     local squashed_position_dict_len = (squashed_position_dict_end - squashed_position_dict) /
         DictAccess.SIZE;
 
-    // local pos_dict_len = (position_dict - position_dict_start) / DictAccess.SIZE;
-    // %{
-    //     for i in range(ids.pos_dict_len):
-    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +0])
-    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +1])
-    //         print(memory[ids.position_dict_start.address_ + i*ids.DictAccess.SIZE +2])
-    //         # print("======")
-    // %}
+    // ------------------------------------------------------------------------------
+
+    local squashed_tab_dict: DictAccess*;
+    %{ ids.squashed_tab_dict = segments.add() %}
+    let (squashed_tab_dict_end) = squash_dict(
+        dict_accesses=order_tab_dict_start,
+        dict_accesses_end=order_tab_dict,
+        squashed_dict=squashed_tab_dict,
+    );
+    local squashed_tab_dict_len = (squashed_tab_dict_end - squashed_tab_dict) / DictAccess.SIZE;
 
     // * VERIFY MERKLE TREE UPDATES ******************************************************
 
@@ -237,18 +248,35 @@ func main{
 
     // * WRITE NEW NOTES AND POSITIONS TO THE PROGRAM OUTPUT ******************************
 
-    write_note_dict_to_output{
+    let note_updates_len = note_updates - note_updates_start;
+    %{ stored_indexes = {} %}
+    write_note_updates_to_output{
         pedersen_ptr=pedersen_ptr,
         bitwise_ptr=bitwise_ptr,
         note_output_ptr=note_output_ptr,
         zero_note_output_ptr=zero_note_output_ptr,
-    }(squashed_note_dict, squashed_note_dict_len);
+    }(note_updates_start, note_updates_len);
 
     write_position_dict_to_output{
         pedersen_ptr=pedersen_ptr,
         position_output_ptr=position_output_ptr,
         empty_position_output_ptr=empty_position_output_ptr,
     }(squashed_position_dict, squashed_position_dict_len);
+
+    write_order_tab_dict_to_output{
+        pedersen_ptr=pedersen_ptr,
+        order_tab_output_ptr=, // Todo
+        empty_order_tabs_output_ptr= , // todo
+    }(squashed_tab_dict, squashed_tab_dict_len);
+
+
+//     func write_order_tab_dict_to_output{
+//     pedersen_ptr: HashBuiltin*,
+//     order_tab_output_ptr: OrderTabOutput*,
+//     empty_order_tabs_output_ptr: ZeroOutput*,
+// }(order_tab_dict_start: DictAccess*, n_output_tabs: felt) {
+//     alloc_locals;
+
 
     write_accumulated_hashes_to_output{accumulated_hashes_ptr=accumulated_hashes}(
         squashed_deposit_hashes_dict,
@@ -291,6 +319,7 @@ func execute_transactions{
     note_dict: DictAccess*,
     fee_tracker_dict: DictAccess*,
     position_dict: DictAccess*,
+    order_tab_dict: DictAccess*,
     deposit_output_ptr: DepositTransactionOutput*,
     accumulated_deposit_hashes: DictAccess*,
     withdraw_output_ptr: WithdrawalTransactionOutput*,

@@ -53,7 +53,7 @@ func execute_margin_change{
 
     let is_increase: felt = is_le(0, margin_change);
     verify_margin_change_signature(
-        msg_hash, notes_in_len, notes_in, position.position_address, is_increase
+        msg_hash, notes_in_len, notes_in, position.position_header.position_address, is_increase
     );
 
     let (new_position: PerpPosition) = modify_margin(position, margin_change);
@@ -91,7 +91,11 @@ func execute_margin_change{
 }
 
 func update_state_after_increase{
-    pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: DictAccess*, position_dict: DictAccess*
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    note_updates: Note*,
 }(
     notes_in_len: felt,
     notes_in: Note*,
@@ -104,16 +108,22 @@ func update_state_after_increase{
     assert note_dict_ptr.prev_value = notes_in[0].hash;
     assert note_dict_ptr.new_value = refund_note.hash;
 
-    %{
-        output_notes[memory[ids.notes_in.address_ + INDEX_OFFSET]] = {
-            "address": {"x": ids.refund_note.address.x, "y": ids.refund_note.address.y},
-            "hash": ids.refund_note.hash,
-            "index": ids.refund_note.index,
-            "blinding": ids.refund_note.blinding_factor,
-            "token": ids.refund_note.token,
-            "amount": ids.refund_note.amount,
-        }
-    %}
+    // ? store to an array used for program outputs
+    if (refund_note.hash != 0) {
+        assert note_updates[0] = refund_note;
+        note_updates = &note_updates[1];
+    }
+
+    // %{
+    //     output_notes[memory[ids.notes_in.address_ + INDEX_OFFSET]] = {
+    //         "address": {"x": ids.refund_note.address.x, "y": ids.refund_note.address.y},
+    //         "hash": ids.refund_note.hash,
+    //         "index": ids.refund_note.index,
+    //         "blinding": ids.refund_note.blinding_factor,
+    //         "token": ids.refund_note.token,
+    //         "amount": ids.refund_note.amount,
+    //     }
+    // %}
 
     let note_dict = note_dict + DictAccess.SIZE;
 
@@ -125,29 +135,17 @@ func update_state_after_increase{
 
     let position_dict = position_dict + DictAccess.SIZE;
 
-    %{
-        output_positions[ids.position.index] = {
-            "order_side": ids.position.order_side,
-            "synthetic_token": ids.position.synthetic_token,
-            "collateral_token": ids.position.collateral_token,
-            "position_size": ids.position.position_size,
-            "margin": ids.position.margin,
-            "entry_price": ids.position.entry_price,
-            "liquidation_price": ids.position.liquidation_price,
-            "bankruptcy_price": ids.position.bankruptcy_price,
-            "position_address": ids.position.position_address,
-            "last_funding_idx": ids.position.last_funding_idx,
-            "index": ids.position.index,
-            "hash": ids.position.hash,
-            "allow_partial_liquidations": ids.position.allow_partial_liquidations,
-        }
-    %}
+    %{ store_output_position(ids.position.address_, ids.position.index) %}
 
     return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
 }
 
 func update_state_after_increase_inner{
-    pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: DictAccess*, position_dict: DictAccess*
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    note_updates: Note*,
 }(notes_in_len: felt, notes_in: Note*) {
     if (notes_in_len == 0) {
         return ();
@@ -158,29 +156,42 @@ func update_state_after_increase_inner{
     assert note_dict_ptr.prev_value = notes_in[0].hash;
     assert note_dict_ptr.new_value = 0;
 
+    // ? store to an array used for program outputs
+    let (zero_note) = get_zero_note(note_in[0].index);
+    assert note_updates[0] = zero_note;
+    note_updates = &note_updates[1];
+
     let note_dict = note_dict + DictAccess.SIZE;
 
     return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
 }
 
 func update_state_after_decrease{
-    pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: DictAccess*, position_dict: DictAccess*
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    note_dict: DictAccess*,
+    position_dict: DictAccess*,
+    note_updates: Note*,
 }(return_collateral_note: Note, position: PerpPosition, prev_position_hash: felt) {
     let note_dict_ptr = note_dict;
     assert note_dict_ptr.key = return_collateral_note.index;
     assert note_dict_ptr.prev_value = 0;
     assert note_dict_ptr.new_value = return_collateral_note.hash;
 
-    %{
-        output_notes[ids.return_collateral_note.index] = {
-            "address": {"x": ids.return_collateral_note.address.x, "y": ids.return_collateral_note.address.y},
-            "hash": ids.return_collateral_note.hash,
-            "index": ids.return_collateral_note.index,
-            "blinding": ids.return_collateral_note.blinding_factor,
-            "token": ids.return_collateral_note.token,
-            "amount": ids.return_collateral_note.amount,
-        }
-    %}
+    // ? store to an array used for program outputs
+    assert note_updates[0] = return_collateral_note;
+    note_updates = &note_updates[1];
+
+    // %{
+    //     output_notes[ids.return_collateral_note.index] = {
+    //         "address": {"x": ids.return_collateral_note.address.x, "y": ids.return_collateral_note.address.y},
+    //         "hash": ids.return_collateral_note.hash,
+    //         "index": ids.return_collateral_note.index,
+    //         "blinding": ids.return_collateral_note.blinding_factor,
+    //         "token": ids.return_collateral_note.token,
+    //         "amount": ids.return_collateral_note.amount,
+    //     }
+    // %}
 
     let note_dict = note_dict + DictAccess.SIZE;
 
@@ -192,23 +203,7 @@ func update_state_after_decrease{
 
     let position_dict = position_dict + DictAccess.SIZE;
 
-    %{
-        output_positions[ids.position.index] = {
-            "order_side": ids.position.order_side,
-            "synthetic_token": ids.position.synthetic_token,
-            "collateral_token": ids.position.collateral_token,
-            "position_size": ids.position.position_size,
-            "margin": ids.position.margin,
-            "entry_price": ids.position.entry_price,
-            "liquidation_price": ids.position.liquidation_price,
-            "bankruptcy_price": ids.position.bankruptcy_price,
-            "position_address": ids.position.position_address,
-            "last_funding_idx": ids.position.last_funding_idx,
-            "index": ids.position.index,
-            "hash": ids.position.hash,
-            "allow_partial_liquidations": ids.position.allow_partial_liquidations,
-        }
-    %}
+    %{ store_output_position(ids.position.address_, ids.position.index) %}
 
     return ();
 }

@@ -10,7 +10,7 @@ use crate::utils::crypto_utils::{pedersen, pedersen_on_vec, EcPoint};
 pub struct Note {
     pub index: u64,
     pub address: EcPoint,
-    pub token: u64,
+    pub token: u32,
     pub amount: u64,
     pub blinding: BigUint,
     pub hash: BigUint,
@@ -20,7 +20,7 @@ impl Note {
     pub fn new(
         index: u64,
         address: EcPoint, //address_pk
-        token: u64,
+        token: u32,
         amount: u64,
         blinding: BigUint,
     ) -> Note {
@@ -37,7 +37,7 @@ impl Note {
     }
 }
 
-fn hash_note(amount: u64, blinding: &BigUint, token: u64, address: &EcPoint) -> BigUint {
+fn hash_note(amount: u64, blinding: &BigUint, token: u32, address: &EcPoint) -> BigUint {
     if amount == 0 {
         return BigUint::from_i8(0).unwrap();
     }
@@ -45,7 +45,7 @@ fn hash_note(amount: u64, blinding: &BigUint, token: u64, address: &EcPoint) -> 
     let commitment = pedersen(&BigUint::from_u64(amount).unwrap(), blinding);
 
     let address_x = address.x.to_biguint().unwrap();
-    let token = BigUint::from_u64(token).unwrap();
+    let token = BigUint::from_u32(token).unwrap();
     let hash_input = vec![&address_x, &token, &commitment];
 
     let note_hash = pedersen_on_vec(&hash_input);
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for Note {
         struct Helper {
             index: u64,
             address: Addr,
-            token: u64,
+            token: u32,
             amount: u64,
             blinding: String,
             hash: String,

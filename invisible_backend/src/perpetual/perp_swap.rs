@@ -27,8 +27,8 @@ use super::perp_helpers::perp_swap_helpers::{consistency_checks, finalize_update
 use super::perp_helpers::perp_swap_outptut::{
     PerpSwapOutput, PerpSwapResponse, TxExecutionThreadOutput,
 };
-use super::PositionEffectType;
 use super::{perp_order::PerpOrder, perp_position::PerpPosition, OrderSide};
+use super::{PositionEffectType, VALID_COLLATERAL_TOKENS};
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
 use crate::transactions::transaction_helpers::swap_helpers::unblock_order;
 use crate::trees::superficial_tree::SuperficialTree;
@@ -97,7 +97,7 @@ impl PerpSwap {
         perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         //
         index_price: u64,
-        min_funding_idxs: Arc<Mutex<HashMap<u64, u32>>>,
+        min_funding_idxs: Arc<Mutex<HashMap<u32, u32>>>,
         swap_funding_info: SwapFundingInfo,
         //
         perp_rollback_safeguard: Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>,
@@ -541,11 +541,7 @@ impl PerpSwap {
                         &updated_note_hashes__,
                         idx,
                         execution_output_a.collateral_returned,
-                        execution_output_a
-                            .prev_position
-                            .as_ref()
-                            .unwrap()
-                            .collateral_token,
+                        VALID_COLLATERAL_TOKENS[0],
                         &self
                             .order_a
                             .close_order_fields
@@ -653,11 +649,7 @@ impl PerpSwap {
                         &updated_note_hashes__,
                         idx,
                         execution_output_b.collateral_returned,
-                        execution_output_b
-                            .prev_position
-                            .as_ref()
-                            .unwrap()
-                            .collateral_token,
+                        VALID_COLLATERAL_TOKENS[0],
                         &self
                             .order_b
                             .close_order_fields

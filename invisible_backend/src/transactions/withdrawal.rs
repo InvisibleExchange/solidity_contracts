@@ -31,7 +31,7 @@ use crate::utils::notes::Note;
 pub struct Withdrawal {
     pub transaction_type: String,
     pub withdrawal_chain_id: u32,
-    pub withdrawal_token: u64,
+    pub withdrawal_token: u32,
     pub withdrawal_amount: u64,
     pub stark_key: BigUint,
     pub notes_in: Vec<Note>,

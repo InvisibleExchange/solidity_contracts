@@ -154,19 +154,46 @@ pub fn open_order_tab(
         return Err(e.to_string());
     }
     let mut order_tab = order_tab.unwrap();
-    order_tab.base_amount = base_amount;
-    order_tab.quote_amount = quote_amount;
 
-    // ? Set the tab index
-    let mut tabs_state_tree = order_tabs_state_tree.lock();
-    let z_index = tabs_state_tree.first_zero_idx();
-    order_tab.tab_idx = z_index as u32;
-    drop(tabs_state_tree);
+    let prev_order_tab;
+    if open_order_tab_req.add_only {
+        // ? Verify that the order tab exists
+        let tab_state_tree_m = order_tabs_state_tree.lock();
+
+        let leaf_hash = tab_state_tree_m.get_leaf_by_index(order_tab.tab_idx as u64);
+        if leaf_hash != order_tab.hash {
+            return Err("order tab does not exist".to_string());
+        }
+        drop(tab_state_tree_m);
+
+        // ? Adding to an existing order tab
+        prev_order_tab = Some(order_tab.clone());
+
+        order_tab.base_amount += base_amount;
+        order_tab.quote_amount += quote_amount;
+
+        order_tab.update_hash();
+    } else {
+        // ? Opening new order tab
+        prev_order_tab = None;
+
+        order_tab.base_amount = base_amount;
+        order_tab.quote_amount = quote_amount;
+
+        // ? Set the tab index
+        let mut tabs_state_tree = order_tabs_state_tree.lock();
+        let z_index = tabs_state_tree.first_zero_idx();
+        order_tab.tab_idx = z_index as u32;
+        drop(tabs_state_tree);
+
+        order_tab.update_hash();
+    }
 
     // ? Verify the signature ---------------------------------------------------------------------
     let signature = Signature::try_from(open_order_tab_req.signature.unwrap_or_default())
         .map_err(|err| err.to_string())?;
     let valid = verfiy_open_order_sig(
+        &prev_order_tab,
         &order_tab,
         &base_refund_note,
         &quote_refund_note,
@@ -185,6 +212,8 @@ pub fn open_order_tab(
         &base_refund_note,
         &quote_notes_in,
         &quote_refund_note,
+        open_order_tab_req.add_only,
+        &prev_order_tab,
         &order_tab,
         &signature,
     );
@@ -222,25 +251,35 @@ pub fn open_order_tab(
 
 /// Verify the signature for the order tab hash
 pub fn verfiy_open_order_sig(
-    order_tab: &OrderTab,
+    prev_order_tab: &Option<OrderTab>,
+    new_order_tab: &OrderTab,
     base_refund_note: &Option<Note>,
     quote_refund_note: &Option<Note>,
     pub_key: &BigUint,
     signature: &Signature,
 ) -> bool {
-    // & header_hash = H({order_tab_hash, base_close_order_fields.hash, quote_close_order_fields.hash})
+    // & header_hash = H({prev_tab_hash, new_tab_hash, base_refund_note_hash, quote_refund_note_hash})
 
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    hash_inputs.push(&order_tab.hash);
-
     let z = BigUint::zero();
+    let prev_tab_hash = if prev_order_tab.is_some() {
+        &prev_order_tab.as_ref().unwrap().hash
+    } else {
+        &z
+    };
+    hash_inputs.push(prev_tab_hash);
+
+    let new_tab_hash = &new_order_tab.hash;
+    hash_inputs.push(new_tab_hash);
+
     let base_refund_note_hash = if base_refund_note.is_some() {
         &base_refund_note.as_ref().unwrap().hash
     } else {
         &z
     };
     hash_inputs.push(&base_refund_note_hash);
+    
     let quote_refund_note_hash = if quote_refund_note.is_some() {
         &quote_refund_note.as_ref().unwrap().hash
     } else {

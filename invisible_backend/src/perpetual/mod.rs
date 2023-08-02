@@ -34,8 +34,8 @@ pub const MAX_LEVERAGE: f64 = 15.0;
 // BTC - 12345
 // ETH - 54321
 // USDC - 55555
-pub static TOKENS: [u64; 2] = [12345, 54321];
-pub static VALID_COLLATERAL_TOKENS: [u64; 1] = [55555];
+pub static TOKENS: [u32; 2] = [12345, 54321];
+pub static VALID_COLLATERAL_TOKENS: [u32; 1] = [55555];
 
 pub static DECIMALS_PER_ASSET: phf::Map<&'static str, u8> = phf_map! {
 "12345" => 9, // BTC
@@ -100,7 +100,7 @@ pub fn calculate_funding() {
 }
 
 // * Price functions * // ====================================================================
-pub fn get_price(synthetic_token: u64, collateral_amount: u64, synthetic_amount: u64) -> u64 {
+pub fn get_price(synthetic_token: u32, collateral_amount: u64, synthetic_amount: u64) -> u64 {
     let synthetic_decimals: &u8 = DECIMALS_PER_ASSET
         .get(synthetic_token.to_string().as_str())
         .unwrap();
@@ -119,8 +119,8 @@ pub fn get_price(synthetic_token: u64, collateral_amount: u64, synthetic_amount:
 }
 
 pub fn get_cross_price(
-    base_token: u64,
-    quote_token: u64,
+    base_token: u32,
+    quote_token: u32,
     base_amount: u64,
     quote_amount: u64,
     round: Option<bool>,
@@ -160,7 +160,6 @@ pub fn get_cross_price(
 }
 
 pub fn round_price(price: f64, round: Option<bool>) -> f64 {
-
     if let Some(r) = round {
         if r {
             return (price * 100.0).ceil() / 100.0;
@@ -185,7 +184,7 @@ pub fn round_price(price: f64, round: Option<bool>) -> f64 {
     // }
 }
 
-pub fn scale_up_price(price: f64, token: u64) -> u64 {
+pub fn scale_up_price(price: f64, token: u32) -> u64 {
     let price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
         .get(token.to_string().as_str())
         .unwrap();
@@ -195,7 +194,7 @@ pub fn scale_up_price(price: f64, token: u64) -> u64 {
     return price as u64;
 }
 
-pub fn scale_down_price(price: u64, token: u64) -> f64 {
+pub fn scale_down_price(price: u64, token: u32) -> f64 {
     let price_decimals: &u8 = PRICE_DECIMALS_PER_ASSET
         .get(token.to_string().as_str())
         .unwrap();

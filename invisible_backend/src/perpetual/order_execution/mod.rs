@@ -23,9 +23,14 @@ pub fn verify_position_existence(
     let perpetual_state_tree = perpetual_state_tree__.lock();
 
     let partially_filled_positions_m = partially_filled_positions.lock();
-    if let Some((pos_, _)) =
-        partially_filled_positions_m.get(&position.as_ref().unwrap().position_address.to_string())
-    {
+    if let Some((pos_, _)) = partially_filled_positions_m.get(
+        &position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .position_address
+            .to_string(),
+    ) {
         // ? Verify the position hash is valid and exists in the state
         if pos_.hash != pos_.hash_position()
             || perpetual_state_tree.get_leaf_by_index(pos_.index as u64) != pos_.hash

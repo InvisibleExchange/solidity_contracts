@@ -32,7 +32,7 @@ use super::Transaction;
 pub struct Deposit {
     pub transaction_type: String,
     pub deposit_id: u64,
-    pub deposit_token: u64,
+    pub deposit_token: u32,
     pub deposit_amount: u64,
     pub stark_key: BigUint,
     pub notes: Vec<Note>,

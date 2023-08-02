@@ -128,8 +128,8 @@ pub async fn get_orders_inner(
             let price = wrapper.order.get_price(order_side, None);
             let qty_left = wrapper.qty_left;
             if let Order::Spot(limit_order) = &wrapper.order {
-                let base_asset: u64;
-                let quote_asset: u64;
+                let base_asset: u32;
+                let quote_asset: u32;
                 if order_side == OBOrderSide::Bid {
                     base_asset = limit_order.token_received;
                     quote_asset = limit_order.token_spent;
@@ -250,6 +250,7 @@ pub async fn get_orders_inner(
                         .position
                         .clone()
                         .unwrap()
+                        .position_header
                         .position_address
                         .to_string();
                 }

@@ -24,7 +24,7 @@ use crate::{
 pub fn refund_partial_fill(
     spend_amount_left: u64,
     note_info: &SpotNotesInfo,
-    token_spent: u64,
+    token_spent: u32,
     spent_amount_x: u64,
     idx: u64,
 ) -> Note {
@@ -47,7 +47,7 @@ pub fn construct_new_swap_note(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     is_first_fill: bool,
     note_info: &SpotNotesInfo,
-    token_received: u64,
+    token_received: u32,
     spent_amount_y: u64,
     fee_taken_x: u64,
 ) -> Note {

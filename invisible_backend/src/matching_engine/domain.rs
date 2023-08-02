@@ -89,7 +89,7 @@ impl Order {
         }
     }
 
-    pub fn get_order_and_price_assets(&self, side: OrderSide) -> (u64, u64) {
+    pub fn get_order_and_price_assets(&self, side: OrderSide) -> (u32, u32) {
         // Returns (order asset, price asset)
         match self {
             Order::Spot(ord) => match side {

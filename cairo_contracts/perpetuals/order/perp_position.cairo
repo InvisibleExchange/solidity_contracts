@@ -17,7 +17,7 @@ from rollup.global_config import token_decimals, price_decimals, GlobalConfig
 
 from perpetuals.order.order_structs import PerpPosition
 
-from perpetuals.order.order_hash import _hash_position_internal
+from perpetuals.order.order_hash import _hash_position_internal, _hash_position_header
 
 from perpetuals.prices.prices import PriceRange, validate_price_in_range
 from perpetuals.funding.funding import FundingInfo, apply_funding
@@ -62,21 +62,20 @@ func construct_new_position{
         allow_partial_liquidations,
     );
 
+    let (header_hash: felt) = _hash_position_header(
+        synthetic_token, allow_partial_liquidations, position_address
+    );
+    let position_header: PositionHeader = PositionHeader(
+        synthetic_token, position_address, allow_partial_liquidations, header_hash
+    );
+
     let (hash: felt) = _hash_position_internal(
-        order_side,
-        synthetic_token,
-        position_size,
-        entry_price,
-        liquidation_price,
-        position_address,
-        funding_idx,
-        allow_partial_liquidations,
+        header_hash, order_side, position_size, entry_price, liquidation_price, funding_idx
     );
 
     let position: PerpPosition = PerpPosition(
+        position_header,
         order_side,
-        synthetic_token,
-        collateral_token,
         position_size,
         margin - fee_taken,
         entry_price,
@@ -86,7 +85,6 @@ func construct_new_position{
         funding_idx,
         idx,
         hash,
-        allow_partial_liquidations,
     );
 
     return (position,);
@@ -112,8 +110,8 @@ func add_margin_to_position_internal{
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
     let leverage_decimals = global_config.leverage_decimals;
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals - (
         collateral_decimals + leverage_decimals
@@ -145,44 +143,39 @@ func add_margin_to_position_internal{
         margin,
         position.position_size + added_size,
         position.order_side,
-        position.synthetic_token,
+        position.position_header.synthetic_token,
     );
     let (liquidation_price: felt) = _get_liquidation_price(
         average_entry_price,
         position.position_size + added_size,
         margin,
         position.order_side,
-        position.synthetic_token,
-        position.allow_partial_liquidations,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
     );
 
     let updated_size = position.position_size + added_size;
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         updated_size,
         average_entry_price,
         liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let new_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         updated_size,
         margin,
         average_entry_price,
         liquidation_price,
         bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (new_position,);
@@ -200,8 +193,8 @@ func increase_position_size_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     let prev_nominal = position.position_size * position.entry_price;
     let new_nominal = added_size * added_price;
@@ -227,42 +220,37 @@ func increase_position_size_internal{
         margin_after_funding - fee_taken,
         updated_size,
         position.order_side,
-        position.synthetic_token,
+        position.position_header.synthetic_token,
     );
     let (liquidation_price: felt) = _get_liquidation_price(
         average_entry_price,
         updated_size,
         margin_after_funding - fee_taken,
         position.order_side,
-        position.synthetic_token,
-        position.allow_partial_liquidations,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
     );
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         updated_size,
         average_entry_price,
         liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let new_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         updated_size,
         margin_after_funding - fee_taken,
         average_entry_price,
         liquidation_price,
         bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (new_position,);
@@ -280,8 +268,8 @@ func reduce_position_size_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     let new_size = position.position_size - reduction_size;
 
@@ -304,42 +292,37 @@ func reduce_position_size_internal{
         updated_margin,
         new_size,
         position.order_side,
-        position.synthetic_token,
+        position.position_header.synthetic_token,
     );
     let (liquidation_price: felt) = _get_liquidation_price(
         position.entry_price,
         new_size,
         updated_margin,
         position.order_side,
-        position.synthetic_token,
-        position.allow_partial_liquidations,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
     );
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         new_size,
         position.entry_price,
         liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let new_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         new_size,
         updated_margin,
         position.entry_price,
         liquidation_price,
         bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (new_position,);
@@ -357,8 +340,8 @@ func flip_position_side_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     let new_size = reduction_size - position.position_size;
 
@@ -379,42 +362,37 @@ func flip_position_side_internal{
     let new_order_side = is_not_zero(1 - position.order_side);
 
     let (bankruptcy_price: felt) = _get_bankruptcy_price(
-        price, updated_margin, new_size, new_order_side, position.synthetic_token
+        price, updated_margin, new_size, new_order_side, position.position_header.synthetic_token
     );
     let (liquidation_price: felt) = _get_liquidation_price(
         price,
         new_size,
         updated_margin,
         new_order_side,
-        position.synthetic_token,
-        position.allow_partial_liquidations,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
     );
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         new_order_side,
-        position.synthetic_token,
         new_size,
         price,
         liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let new_position = PerpPosition(
+        position.position_header,
         new_order_side,
-        position.synthetic_token,
-        position.collateral_token,
         new_size,
         updated_margin,
         price,
         liquidation_price,
         bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (new_position,);
@@ -436,8 +414,8 @@ func close_position_partialy_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     let updated_size = position.position_size - reduction_size;
 
@@ -464,30 +442,25 @@ func close_position_partialy_internal{
     let margin = margin_after_funding - reduction_margin;
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         updated_size,
         position.entry_price,
         position.liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let updated_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         updated_size,
         margin,
         position.entry_price,
         position.liquidation_price,
         position.bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (updated_position, return_collateral);
@@ -502,8 +475,8 @@ func close_position_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
         collateral_decimals;
@@ -545,7 +518,7 @@ func is_position_liquidatable{
         }
     }
 
-    let min_liq_size = 1;  // Todo
+    let min_liq_size = 1;  // TODO
     let (liq_cond) = is_le(position.position_size, min_liq_size + 1);
     if (position.is_position_liquidatable == 1) {
         if (liq_cond == 0) {
@@ -554,8 +527,10 @@ func is_position_liquidatable{
 
         let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-        let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-        let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+        let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+        let (synthetic_price_decimals: felt) = price_decimals(
+            position.position_header.synthetic_token
+        );
 
         tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
             collateral_decimals;
@@ -596,8 +571,8 @@ func liquidate_position_partialy_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
         collateral_decimals;
@@ -621,30 +596,25 @@ func liquidate_position_partialy_internal{
     let margin = margin_after_funding - reduction_margin;
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         updated_size,
         position.entry_price,
         position.liquidation_price,
-        position.position_address,
         funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let updated_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         updated_size,
         margin,
         position.entry_price,
         position.liquidation_price,
         position.bankruptcy_price,
-        position.position_address,
         funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (updated_position, leftover_value);
@@ -657,8 +627,8 @@ func liquidate_position_internal{
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    let (synthetic_decimals: felt) = token_decimals(position.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.synthetic_token);
+    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
 
     tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
         collateral_decimals;
@@ -693,7 +663,7 @@ func modify_margin{range_check_ptr, pedersen_ptr: HashBuiltin*, global_config: G
         margin,
         position.position_size,
         position.order_side,
-        position.synthetic_token,
+        position.position_header.synthetic_token,
     );
 
     let (liquidation_price: felt) = _get_liquidation_price(
@@ -701,35 +671,30 @@ func modify_margin{range_check_ptr, pedersen_ptr: HashBuiltin*, global_config: G
         position.position_size,
         margin,
         position.order_side,
-        position.synthetic_token,
-        position.allow_partial_liquidations,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
     );
 
     let (new_position_hash: felt) = _hash_position_internal(
+        position.position_header.hash,
         position.order_side,
-        position.synthetic_token,
         position.position_size,
         position.entry_price,
         liquidation_price,
-        position.position_address,
         position.last_funding_idx,
-        position.allow_partial_liquidations,
     );
 
     let new_position = PerpPosition(
+        position.position_header,
         position.order_side,
-        position.synthetic_token,
-        position.collateral_token,
         position.position_size,
         margin,
         position.entry_price,
         liquidation_price,
         bankruptcy_price,
-        position.position_address,
         position.last_funding_idx,
         position.index,
         new_position_hash,
-        position.allow_partial_liquidations,
     );
 
     return (new_position,);

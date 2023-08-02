@@ -283,7 +283,7 @@ func execute_modify_order{
 
     // ? Take a fee
     validate_fee_taken(fee_taken, order, spent_collateral);
-    take_fee(position.collateral_token, fee_taken);
+    take_fee(position.collateral_token, fee_taken); // TODO : FIGURE THIS OUT
 
     let (price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
 

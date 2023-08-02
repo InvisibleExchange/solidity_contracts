@@ -4,7 +4,11 @@ use error_stack::{Report, Result};
 use num_bigint::{BigInt, BigUint};
 
 use crate::{
-    perpetual::{perp_order::CloseOrderFields, perp_position::PerpPosition, OrderSide},
+    perpetual::{
+        perp_order::CloseOrderFields,
+        perp_position::{PerpPosition, PositionHeader},
+        OrderSide, VALID_COLLATERAL_TOKENS,
+    },
     transaction_batch::tx_batch_structs::OracleUpdate,
     utils::crypto_utils::{EcPoint, Signature},
     utils::{errors::GrpcMessageError, notes::Note},
@@ -28,14 +32,14 @@ impl From<PerpPosition> for GrpcPerpPosition {
                 0
             },
             position_size: req.position_size,
-            synthetic_token: req.synthetic_token,
-            collateral_token: req.collateral_token,
+            synthetic_token: req.position_header.synthetic_token,
+            collateral_token: VALID_COLLATERAL_TOKENS[0],
             margin: req.margin,
             entry_price: req.entry_price,
             liquidation_price: req.liquidation_price,
             bankruptcy_price: req.bankruptcy_price,
-            allow_partial_liquidations: req.allow_partial_liquidations,
-            position_address: BigUint::from_str(&req.position_address.to_string())
+            allow_partial_liquidations: req.position_header.allow_partial_liquidations,
+            position_address: BigUint::from_str(&req.position_header.position_address.to_string())
                 .unwrap_or_default()
                 .to_string(),
             last_funding_idx: req.last_funding_idx,
@@ -67,17 +71,20 @@ impl TryFrom<GrpcPerpPosition> for PerpPosition {
         //     req.last_funding_idx,
         // );
 
+        let position_header = PositionHeader::new(
+            req.synthetic_token,
+            req.allow_partial_liquidations,
+            position_address,
+        );
+
         let position = PerpPosition {
+            position_header,
             order_side,
             position_size: req.position_size,
-            synthetic_token: req.synthetic_token,
-            collateral_token: req.collateral_token,
             margin: req.margin,
             entry_price: req.entry_price,
             liquidation_price: req.liquidation_price,
             bankruptcy_price: req.bankruptcy_price,
-            allow_partial_liquidations: req.allow_partial_liquidations,
-            position_address,
             last_funding_idx: req.last_funding_idx,
             index: req.index,
             hash: BigUint::from_str(&req.hash).map_err(|_| GrpcMessageError {})?,
@@ -196,7 +203,7 @@ impl TryFrom<MarginChangeReq> for ChangeMarginMessage {
             for n in req.notes_in.iter() {
                 let note = Note::try_from(n.clone())?;
 
-                if position.collateral_token != note.token {
+                if VALID_COLLATERAL_TOKENS[0] != note.token {
                     return Err(Report::new(GrpcMessageError {}));
                 }
 
@@ -207,7 +214,7 @@ impl TryFrom<MarginChangeReq> for ChangeMarginMessage {
             } else {
                 let ref_note = Note::try_from(req.refund_note.ok_or(GrpcMessageError {})?)?;
 
-                if position.collateral_token != ref_note.token {
+                if VALID_COLLATERAL_TOKENS[0] != ref_note.token {
                     return Err(Report::new(GrpcMessageError {}));
                 }
 

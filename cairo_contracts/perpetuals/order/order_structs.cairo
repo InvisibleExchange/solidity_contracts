@@ -30,18 +30,23 @@ struct CloseOrderFields {
     return_collateral_blinding: felt,
 }
 
-struct PerpPosition {
-    order_side: felt,
+struct PositionHeader {
     synthetic_token: felt,
-    collateral_token: felt,
+    // collateral_token: felt,
+    position_address: felt,
+    allow_partial_liquidations: felt,
+    hash: felt,
+}
+
+struct PerpPosition {
+    position_header: PositionHeader,
+    order_side: felt,
     position_size: felt,
     margin: felt,
     entry_price: felt,
     liquidation_price: felt,
     bankruptcy_price: felt,
-    position_address: felt,
     last_funding_idx: felt,
     index: felt,
     hash: felt,
-    allow_partial_liquidations: felt,
 }

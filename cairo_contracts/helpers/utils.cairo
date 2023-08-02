@@ -109,6 +109,18 @@ func construct_new_note{pedersen_ptr: HashBuiltin*}(
     return (new_note,);
 }
 
+func get_zero_note{pedersen_ptr: HashBuiltin*}(index: felt) -> (note: Note) {
+    alloc_locals;
+
+    let address = EcPoint(x=0, y=0);
+
+    let zero_note: Note = Note(
+        address=address, token=0, amount=0, blinding_factor=0, index=index, hash=0
+    );
+
+    return (zero_note,);
+}
+
 // * ================================================================================
 
 func check_index_uniqueness{range_check_ptr}(notes_in_len: felt, notes_in: Note*) {

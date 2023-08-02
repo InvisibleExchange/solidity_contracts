@@ -122,7 +122,9 @@ pub fn liquidation_consistency_checks(
         ));
     }
 
-    if liquidation_order.position.synthetic_token != liquidation_order.synthetic_token {
+    if liquidation_order.position.position_header.synthetic_token
+        != liquidation_order.synthetic_token
+    {
         return Err(send_perp_swap_error(
             "order and position token mismatch".to_string(),
             None,

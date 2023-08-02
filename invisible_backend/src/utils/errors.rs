@@ -218,8 +218,8 @@ use tonic::{Response, Status};
 
 use crate::server::grpc::engine_proto::{
     AmendOrderResponse, CancelOrderResponse, CloseOrderTabRes, DepositResponse, FundingRes,
-    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, ModifyOrderTabRes, OpenOrderTabRes,
-    OrderResponse, SplitNotesRes, SuccessResponse,
+    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, OpenOrderTabRes, OrderResponse,
+    SplitNotesRes, SuccessResponse,
 };
 
 // * ERROR GRPC REPLIES
@@ -335,18 +335,6 @@ pub fn send_open_tab_error_reply(err_msg: String) -> Result<Response<OpenOrderTa
         successful: false,
         error_message: err_msg,
         order_tab: None,
-    };
-
-    return Ok(Response::new(reply));
-}
-
-pub fn send_modify_tab_error_reply(err_msg: String) -> Result<Response<ModifyOrderTabRes>, Status> {
-    let reply = ModifyOrderTabRes {
-        successful: false,
-        error_message: err_msg,
-        order_tab: None,
-        base_return_note: None,
-        quote_return_note: None,
     };
 
     return Ok(Response::new(reply));
