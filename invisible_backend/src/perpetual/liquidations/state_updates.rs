@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::perp_position::PerpPosition,
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{send_perp_swap_error, PerpSwapExecutionError},
@@ -18,12 +19,12 @@ use crate::{
 pub fn update_state_after_liquidation(
     //
     state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     notes_in: &Vec<Note>,
     refund_note: &Option<Note>,
 ) -> Result<(), PerpSwapExecutionError> {
     let mut tree = state_tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     //  ? verify notes exist in the tree
     for note in notes_in.iter() {
@@ -47,48 +48,57 @@ pub fn update_state_after_liquidation(
     };
 
     tree.update_leaf_node(&refund_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_hash));
 
     for i in 1..notes_in.len() {
         let idx = notes_in[i].index;
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
     drop(tree);
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
 
     Ok(())
 }
 
 // ! UPDATING PERPETUAL STATE ! // ============================================
 pub fn update_perpetual_state_after_liquidation(
-    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    state_tree_m: &Arc<Mutex<SuperficialTree>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     liquidated_position_index: u32,
     liquidated_position: &Option<PerpPosition>,
     new_position: &PerpPosition,
 ) -> Result<(), PerpSwapExecutionError> {
     //
 
-    let mut perpetual_state_tree = perpetual_state_tree_m.lock();
-    let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();
+    let mut state_tree = state_tree_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     if liquidated_position.is_some() {
         let position = &liquidated_position.as_ref().unwrap();
 
-        perpetual_state_tree.update_leaf_node(&position.hash, position.index as u64);
-        perpetual_updated_position_hashes.insert(position.index as u64, position.hash.clone());
+        state_tree.update_leaf_node(&position.hash, position.index as u64);
+        updated_state_hashes.insert(
+            position.index as u64,
+            (LeafNodeType::Position, position.hash.clone()),
+        );
     } else {
-        perpetual_state_tree.update_leaf_node(&BigUint::zero(), liquidated_position_index as u64);
-        perpetual_updated_position_hashes.insert(liquidated_position_index as u64, BigUint::zero());
+        state_tree.update_leaf_node(&BigUint::zero(), liquidated_position_index as u64);
+        updated_state_hashes.insert(
+            liquidated_position_index as u64,
+            (LeafNodeType::Position, BigUint::zero()),
+        );
     }
 
-    perpetual_state_tree.update_leaf_node(&new_position.hash, new_position.index as u64);
-    perpetual_updated_position_hashes.insert(new_position.index as u64, new_position.hash.clone());
+    state_tree.update_leaf_node(&new_position.hash, new_position.index as u64);
+    updated_state_hashes.insert(
+        new_position.index as u64,
+        (LeafNodeType::Position, new_position.hash.clone()),
+    );
 
-    drop(perpetual_state_tree);
-    drop(perpetual_updated_position_hashes);
+    drop(state_tree);
+    drop(updated_state_hashes);
 
     Ok(())
 }

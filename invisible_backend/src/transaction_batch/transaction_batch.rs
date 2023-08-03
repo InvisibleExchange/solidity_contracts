@@ -33,7 +33,6 @@ use crate::{
         transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
         Transaction,
     },
-    trees::TreeStateType,
     utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
@@ -62,9 +61,8 @@ use super::{
     },
     restore_state_helpers::{
         restore_close_order_tab, restore_deposit_update, restore_liquidation_order_execution,
-        restore_margin_update, restore_modify_order_tab, restore_note_split,
-        restore_open_order_tab, restore_perp_order_execution, restore_spot_order_execution,
-        restore_withdrawal_update,
+        restore_margin_update, restore_note_split, restore_open_order_tab,
+        restore_perp_order_execution, restore_spot_order_execution, restore_withdrawal_update,
     },
     tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info, split_hashmap},
     tx_batch_structs::{get_price_info, GlobalConfig},
@@ -85,22 +83,24 @@ use crate::transaction_batch::{
 
 // TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
 
+#[derive(Clone)]
+pub enum LeafNodeType {
+    Note,
+    Position,
+    OrderTab,
+}
 pub struct TransactionBatch {
     pub state_tree: Arc<Mutex<SuperficialTree>>, // current state tree (superficial tree only stores the leaves)
     pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>, // maps orderIds to partial fill refund notes and filled mounts
-    pub updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>, // info to get merkle proofs at the end of the batch
+    pub updated_state_hashes: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>, // info to get merkle proofs at the end of the batch
     pub swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>, // json output map for cairo input
     pub blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>, // maps orderIds to whether they are blocked while another thread is processing the same order (in case of partial fills)
     //
-    pub perpetual_state_tree: Arc<Mutex<SuperficialTree>>, // current perpetual state tree (superficial tree only stores the leaves)
+    // pub perpetual_state_tree: Arc<Mutex<SuperficialTree>>, // current perpetual state tree (superficial tree only stores the leaves)
     pub perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>, // (pfr_note, amount_filled, spent_margin)
     pub partialy_opened_positions: Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>, // positions that were partially opened in an order that was partially filled
-    pub perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>, // info to get merkle proofs at the end of the batch
     pub blocked_perp_order_ids: Arc<Mutex<HashMap<u64, bool>>>, // maps orderIds to whether they are blocked while another thread is processing the same order (in case of partial fills)
     pub insurance_fund: Arc<Mutex<i64>>, // insurance fund used to pay for liquidations
-    //
-    pub order_tabs_state_tree: Arc<Mutex<SuperficialTree>>, // current order tabs state tree (superficial tree only stores the leaves)
-    pub updated_tab_hashes: Arc<Mutex<HashMap<u32, BigUint>>>, // info to get merkle proofs at the end of the batch
     //
     pub latest_index_price: HashMap<u32, u64>,
     pub min_index_price_data: HashMap<u32, (u64, OracleUpdate)>, // maps asset id to the min price, OracleUpdate info of this batch
@@ -131,24 +131,22 @@ pub struct TransactionBatch {
 
 impl TransactionBatch {
     pub fn new(
-        spot_tree_depth: u32,
-        perp_tree_depth: u32,
+        tree_depth: u32,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
         perp_rollback_safeguard: Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>,
     ) -> TransactionBatch {
-        let state_tree = SuperficialTree::new(spot_tree_depth);
+        let state_tree = SuperficialTree::new(tree_depth);
         let partial_fill_tracker: HashMap<u64, (Option<Note>, u64)> = HashMap::new();
-        let updated_note_hashes: HashMap<u64, BigUint> = HashMap::new();
+        let updated_state_hashes: HashMap<u64, (LeafNodeType, BigUint)> = HashMap::new();
         let swap_output_json: Vec<serde_json::Map<String, Value>> = Vec::new();
         let blocked_order_ids: HashMap<u64, bool> = HashMap::new();
 
-        let perpetual_state_tree = SuperficialTree::new(perp_tree_depth);
+        // let perpetual_state_tree = SuperficialTree::new(perp_tree_depth);
         let perpetual_partial_fill_tracker: HashMap<u64, (Option<Note>, u64, u64)> = HashMap::new();
         let partialy_opened_positions: HashMap<String, (PerpPosition, u64)> = HashMap::new();
-        let perpetual_updated_position_hashes: HashMap<u64, BigUint> = HashMap::new();
         let blocked_perp_order_ids: HashMap<u64, bool> = HashMap::new();
 
-        let order_tabs_state_tree = SuperficialTree::new(16);
+        // let order_tabs_state_tree = SuperficialTree::new(16);
 
         let mut latest_index_price: HashMap<u32, u64> = HashMap::new();
         let mut min_index_price_data: HashMap<u32, (u64, OracleUpdate)> = HashMap::new();
@@ -181,21 +179,14 @@ impl TransactionBatch {
         let tx_batch = TransactionBatch {
             state_tree: Arc::new(Mutex::new(state_tree)),
             partial_fill_tracker: Arc::new(Mutex::new(partial_fill_tracker)),
-            updated_note_hashes: Arc::new(Mutex::new(updated_note_hashes)),
+            updated_state_hashes: Arc::new(Mutex::new(updated_state_hashes)),
             swap_output_json: Arc::new(Mutex::new(swap_output_json)),
             blocked_order_ids: Arc::new(Mutex::new(blocked_order_ids)),
             //
-            perpetual_state_tree: Arc::new(Mutex::new(perpetual_state_tree)),
             perpetual_partial_fill_tracker: Arc::new(Mutex::new(perpetual_partial_fill_tracker)),
             partialy_opened_positions: Arc::new(Mutex::new(partialy_opened_positions)),
-            perpetual_updated_position_hashes: Arc::new(Mutex::new(
-                perpetual_updated_position_hashes,
-            )),
             blocked_perp_order_ids: Arc::new(Mutex::new(blocked_perp_order_ids)),
             insurance_fund: Arc::new(Mutex::new(0)),
-            //
-            order_tabs_state_tree: Arc::new(Mutex::new(order_tabs_state_tree)),
-            updated_tab_hashes: Arc::new(Mutex::new(HashMap::new())),
             //
             latest_index_price,
             min_index_price_data,
@@ -265,17 +256,17 @@ impl TransactionBatch {
             }
         }
 
-        let state_tree = match SuperficialTree::from_disk(&TreeStateType::Spot) {
+        let state_tree = match SuperficialTree::from_disk() {
             Ok(tree) => tree,
             Err(_) => SuperficialTree::new(32),
         };
 
         self.state_tree = Arc::new(Mutex::new(state_tree));
-        let perp_state_tree = match SuperficialTree::from_disk(&TreeStateType::Perpetual) {
-            Ok(tree) => tree,
-            Err(_) => SuperficialTree::new(32),
-        };
-        self.perpetual_state_tree = Arc::new(Mutex::new(perp_state_tree));
+        // let perp_state_tree = match SuperficialTree::from_disk(&TreeStateType::Perpetual) {
+        //     Ok(tree) => tree,
+        //     Err(_) => SuperficialTree::new(32),
+        // };
+        // self.perpetual_state_tree = Arc::new(Mutex::new(perp_state_tree));
 
         if !storage.tx_db.is_empty() {
             let swap_output_json = storage.read_storage(0);
@@ -294,10 +285,8 @@ impl TransactionBatch {
         let tx_type = String::from_str(transaction.transaction_type()).unwrap();
 
         let state_tree = self.state_tree.clone();
-        let tabs_state_tree = self.order_tabs_state_tree.clone();
         let partial_fill_tracker = self.partial_fill_tracker.clone();
-        let updated_note_hashes = self.updated_note_hashes.clone();
-        let updated_tab_hashes = self.updated_tab_hashes.clone();
+        let updated_state_hashes = self.updated_state_hashes.clone();
         let swap_output_json = self.swap_output_json.clone();
         let blocked_order_ids = self.blocked_order_ids.clone();
         let rollback_safeguard = self.rollback_safeguard.clone();
@@ -307,10 +296,8 @@ impl TransactionBatch {
         let handle = thread::spawn(move || {
             let res = transaction.execute_transaction(
                 state_tree,
-                tabs_state_tree,
                 partial_fill_tracker,
-                updated_note_hashes,
-                updated_tab_hashes,
+                updated_state_hashes,
                 swap_output_json,
                 blocked_order_ids,
                 rollback_safeguard,
@@ -349,13 +336,11 @@ impl TransactionBatch {
         transaction: PerpSwap,
     ) -> JoinHandle<Result<PerpSwapResponse, PerpSwapExecutionError>> {
         let state_tree = self.state_tree.clone();
-        let updated_note_hashes = self.updated_note_hashes.clone();
+        let updated_state_hashes = self.updated_state_hashes.clone();
         let swap_output_json = self.swap_output_json.clone();
 
-        let perpetual_state_tree = self.perpetual_state_tree.clone();
         let perpetual_partial_fill_tracker = self.perpetual_partial_fill_tracker.clone();
         let partialy_opened_positions = self.partialy_opened_positions.clone();
-        let perpetual_updated_position_hashes = self.perpetual_updated_position_hashes.clone();
         let blocked_perp_order_ids = self.blocked_perp_order_ids.clone();
 
         let session = self.firebase_session.clone();
@@ -382,13 +367,11 @@ impl TransactionBatch {
         let handle = thread::spawn(move || {
             return transaction.execute(
                 state_tree,
-                updated_note_hashes,
+                updated_state_hashes,
                 swap_output_json,
                 blocked_perp_order_ids,
-                perpetual_state_tree,
                 perpetual_partial_fill_tracker,
                 partialy_opened_positions,
-                perpetual_updated_position_hashes,
                 current_index_price,
                 min_funding_idxs,
                 swap_funding_info,
@@ -417,11 +400,8 @@ impl TransactionBatch {
         liquidation_transaction: LiquidationSwap,
     ) -> JoinHandle<Result<LiquidationResponse, PerpSwapExecutionError>> {
         let state_tree = self.state_tree.clone();
-        let updated_note_hashes = self.updated_note_hashes.clone();
+        let updated_state_hashes = self.updated_state_hashes.clone();
         let swap_output_json = self.swap_output_json.clone();
-
-        let perpetual_state_tree = self.perpetual_state_tree.clone();
-        let perpetual_updated_position_hashes = self.perpetual_updated_position_hashes.clone();
 
         let session = self.firebase_session.clone();
         let backup_storage = self.backup_storage.clone();
@@ -447,10 +427,8 @@ impl TransactionBatch {
         let handle = thread::spawn(move || {
             return liquidation_transaction.execute(
                 state_tree,
-                updated_note_hashes,
+                updated_state_hashes,
                 swap_output_json,
-                perpetual_state_tree,
-                perpetual_updated_position_hashes,
                 insurance_fund,
                 current_index_price,
                 min_funding_idxs,
@@ -477,7 +455,7 @@ impl TransactionBatch {
 
         //     let rollback_info = self.rollback_safeguard.lock().remove(&thread_id).unwrap();
 
-        //     rollback_deposit_updates(&self.state_tree, &self.updated_note_hashes, rollback_info);
+        //     rollback_deposit_updates(&self.state_tree, &self.updated_state_hashes, rollback_info);
         // } else if rollback_message.tx_type == "swap" {
         //     // ? rollback the swap execution state updates
 
@@ -485,7 +463,7 @@ impl TransactionBatch {
 
         //     rollback_swap_updates(
         //         &self.state_tree,
-        //         &self.updated_note_hashes,
+        //         &self.updated_state_hashes,
         //         rollback_message,
         //         rollback_info,
         //     );
@@ -494,7 +472,7 @@ impl TransactionBatch {
 
         //     rollback_withdrawal_updates(
         //         &self.state_tree,
-        //         &self.updated_note_hashes,
+        //         &self.updated_state_hashes,
         //         rollback_message,
         //     );
         // } else if rollback_message.tx_type == "perp_swap" {
@@ -508,7 +486,7 @@ impl TransactionBatch {
 
         //     rollback_perp_swap(
         //         &self.state_tree,
-        //         &self.updated_note_hashes,
+        //         &self.updated_state_hashes,
         //         &self.perpetual_state_tree,
         //         &self.perpetual_updated_position_hashes,
         //         rollback_message,
@@ -587,30 +565,40 @@ impl TransactionBatch {
 
         let mut zero_idxs: Vec<u64> = Vec::new(); // TODO: Should be renamed to new_idxs
 
-        let mut updated_note_hashes = self.updated_note_hashes.lock();
+        let mut updated_state_hashes = self.updated_state_hashes.lock();
         if notes_in.len() > notes_out.len() {
             for i in 0..notes_out.len() {
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
+                updated_state_hashes.insert(
+                    notes_in[i].index,
+                    (LeafNodeType::Note, notes_out[i].hash.clone()),
+                );
 
                 zero_idxs.push(notes_in[i].index)
             }
 
             for i in notes_out.len()..notes_in.len() {
                 state_tree.update_leaf_node(&BigUint::zero(), notes_in[i].index);
-                updated_note_hashes.insert(notes_in[i].index, BigUint::zero());
+                updated_state_hashes
+                    .insert(notes_in[i].index, (LeafNodeType::Note, BigUint::zero()));
             }
         } else if notes_in.len() == notes_out.len() {
             for i in 0..notes_out.len() {
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
+                updated_state_hashes.insert(
+                    notes_in[i].index,
+                    (LeafNodeType::Note, notes_out[i].hash.clone()),
+                );
 
                 zero_idxs.push(notes_in[i].index);
             }
         } else {
             for i in 0..notes_in.len() {
                 state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_note_hashes.insert(notes_in[i].index, notes_out[i].hash.clone());
+                updated_state_hashes.insert(
+                    notes_in[i].index,
+                    (LeafNodeType::Note, notes_out[i].hash.clone()),
+                );
 
                 zero_idxs.push(notes_in[i].index);
             }
@@ -619,12 +607,13 @@ impl TransactionBatch {
                 let zero_idx = state_tree.first_zero_idx();
 
                 state_tree.update_leaf_node(&notes_out[i].hash, zero_idx);
-                updated_note_hashes.insert(zero_idx, notes_out[i].hash.clone());
+                updated_state_hashes
+                    .insert(zero_idx, (LeafNodeType::Note, notes_out[i].hash.clone()));
 
                 zero_idxs.push(zero_idx);
             }
         }
-        drop(updated_note_hashes);
+        drop(updated_state_hashes);
         drop(state_tree);
 
         // ----------------------------------------------
@@ -668,7 +657,7 @@ impl TransactionBatch {
         verify_margin_change_signature(&margin_change)?;
 
         let mut position = margin_change.position.clone();
-        verify_position_existence(&position, &self.perpetual_state_tree)?;
+        verify_position_existence(&position, &self.state_tree)?;
 
         position.modify_margin(margin_change.margin_change)?;
 
@@ -722,9 +711,7 @@ impl TransactionBatch {
 
             add_margin_state_updates(
                 &self.state_tree,
-                &self.perpetual_state_tree,
-                &self.updated_note_hashes,
-                &self.perpetual_updated_position_hashes,
+                &self.updated_state_hashes,
                 margin_change.notes_in.as_ref().unwrap(),
                 margin_change.refund_note.clone(),
                 position.index as u64,
@@ -783,9 +770,7 @@ impl TransactionBatch {
 
             reduce_margin_state_updates(
                 &self.state_tree,
-                &self.perpetual_state_tree,
-                &self.updated_note_hashes,
-                &self.perpetual_updated_position_hashes,
+                &self.updated_state_hashes,
                 return_collateral_note.clone(),
                 position.index as u64,
                 &position.hash.clone(),
@@ -838,9 +823,7 @@ impl TransactionBatch {
         tab_action_message: OrderTabActionMessage,
     ) -> JoinHandle<OrderTabActionResponse> {
         let state_tree = self.state_tree.clone();
-        let tabs_state_tree = self.order_tabs_state_tree.clone();
-        let updated_note_hashes = self.updated_note_hashes.clone();
-        let updated_tab_hashes = self.updated_tab_hashes.clone();
+        let updated_state_hashes = self.updated_state_hashes.clone();
         let session = self.firebase_session.clone();
         let backup_storage = self.backup_storage.clone();
         let swap_output_json = self.swap_output_json.clone();
@@ -854,9 +837,7 @@ impl TransactionBatch {
                     &backup_storage,
                     open_order_tab_req,
                     &state_tree,
-                    &updated_note_hashes,
-                    &tabs_state_tree,
-                    &updated_tab_hashes,
+                    &updated_state_hashes,
                     &swap_output_json,
                 );
 
@@ -873,9 +854,7 @@ impl TransactionBatch {
                     &session,
                     &backup_storage,
                     &state_tree,
-                    &updated_note_hashes,
-                    &tabs_state_tree,
-                    &updated_tab_hashes,
+                    &updated_state_hashes,
                     &swap_output_json,
                     close_order_tab_req,
                 );
@@ -903,10 +882,6 @@ impl TransactionBatch {
         let mut state_tree = state_tree.lock();
         state_tree.update_zero_idxs();
 
-        let perpetual_state_tree = self.perpetual_state_tree.clone();
-        let mut perpetual_state_tree = perpetual_state_tree.lock();
-        perpetual_state_tree.update_zero_idxs();
-
         let main_storage = self.main_storage.clone();
         let mut main_storage = main_storage.lock();
         let latest_output_json = self.swap_output_json.clone();
@@ -924,11 +899,9 @@ impl TransactionBatch {
         let min_index_price_data = &self.min_index_price_data;
         let max_index_price_data = &self.max_index_price_data;
 
-        let mut updated_note_hashes_c = self.updated_note_hashes.lock();
-        let updated_note_hashes: HashMap<u64, BigUint> = updated_note_hashes_c.clone();
-        let mut perpetual_updated_position_hashes_c = self.perpetual_updated_position_hashes.lock();
-        let perpetual_updated_position_hashes: HashMap<u64, BigUint> =
-            perpetual_updated_position_hashes_c.clone();
+        let mut updated_state_hashes_c = self.updated_state_hashes.lock();
+        let updated_state_hashes: HashMap<u64, (LeafNodeType, BigUint)> =
+            updated_state_hashes_c.clone();
 
         // ?  Get the funding info
         let funding_info: FundingInfo =
@@ -938,32 +911,23 @@ impl TransactionBatch {
         let price_info_json = get_price_info(min_index_price_data, max_index_price_data);
 
         // ? Get the final updated counts for the cairo program input
-        let [num_output_notes, num_zero_notes, num_output_positions, num_empty_positions] =
-            get_final_updated_counts(&updated_note_hashes, &perpetual_updated_position_hashes);
+        let [num_output_notes, num_zero_notes, num_output_positions, num_empty_positions, num_output_tabs, num_empty_tabs] =
+            get_final_updated_counts(&updated_state_hashes);
         let (n_deposits, n_withdrawals) = (self.n_deposits, self.n_withdrawals);
 
-        updated_note_hashes_c.clear();
-        perpetual_updated_position_hashes_c.clear();
+        updated_state_hashes_c.clear();
 
-        // Drop the locks before updating the trees
+        // ? Drop the locks before updating the trees
         drop(state_tree);
-        drop(perpetual_state_tree);
         drop(main_storage);
-        drop(updated_note_hashes_c);
-        drop(perpetual_updated_position_hashes_c);
+        drop(updated_state_hashes_c);
 
         // ? Reset the batch
         self.reset_batch();
 
         // ? Update the merkle trees and get the new roots and preimages
-        let (
-            prev_spot_root,
-            new_spot_root,
-            prev_perp_root,
-            new_perp_root,
-            preimage_json,
-            perpetual_preimage_json,
-        ) = self.update_trees(updated_note_hashes, perpetual_updated_position_hashes)?;
+        let (prev_spot_root, new_spot_root, preimage_json) =
+            self.update_trees(updated_state_hashes)?;
 
         // ? Construct the global state and config
         let global_expiration_timestamp = SystemTime::now()
@@ -974,15 +938,14 @@ impl TransactionBatch {
             1234, // todo: Could be a version code and a tx_batch count
             &prev_spot_root,
             &new_spot_root,
-            &prev_perp_root,
-            &new_perp_root,
-            Self::TREE_DEPTH,
             Self::TREE_DEPTH,
             global_expiration_timestamp,
             num_output_notes,
             num_zero_notes,
             num_output_positions,
             num_empty_positions,
+            num_output_tabs,
+            num_empty_tabs,
             n_deposits,
             n_withdrawals,
             CHAIN_IDS.to_vec(),
@@ -1001,7 +964,6 @@ impl TransactionBatch {
             price_info_json,
             &swap_output_json,
             preimage_json,
-            perpetual_preimage_json,
         );
 
         // // Todo: This is for testing only ----------------------------
@@ -1026,26 +988,15 @@ impl TransactionBatch {
     const PARTITION_SIZE_EXPONENT: u32 = 12; //16;
     pub fn update_trees(
         &mut self,
-        updated_note_hashes: HashMap<u64, BigUint>,
-        updated_position_hashes: HashMap<u64, BigUint>,
-    ) -> Result<
-        (
-            BigUint,
-            BigUint,
-            BigUint,
-            BigUint,
-            Map<String, Value>,
-            Map<String, Value>,
-        ),
-        BatchFinalizationError,
-    > {
+        updated_state_hashes: HashMap<u64, (LeafNodeType, BigUint)>,
+    ) -> Result<(BigUint, BigUint, Map<String, Value>), BatchFinalizationError> {
         // * UPDATE SPOT TREES  -------------------------------------------------------------------------------------
         let mut updated_root_hashes: HashMap<u64, BigUint> = HashMap::new(); // the new roots of all tree partitions
 
         let mut preimage_json: Map<String, Value> = Map::new();
 
         let partitioned_hashes = split_hashmap(
-            updated_note_hashes,
+            updated_state_hashes,
             2_usize.pow(Self::PARTITION_SIZE_EXPONENT) as usize,
         );
 
@@ -1055,75 +1006,25 @@ impl TransactionBatch {
                 continue;
             }
 
-            let (_, new_root) = self.tree_partition_update(
-                partition,
-                &mut preimage_json,
-                partition_index as u32,
-                false,
-            )?;
+            let (_, new_root) =
+                self.tree_partition_update(partition, &mut preimage_json, partition_index as u32)?;
 
             updated_root_hashes.insert(partition_index as u64, new_root);
         }
 
         // ? use the newly generated roots to update the state tree
         let (prev_spot_root, new_spot_root) =
-            self.tree_partition_update(updated_root_hashes, &mut preimage_json, u32::MAX, false)?;
+            self.tree_partition_update(updated_root_hashes, &mut preimage_json, u32::MAX)?;
 
-        // * UPDATE PERPETUAL TREES  -------------------------------------------------------------------------------------
-        let mut updated_root_hashes: HashMap<u64, BigUint> = HashMap::new(); // the new roots of all tree partitions
-
-        let mut perpetual_preimage_json: Map<String, Value> = Map::new();
-        let partitioned_hashes = split_hashmap(
-            updated_position_hashes,
-            2_usize.pow(Self::PARTITION_SIZE_EXPONENT) as usize,
-        );
-
-        // ? Loop over all partitions and update the trees
-        for (partition_index, partition) in partitioned_hashes {
-            if partition.is_empty() {
-                continue;
-            }
-
-            let (_, new_root) = self.tree_partition_update(
-                partition,
-                &mut perpetual_preimage_json,
-                partition_index as u32,
-                true,
-            )?;
-
-            updated_root_hashes.insert(partition_index as u64, new_root);
-        }
-        // ? use the newly generated roots to update the state tree
-        let (prev_perp_root, new_perp_root) = self.tree_partition_update(
-            updated_root_hashes,
-            &mut perpetual_preimage_json,
-            u32::MAX,
-            true,
-        )?;
-
-        Ok((
-            prev_spot_root,
-            new_spot_root,
-            prev_perp_root,
-            new_perp_root,
-            preimage_json,
-            perpetual_preimage_json,
-        ))
+        Ok((prev_spot_root, new_spot_root, preimage_json))
     }
 
     pub fn tree_partition_update(
         &mut self,
-        updated_note_hashes: HashMap<u64, BigUint>,
+        updated_state_hashes: HashMap<u64, BigUint>,
         preimage_json: &mut Map<String, Value>,
         tree_index: u32,
-        is_perpetual: bool,
     ) -> Result<(BigUint, BigUint), BatchFinalizationError> {
-        let tree_type = if is_perpetual {
-            crate::trees::TreeStateType::Perpetual
-        } else {
-            crate::trees::TreeStateType::Spot
-        };
-
         let shift = if tree_index == u32::MAX {
             Self::PARTITION_SIZE_EXPONENT
         } else {
@@ -1135,16 +1036,16 @@ impl TransactionBatch {
             Self::PARTITION_SIZE_EXPONENT
         };
 
-        let mut batch_init_tree = Tree::from_disk(&tree_type, tree_index, depth, shift)
-            .map_err(|_| BatchFinalizationError {})?;
+        let mut batch_init_tree =
+            Tree::from_disk(tree_index, depth, shift).map_err(|_| BatchFinalizationError {})?;
 
         let prev_root = batch_init_tree.root.clone();
 
-        batch_init_tree.batch_transition_updates(&updated_note_hashes, preimage_json);
+        batch_init_tree.batch_transition_updates(&updated_state_hashes, preimage_json);
 
         let new_root = batch_init_tree.root.clone();
 
-        if let Err(e) = batch_init_tree.store_to_disk(&tree_type, tree_index) {
+        if let Err(e) = batch_init_tree.store_to_disk(tree_index) {
             println!("Error storing tree to disk: {:?}", e);
         }
 
@@ -1176,7 +1077,7 @@ impl TransactionBatch {
 
                     restore_deposit_update(
                         &self.state_tree,
-                        &self.updated_note_hashes,
+                        &self.updated_state_hashes,
                         deposit_notes,
                     );
 
@@ -1194,7 +1095,7 @@ impl TransactionBatch {
 
                     restore_withdrawal_update(
                         &self.state_tree,
-                        &self.updated_note_hashes,
+                        &self.updated_state_hashes,
                         withdrawal_notes_in,
                         refund_note,
                     );
@@ -1206,9 +1107,7 @@ impl TransactionBatch {
 
                     restore_spot_order_execution(
                         &self.state_tree,
-                        &self.updated_note_hashes,
-                        &self.order_tabs_state_tree,
-                        &self.updated_tab_hashes,
+                        &self.updated_state_hashes,
                         &transaction,
                         true,
                     );
@@ -1217,9 +1116,7 @@ impl TransactionBatch {
 
                     restore_spot_order_execution(
                         &self.state_tree,
-                        &self.updated_note_hashes,
-                        &self.order_tabs_state_tree,
-                        &self.updated_tab_hashes,
+                        &self.updated_state_hashes,
                         &transaction,
                         false,
                     );
@@ -1230,9 +1127,7 @@ impl TransactionBatch {
                     // * Order a ------------------------
                     restore_perp_order_execution(
                         &self.state_tree,
-                        &self.updated_note_hashes,
-                        &self.perpetual_state_tree,
-                        &self.perpetual_updated_position_hashes,
+                        &self.updated_state_hashes,
                         &self.perpetual_partial_fill_tracker,
                         &transaction,
                         true,
@@ -1241,9 +1136,7 @@ impl TransactionBatch {
                     // * Order b ------------------------
                     restore_perp_order_execution(
                         &self.state_tree,
-                        &self.updated_note_hashes,
-                        &self.perpetual_state_tree,
-                        &self.perpetual_updated_position_hashes,
+                        &self.updated_state_hashes,
                         &self.perpetual_partial_fill_tracker,
                         &transaction,
                         false,
@@ -1253,42 +1146,27 @@ impl TransactionBatch {
                 }
                 "liquidation_swap" => restore_liquidation_order_execution(
                     &self.state_tree,
-                    &self.updated_note_hashes,
-                    &self.perpetual_state_tree,
-                    &self.perpetual_updated_position_hashes,
+                    &self.updated_state_hashes,
                     &transaction,
                 ),
                 "margin_change" => restore_margin_update(
                     &self.state_tree,
-                    &self.updated_note_hashes,
-                    &self.perpetual_state_tree,
-                    &self.perpetual_updated_position_hashes,
+                    &self.updated_state_hashes,
                     &transaction,
                 ),
                 "note_split" => {
-                    restore_note_split(&self.state_tree, &self.updated_note_hashes, &transaction)
+                    restore_note_split(&self.state_tree, &self.updated_state_hashes, &transaction)
                 }
                 "open_order_tab" => {
                     restore_open_order_tab(
                         &self.state_tree,
-                        &self.updated_note_hashes,
-                        &self.order_tabs_state_tree,
-                        &self.updated_tab_hashes,
+                        &self.updated_state_hashes,
                         &transaction,
                     );
                 }
                 "close_order_tab" => restore_close_order_tab(
                     &self.state_tree,
-                    &self.updated_note_hashes,
-                    &self.order_tabs_state_tree,
-                    &self.updated_tab_hashes,
-                    &transaction,
-                ),
-                "modify_order_tab" => restore_modify_order_tab(
-                    &self.state_tree,
-                    &self.updated_note_hashes,
-                    &self.order_tabs_state_tree,
-                    &self.updated_tab_hashes,
+                    &self.updated_state_hashes,
                     &transaction,
                 ),
                 _ => {

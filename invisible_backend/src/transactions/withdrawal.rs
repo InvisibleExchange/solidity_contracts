@@ -6,6 +6,7 @@ use starknet::curve::AffinePoint;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
+use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 use crate::utils::errors::{
@@ -43,7 +44,7 @@ impl Withdrawal {
     pub fn execute_withdrawal(
         &self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_state_hashes_m: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
         session: &Arc<Mutex<ServiceSession>>,
@@ -82,16 +83,16 @@ impl Withdrawal {
 
             // ? Update state
             let mut tree = tree_m.lock();
-            let mut updated_note_hashes = updated_note_hashes_m.lock();
+            let mut updated_state_hashes = updated_state_hashes_m.lock();
             update_state_after_withdrawal(
                 &mut tree,
-                &mut updated_note_hashes,
+                &mut updated_state_hashes,
                 &rollback_safeguard,
                 &self.notes_in,
                 &self.refund_note,
             )?;
             drop(tree);
-            drop(updated_note_hashes);
+            drop(updated_state_hashes);
 
             let mut json_map = serde_json::map::Map::new();
             json_map.insert(
@@ -194,10 +195,8 @@ impl Transaction for Withdrawal {
     fn execute_transaction(
         &mut self,
         tree: Arc<Mutex<SuperficialTree>>,
-        _: Arc<Mutex<SuperficialTree>>,
         _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
-        _: Arc<Mutex<HashMap<u32, BigUint>>>,
+        updated_state_hashes: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -206,7 +205,7 @@ impl Transaction for Withdrawal {
     ) -> Result<(Option<SwapResponse>, Option<Vec<u64>>), TransactionExecutionError> {
         self.execute_withdrawal(
             tree,
-            updated_note_hashes,
+            updated_state_hashes,
             swap_output_json,
             rollback_safeguard,
             session,

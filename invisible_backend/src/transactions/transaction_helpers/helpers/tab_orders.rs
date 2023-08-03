@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 use crate::{
     order_tab::OrderTab,
     perpetual::DUST_AMOUNT_PER_ASSET,
+    transaction_batch::transaction_batch::LeafNodeType,
     transactions::limit_order::LimitOrder,
     trees::superficial_tree::SuperficialTree,
     utils::errors::{send_swap_error, SwapThreadExecutionError},
@@ -14,7 +15,7 @@ use crate::{
 
 // * CHECK ORDER VALIDITY FUNCTION * --------------------------------------------
 pub fn check_tab_order_validity(
-    order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
+    state_tree: &Arc<Mutex<SuperficialTree>>,
     order: &LimitOrder,
     spent_amount: u64,
 ) -> Result<(), SwapThreadExecutionError> {
@@ -89,11 +90,11 @@ pub fn check_tab_order_validity(
     }
 
     // ? Check that the order tab hash exists in the state --------------------------------------------
-    let tabs_state_tree = order_tabs_state_tree.lock();
-    let leaf_hash = tabs_state_tree.get_leaf_by_index(order_tab.tab_idx as u64);
+    let state_tree_ = state_tree.lock();
+    let leaf_hash = state_tree_.get_leaf_by_index(order_tab.tab_idx as u64);
 
     if leaf_hash != order_tab.hash {
-        println!("leaves: {:?}", tabs_state_tree.leaf_nodes);
+        println!("leaves: {:?}", state_tree_.leaf_nodes);
         println!(
             "order_tab.hash: {:?} - {:?}",
             order_tab.hash, order_tab.tab_idx
@@ -149,18 +150,18 @@ pub fn execute_tab_order_modifications(
 
 // ? update the state with the new order tab hash
 pub fn update_state_after_tab_order(
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes_m: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    state_tree: &Arc<Mutex<SuperficialTree>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     order: &LimitOrder,
     updated_order_tab: &OrderTab,
 ) -> Result<(), SwapThreadExecutionError> {
-    let mut tabs_state_tree_ = tabs_state_tree.lock();
-    let mut updated_tab_hashes = updated_tab_hashes_m.lock();
+    let mut state_tree_ = state_tree.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let prev_tab_hash = order.order_tab.as_ref().unwrap().lock().hash.clone();
 
     // ? Check that the order tab hash exists in the state --------------------------------------------
-    let leaf_hash = tabs_state_tree_.get_leaf_by_index(updated_order_tab.tab_idx as u64);
+    let leaf_hash = state_tree_.get_leaf_by_index(updated_order_tab.tab_idx as u64);
 
     if leaf_hash != prev_tab_hash {
         return Err(send_swap_error(
@@ -170,11 +171,14 @@ pub fn update_state_after_tab_order(
         ));
     }
 
-    tabs_state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
-    updated_tab_hashes.insert(updated_order_tab.tab_idx, updated_order_tab.hash.clone());
+    state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
+    updated_state_hashes.insert(
+        updated_order_tab.tab_idx as u64,
+        (LeafNodeType::OrderTab, updated_order_tab.hash.clone()),
+    );
 
-    drop(tabs_state_tree_);
-    drop(updated_tab_hashes);
+    drop(state_tree_);
+    drop(updated_state_hashes);
 
     Ok(())
 }

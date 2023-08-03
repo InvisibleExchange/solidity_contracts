@@ -91,13 +91,13 @@ pub fn verify_tab_existence(
 
 pub fn verify_position_existence(
     position: &PerpPosition,
-    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
+    state_tree: &Arc<Mutex<SuperficialTree>>,
 ) -> Result<(), String> {
     if position.hash != position.hash_position() {
         return Err("Position hash not valid".to_string());
     }
 
-    let tree = perp_state_tree.lock();
+    let tree = state_tree.lock();
 
     let leaf_hash = tree.get_leaf_by_index(position.index as u64);
 

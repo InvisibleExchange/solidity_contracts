@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 
 use crate::{
     order_tab::OrderTab,
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{errors::SwapThreadExecutionError, notes::Note},
 };
@@ -33,7 +34,6 @@ use super::{
 // * UPDATE STATE FUNCTION * ========================================================
 pub fn execute_order(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     blocked_order_ids_m: &Arc<Mutex<HashMap<u64, bool>>>,
     order: &LimitOrder,
@@ -54,7 +54,6 @@ pub fn execute_order(
     // ? This proves the transaction is valid and the state can be updated
     check_order_validity(
         tree_m,
-        tabs_state_tree,
         &partial_fill_info,
         order,
         is_first_fill,
@@ -152,7 +151,6 @@ fn execute_order_modifications(
 
 fn check_order_validity(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
     order: &LimitOrder,
     is_first_fill: bool,
@@ -179,7 +177,7 @@ fn check_order_validity(
         //     0
         // };
 
-        check_tab_order_validity(tabs_state_tree, order, spent_amount)?;
+        check_tab_order_validity(tree_m, order, spent_amount)?;
     }
 
     return Ok(());
@@ -187,9 +185,7 @@ fn check_order_validity(
 
 pub fn update_state_after_order(
     tree: &Arc<Mutex<SuperficialTree>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     thread_id: ThreadId,
     order: &LimitOrder,
@@ -211,7 +207,7 @@ pub fn update_state_after_order(
 
         update_state_after_non_tab_order(
             tree,
-            updated_note_hashes,
+            updated_state_hashes,
             rollback_safeguard,
             thread_id,
             is_first_fill,
@@ -225,12 +221,7 @@ pub fn update_state_after_order(
     } else {
         let updated_order_tab = updated_order_tab.as_ref().unwrap();
 
-        update_state_after_tab_order(
-            tabs_state_tree,
-            updated_tab_hashes,
-            order,
-            updated_order_tab,
-        )?;
+        update_state_after_tab_order(tree, updated_state_hashes, order, updated_order_tab)?;
     }
 
     Ok(())

@@ -517,7 +517,5 @@ message StateInfoReq {
 
 message StateInfoRes {
     repeated string state_tree = 1;
-    repeated string perpetual_state_tree = 2;
-    repeated string tabs_state_tree = 3;
 }
 

@@ -37,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut tx_batch = TransactionBatch::new(
         40,
-        32,
         rollback_safeguard.clone(),
         perp_rollback_safeguard.clone(),
     );
@@ -45,14 +44,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // TODO: TESTING ==========================================================
     println!("\nstate tree: {:?}", tx_batch.state_tree.lock().leaf_nodes);
-    println!(
-        "\nperp state tree: {:?}",
-        tx_batch.perpetual_state_tree.lock().leaf_nodes
-    );
-    println!(
-        "\ntabs state tree: {:?}",
-        tx_batch.order_tabs_state_tree.lock().leaf_nodes
-    );
 
     // TODO: TESTING ==========================================================
 
@@ -62,8 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let swap_output_json = Arc::clone(&tx_batch.swap_output_json);
 
     let state_tree = Arc::clone(&tx_batch.state_tree);
-    let perp_state_tree = Arc::clone(&tx_batch.perpetual_state_tree);
-    let tabs_state_tree = Arc::clone(&tx_batch.order_tabs_state_tree);
 
     let partial_fill_tracker = Arc::clone(&tx_batch.partial_fill_tracker);
     let perpetual_partial_fill_tracker = Arc::clone(&tx_batch.perpetual_partial_fill_tracker);
@@ -296,7 +285,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &privileged_ws_connections,
         &backup_storage,
         &state_tree,
-        &perp_state_tree,
     )
     .await;
 
@@ -307,8 +295,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mpsc_tx,
         session,
         state_tree,
-        perp_state_tree,
-        tabs_state_tree,
         partial_fill_tracker,
         perpetual_partial_fill_tracker,
         rollback_safeguard,

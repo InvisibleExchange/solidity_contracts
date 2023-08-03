@@ -6,6 +6,7 @@ use num_bigint::BigUint;
 use num_traits::Zero;
 
 use crate::{
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{
@@ -23,8 +24,8 @@ use super::rollbacks::{OrderRollbackInfo, RollbackInfo};
 /// Adds the new notes to the state
 pub fn update_state_after_deposit(
     tree: &mut SuperficialTree,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
+    rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     notes: &Vec<Note>,
 ) -> Result<(), DepositThreadExecutionError> {
     //
@@ -43,16 +44,16 @@ pub fn update_state_after_deposit(
     drop(rollback_safeguard_m);
 
     // ? Upadte the state by adding the note hashes to the merkle tree
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
     for note in notes.iter() {
         let idx = note.index;
         // let (proof, proof_pos) = tree.get_proof(idx);
         // tree.update_node(&note.hash, idx, &proof);
 
         tree.update_leaf_node(&note.hash, idx);
-        updated_note_hashes.insert(idx, note.hash.clone());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, note.hash.clone()));
     }
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
 
     Ok(())
 }
@@ -64,7 +65,7 @@ pub fn update_state_after_deposit(
 
 pub fn update_state_after_swap_first_fill(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     thread_id: ThreadId,
     order_id: u64,
@@ -114,7 +115,7 @@ pub fn update_state_after_swap_first_fill(
 
     // ? Get lock to mutable values
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     // ? verify notes exist in the tree -———————————————————————————————————
     for note in notes_in.iter() {
@@ -140,12 +141,12 @@ pub fn update_state_after_swap_first_fill(
     };
 
     tree.update_leaf_node(&refund_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_hash));
 
     let swap_idx = swap_note.index;
 
     tree.update_leaf_node(&swap_note.hash, swap_idx);
-    updated_note_hashes.insert(swap_idx, swap_note.hash.clone());
+    updated_state_hashes.insert(swap_idx, (LeafNodeType::Note, swap_note.hash.clone()));
 
     if partial_fill_refund_note.is_some() {
         //
@@ -153,14 +154,14 @@ pub fn update_state_after_swap_first_fill(
         let idx: u64 = note.index;
 
         tree.update_leaf_node(&note.hash, idx);
-        updated_note_hashes.insert(idx, note.hash.clone());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, note.hash.clone()));
         //
     } else if notes_in.len() > 2 {
         //
         let idx = notes_in[2].index;
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
         //
     }
 
@@ -168,10 +169,10 @@ pub fn update_state_after_swap_first_fill(
         let idx = notes_in[i].index;
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
 
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
     drop(tree);
 
     Ok(())
@@ -181,7 +182,7 @@ pub fn update_state_after_swap_first_fill(
 
 pub fn update_state_after_swap_later_fills(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     thread_id: ThreadId,
     order_id: u64,
@@ -230,7 +231,7 @@ pub fn update_state_after_swap_later_fills(
 
     // ? Get mutable pointer locks
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     // ? verify note exist in the tree
     let leaf_hash = tree.get_leaf_by_index(prev_partial_fill_refund_note.index);
@@ -249,17 +250,17 @@ pub fn update_state_after_swap_later_fills(
     let swap_idx = swap_note.index;
 
     tree.update_leaf_node(&swap_note.hash, swap_idx);
-    updated_note_hashes.insert(swap_idx, swap_note.hash.clone());
+    updated_state_hashes.insert(swap_idx, (LeafNodeType::Note, swap_note.hash.clone()));
 
     if new_partial_fill_refund_note.is_some() {
         let pfr_note: &Note = new_partial_fill_refund_note.as_ref().unwrap();
         let pfr_idx = pfr_note.index;
 
         tree.update_leaf_node(&pfr_note.hash, pfr_idx);
-        updated_note_hashes.insert(pfr_idx, pfr_note.hash.clone());
+        updated_state_hashes.insert(pfr_idx, (LeafNodeType::Note, pfr_note.hash.clone()));
     }
 
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
     drop(tree);
 
     Ok(())
@@ -270,7 +271,7 @@ pub fn update_state_after_swap_later_fills(
 
 pub fn update_state_after_withdrawal(
     tree: &mut SuperficialTree,
-    updated_note_hashes: &mut HashMap<u64, BigUint>,
+    updated_state_hashes: &mut HashMap<u64, (LeafNodeType, BigUint)>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     notes_in: &Vec<Note>,
     refund_note: &Option<Note>,
@@ -307,7 +308,7 @@ pub fn update_state_after_withdrawal(
     }
 
     tree.update_leaf_node(refund_note_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_note_hash.clone());
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash.clone()));
 
     for note in notes_in.iter().skip(1) {
         let idx = note.index;
@@ -322,7 +323,7 @@ pub fn update_state_after_withdrawal(
         }
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
 
     Ok(())

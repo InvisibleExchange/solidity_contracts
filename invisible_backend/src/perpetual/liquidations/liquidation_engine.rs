@@ -17,6 +17,7 @@ use super::state_updates::{
     update_perpetual_state_after_liquidation, update_state_after_liquidation,
 };
 use crate::perpetual::perp_position::PerpPosition;
+use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
@@ -56,11 +57,9 @@ impl LiquidationSwap {
     pub fn execute(
         &self,
         state_tree: Arc<Mutex<SuperficialTree>>,
-        updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_state_hashes: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         //
-        perpetual_state_tree: Arc<Mutex<SuperficialTree>>,
-        perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         insurance_fund: Arc<Mutex<i64>>,
         //
         index_price: u64,
@@ -83,7 +82,7 @@ impl LiquidationSwap {
             let mut liquidated_position = self.liquidation_order.position.clone();
 
             // ? Verify the position hash is valid and exists in the state
-            verify_position_existence(&perpetual_state_tree, &liquidated_position)?;
+            verify_position_existence(&state_tree, &liquidated_position)?;
 
             // ? Verify the signature
             self.liquidation_order
@@ -99,7 +98,7 @@ impl LiquidationSwap {
                 )?;
 
             let new_idx = if is_partial_liquidation {
-                perpetual_state_tree.lock().first_zero_idx() as u32
+                state_tree.lock().first_zero_idx() as u32
             } else {
                 liquidated_position.index
             };
@@ -128,14 +127,14 @@ impl LiquidationSwap {
 
             update_state_after_liquidation(
                 &state_tree,
-                &updated_note_hashes,
+                &updated_state_hashes,
                 &self.liquidation_order.open_order_fields.notes_in,
                 &self.liquidation_order.open_order_fields.refund_note,
             )?;
 
             update_perpetual_state_after_liquidation(
-                &perpetual_state_tree,
-                &perpetual_updated_position_hashes,
+                &state_tree,
+                &updated_state_hashes,
                 self.liquidation_order.position.index,
                 &liquidated_position,
                 &new_position,

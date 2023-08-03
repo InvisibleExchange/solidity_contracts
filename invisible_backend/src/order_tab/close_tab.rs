@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::{
     perpetual::{perp_order::CloseOrderFields, DUST_AMOUNT_PER_ASSET},
     server::grpc::engine_proto::CloseOrderTabReq,
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{crypto_utils::pedersen_on_vec, notes::Note, storage::BackupStorage},
 };
@@ -25,9 +26,7 @@ pub fn close_order_tab(
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     swap_output_json_m: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
     //
     close_order_tab_req: CloseOrderTabReq,
@@ -69,14 +68,15 @@ pub fn close_order_tab(
     }
 
     // ? CHECK THAT THE ORDER TAB EXISTS ---------------------------------------------------
-    let tab_state_tree_m = order_tabs_state_tree.lock();
-
-    let leaf_hash = tab_state_tree_m.get_leaf_by_index(order_tab.tab_idx as u64);
+    let mut state_tree_m = state_tree.lock();
+    let leaf_hash = state_tree_m.get_leaf_by_index(order_tab.tab_idx as u64);
     if leaf_hash != order_tab.hash {
         return Err("order tab does not exist".to_string());
     }
 
-    drop(tab_state_tree_m);
+    let zero_idx1 = state_tree_m.first_zero_idx();
+    let zero_idx2 = state_tree_m.first_zero_idx();
+    drop(state_tree_m);
 
     // ? VERIFY THE SIGNATURE --------------------------------------------------------------
     let signature = Signature::try_from(close_order_tab_req.signature.unwrap_or_default())
@@ -91,12 +91,6 @@ pub fn close_order_tab(
     );
 
     // ? GENERATE THE RETURN NOTES ---------------------------------------------------------
-    let mut state_tree_m = state_tree.lock();
-
-    let zero_idx1 = state_tree_m.first_zero_idx();
-    let zero_idx2 = state_tree_m.first_zero_idx();
-    drop(state_tree_m);
-
     let base_return_note = Note::new(
         zero_idx1,
         base_close_order_fields.dest_received_address.clone(),
@@ -146,9 +140,7 @@ pub fn close_order_tab(
     // ? UPDATE THE STATE -----------------------------------------------------------------
     close_tab_state_updates(
         state_tree,
-        updated_note_hashes,
-        order_tabs_state_tree,
-        updated_tab_hashes,
+        updated_state_hashes,
         &order_tab,
         &updated_order_tab,
         base_return_note.clone(),

@@ -9,11 +9,11 @@ use crate::{
     utils::crypto_utils::EcPoint, utils::notes::Note,
 };
 
+use super::transaction_batch::LeafNodeType;
+
 pub fn restore_spot_order_execution(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
     is_a: bool,
 ) {
@@ -37,8 +37,8 @@ pub fn restore_spot_order_execution(
         let order_tab = order_json.get("order_tab").unwrap();
         let tab_idx = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
 
-        let mut tabs_state_tree_m = tabs_state_tree.lock();
-        let mut updated_tab_hashes_m = updated_tab_hashes.lock();
+        let mut state_tree_m = tree_m.lock();
+        let mut updated_state_hashes = updated_state_hashes_m.lock();
 
         let updated_tab_hash = transaction
             .get(if is_a {
@@ -50,8 +50,11 @@ pub fn restore_spot_order_execution(
             .as_str()
             .unwrap();
         let updated_tab_hash = BigUint::from_str(updated_tab_hash).unwrap();
-        tabs_state_tree_m.update_leaf_node(&updated_tab_hash, tab_idx);
-        updated_tab_hashes_m.insert(tab_idx as u32, updated_tab_hash);
+
+        state_tree_m.update_leaf_node(&updated_tab_hash, tab_idx);
+        updated_state_hashes.insert(tab_idx, (LeafNodeType::OrderTab, updated_tab_hash));
+
+        //
     } else {
         let swap_note = rebuild_swap_note(&transaction, is_a);
         let pfr_note = restore_partial_fill_refund_note(&transaction, is_a);
@@ -77,7 +80,7 @@ pub fn restore_spot_order_execution(
 
             restore_after_swap_first_fill(
                 tree_m,
-                updated_note_hashes_m,
+                updated_state_hashes_m,
                 &notes_in,
                 refund_note,
                 swap_note,
@@ -86,7 +89,7 @@ pub fn restore_spot_order_execution(
         } else {
             // ? Second fill
 
-            restore_after_swap_later_fills(tree_m, updated_note_hashes_m, swap_note, pfr_note);
+            restore_after_swap_later_fills(tree_m, updated_state_hashes_m, swap_note, pfr_note);
         }
     }
 }
@@ -97,9 +100,9 @@ pub fn restore_spot_order_execution(
 
 pub fn restore_perp_order_execution(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
+    // perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
+    // perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
     transaction: &Map<String, Value>,
     is_a: bool,
@@ -132,7 +135,7 @@ pub fn restore_perp_order_execution(
 
                 restore_after_perp_swap_first_fill(
                     tree_m,
-                    updated_note_hashes_m,
+                    updated_state_hashes_m,
                     perpetual_partial_fill_tracker_m,
                     order.get("order_id").unwrap().as_u64().unwrap(),
                     notes_in,
@@ -152,7 +155,7 @@ pub fn restore_perp_order_execution(
             } else {
                 restore_after_perp_swap_later_fills(
                     tree_m,
-                    updated_note_hashes_m,
+                    updated_state_hashes_m,
                     perpetual_partial_fill_tracker_m,
                     order.get("order_id").unwrap().as_u64().unwrap(),
                     transaction
@@ -184,7 +187,7 @@ pub fn restore_perp_order_execution(
             // ? Close position
             restore_return_collateral_note(
                 tree_m,
-                updated_note_hashes_m,
+                updated_state_hashes_m,
                 &transaction
                     .get("indexes")
                     .unwrap()
@@ -209,8 +212,8 @@ pub fn restore_perp_order_execution(
     }
 
     restore_perpetual_state(
-        perpetual_state_tree_m,
-        perpetual_updated_position_hashes_m,
+        tree_m,
+        updated_state_hashes_m,
         &transaction
             .get("indexes")
             .unwrap()
@@ -231,15 +234,13 @@ pub fn restore_perp_order_execution(
 
 pub fn restore_liquidation_order_execution(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
 ) {
     let liquidation_order = transaction.get("liquidation_order").unwrap();
 
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let open_order_fields = liquidation_order.get("open_order_fields").unwrap();
 
@@ -258,7 +259,7 @@ pub fn restore_liquidation_order_execution(
     };
 
     tree.update_leaf_node(&refund_note_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_note_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash));
 
     // ========
 
@@ -266,11 +267,8 @@ pub fn restore_liquidation_order_execution(
         let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
-
-    drop(tree);
-    drop(updated_note_hashes);
 
     // & Update Perpetual State Tree
 
@@ -300,22 +298,22 @@ pub fn restore_liquidation_order_execution(
         .as_str()
         .unwrap();
 
-    let mut perpetual_state_tree = perpetual_state_tree_m.lock();
-    let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();
-
-    perpetual_state_tree.update_leaf_node(
+    tree.update_leaf_node(
         &BigUint::from_str(new_position_hash).unwrap(),
         new_position_idx,
     );
-    perpetual_updated_position_hashes.insert(
+    updated_state_hashes.insert(
         new_position_idx,
-        BigUint::from_str(new_position_hash).unwrap(),
+        (
+            LeafNodeType::Position,
+            BigUint::from_str(new_position_hash).unwrap(),
+        ),
     );
 
     let hash = BigUint::from_str(new_liquidated_position_hash).unwrap();
     if hash != BigUint::zero() {
-        perpetual_state_tree.update_leaf_node(&hash, new_liquidated_position_idx);
-        perpetual_updated_position_hashes.insert(new_liquidated_position_idx, hash);
+        tree.update_leaf_node(&hash, new_liquidated_position_idx);
+        updated_state_hashes.insert(new_liquidated_position_idx, (LeafNodeType::Position, hash));
     }
 }
 
@@ -327,34 +325,34 @@ pub fn restore_liquidation_order_execution(
 
 pub fn restore_deposit_update(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     notes: &Vec<Value>,
 ) {
     // ? Upadte the state by adding the note hashes to the merkle tree
 
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     for note in notes.iter() {
         let idx = note.get("index").unwrap().as_u64().unwrap();
         let hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
 
         tree.update_leaf_node(&hash, idx);
-        updated_note_hashes.insert(idx, hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
     }
     drop(tree);
 }
 
 pub fn restore_withdrawal_update(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     notes_in: &Vec<Value>,
     refund_note: Option<&Value>,
 ) {
     // ? Upadte the state by adding the note hashes to the merkle tree
 
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let refund_idx = notes_in[0].get("index").unwrap().as_u64().unwrap();
     let refund_note_hash = if refund_note.unwrap().is_null() {
@@ -363,27 +361,27 @@ pub fn restore_withdrawal_update(
         BigUint::from_str(refund_note.unwrap().get("hash").unwrap().as_str().unwrap()).unwrap()
     };
     tree.update_leaf_node(&refund_note_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_note_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash));
 
     for note in notes_in.iter().skip(1) {
         let idx = note.get("index").unwrap().as_u64().unwrap();
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
     drop(tree);
 }
 
 fn restore_after_swap_first_fill(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     notes_in: &Vec<Value>,
     refund_note: Option<&Value>,
     swap_note: Note,
     partial_fill_refund_note: Option<Note>,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let refund_idx = notes_in[0].get("index").unwrap().as_u64().unwrap();
     let refund_note_hash = if refund_note.unwrap().is_null() {
@@ -393,12 +391,12 @@ fn restore_after_swap_first_fill(
     };
 
     tree.update_leaf_node(&refund_note_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_note_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash));
 
     let swap_idx = swap_note.index;
     let swap_hash = swap_note.hash;
     tree.update_leaf_node(&swap_hash, swap_idx);
-    updated_note_hashes.insert(swap_idx, swap_hash);
+    updated_state_hashes.insert(swap_idx, (LeafNodeType::Note, swap_hash));
 
     if partial_fill_refund_note.is_some() {
         //
@@ -407,14 +405,14 @@ fn restore_after_swap_first_fill(
         let hash = partial_fill_refund_note.unwrap().hash;
 
         tree.update_leaf_node(&hash, idx);
-        updated_note_hashes.insert(idx, hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
         //
     } else if notes_in.len() > 2 {
         //
         let idx = notes_in[2].get("index").unwrap().as_u64().unwrap();
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
         //
     }
 
@@ -422,44 +420,44 @@ fn restore_after_swap_first_fill(
         let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
 
     drop(tree);
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
 }
 
 fn restore_after_swap_later_fills(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     swap_note: Note,
     partial_fill_refund_note: Option<Note>,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     // ? Update the state tree
     let swap_idx = swap_note.index;
     let swap_hash = swap_note.hash;
     tree.update_leaf_node(&swap_hash, swap_idx);
-    updated_note_hashes.insert(swap_idx, swap_hash);
+    updated_state_hashes.insert(swap_idx, (LeafNodeType::Note, swap_hash));
 
     if partial_fill_refund_note.is_some() {
         let idx: u64 = partial_fill_refund_note.as_ref().unwrap().index;
         let hash = partial_fill_refund_note.unwrap().hash;
 
         tree.update_leaf_node(&hash, idx);
-        updated_note_hashes.insert(idx, hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
     }
 
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
     drop(tree);
 }
 
 // * PERP STATE RESTORE FUNCTIONS ================================================================================
 fn restore_after_perp_swap_first_fill(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
     order_id: u64,
     notes_in: &Vec<Value>,
@@ -468,7 +466,7 @@ fn restore_after_perp_swap_first_fill(
     new_pfr_hash: &Option<&Value>,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let refund_idx = notes_in[0].get("index").unwrap().as_u64().unwrap();
     let refund_note_hash = if refund_note.unwrap().is_null() {
@@ -478,7 +476,7 @@ fn restore_after_perp_swap_first_fill(
     };
 
     tree.update_leaf_node(&refund_note_hash, refund_idx);
-    updated_note_hashes.insert(refund_idx, refund_note_hash);
+    updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash));
 
     if !new_pfr_hash.unwrap().is_null() {
         //
@@ -487,7 +485,7 @@ fn restore_after_perp_swap_first_fill(
         let hash = BigUint::from_str(new_pfr_hash.unwrap().as_str().unwrap()).unwrap();
 
         tree.update_leaf_node(&hash, idx);
-        updated_note_hashes.insert(idx, hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
 
         // Set this so that the partial fill fails in case it tries to fill again (to prevent unexpected behavior)
         // let mut pft = perpetual_partial_fill_tracker_m.lock();
@@ -500,7 +498,7 @@ fn restore_after_perp_swap_first_fill(
             let idx = notes_in[1].get("index").unwrap().as_u64().unwrap();
 
             tree.update_leaf_node(&BigUint::zero(), idx);
-            updated_note_hashes.insert(idx, BigUint::zero());
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
         }
 
         let mut pft = perpetual_partial_fill_tracker_m.lock();
@@ -512,16 +510,16 @@ fn restore_after_perp_swap_first_fill(
         let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
 
         tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
 
     drop(tree);
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
 }
 
 fn restore_after_perp_swap_later_fills(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     perpetual_partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
     order_id: u64,
     prev_pfr_idx: u64,
@@ -529,14 +527,14 @@ fn restore_after_perp_swap_later_fills(
     new_pfr_hash: &Option<&Value>,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     if !new_pfr_hash.unwrap().is_null() {
         let idx: u64 = new_pfr_idx.unwrap().as_u64().unwrap();
         let hash = BigUint::from_str(new_pfr_hash.unwrap().as_str().unwrap()).unwrap();
 
         tree.update_leaf_node(&hash, idx);
-        updated_note_hashes.insert(idx, hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
 
         // Set this so that the partial fill fails in case it tries to fill again (to prevent unexpected behavior)
         let mut pft = perpetual_partial_fill_tracker_m.lock();
@@ -544,61 +542,61 @@ fn restore_after_perp_swap_later_fills(
         drop(pft);
     } else {
         tree.update_leaf_node(&BigUint::zero(), prev_pfr_idx);
-        updated_note_hashes.insert(prev_pfr_idx, BigUint::zero());
+        updated_state_hashes.insert(prev_pfr_idx, (LeafNodeType::Note, BigUint::zero()));
 
         let mut pft = perpetual_partial_fill_tracker_m.lock();
         pft.remove(&order_id);
         drop(pft);
     }
 
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
     drop(tree);
 }
 
 fn restore_return_collateral_note(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     ret_collatera_note_idx: &Value,
     ret_collatera_note_hash: &Value,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let idx = ret_collatera_note_idx.as_u64().unwrap();
     let hash = BigUint::from_str(ret_collatera_note_hash.as_str().unwrap()).unwrap();
 
     tree.update_leaf_node(&hash, idx);
-    updated_note_hashes.insert(idx, hash);
+    updated_state_hashes.insert(idx, (LeafNodeType::Note, hash));
 
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
     drop(tree);
 }
 
 // ! UPDATING PERPETUAL STATE ! // ============================================
 pub fn restore_perpetual_state(
-    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    tree_m: &Arc<Mutex<SuperficialTree>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     position_index: &Option<&Value>,
     position_hash: Option<&Value>,
 ) {
     //
 
-    let mut perpetual_state_tree = perpetual_state_tree_m.lock();
-    let mut perpetual_updated_position_hashes = perpetual_updated_position_hashes_m.lock();
+    let mut state_tree = tree_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
     if !position_hash.unwrap().is_null() {
         let idx = position_index.unwrap().as_u64().unwrap();
         let hash = BigUint::from_str(position_hash.unwrap().as_str().unwrap()).unwrap();
 
-        perpetual_state_tree.update_leaf_node(&hash, idx);
-        perpetual_updated_position_hashes.insert(idx, hash);
+        state_tree.update_leaf_node(&hash, idx);
+        updated_state_hashes.insert(idx, (LeafNodeType::Position, hash));
     } else {
         let idx = position_index.unwrap().as_u64().unwrap();
 
-        perpetual_state_tree.update_leaf_node(&BigUint::zero(), idx);
-        perpetual_updated_position_hashes.insert(idx, BigUint::zero());
+        state_tree.update_leaf_node(&BigUint::zero(), idx);
+        updated_state_hashes.insert(idx, (LeafNodeType::Position, BigUint::zero()));
     }
-    drop(perpetual_state_tree);
-    drop(perpetual_updated_position_hashes);
+    drop(state_tree);
+    drop(updated_state_hashes);
 }
 
 // * HELPER FUNCTIONS ============================================================================================
@@ -805,15 +803,11 @@ pub fn restore_partial_fill_refund_note(
 
 pub fn restore_margin_update(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    perpetual_state_tree_m: &Arc<Mutex<SuperficialTree>>,
-    perpetual_updated_position_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
 ) {
     let mut tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
-    let mut perp_tree = perpetual_state_tree_m.lock();
-    let mut updated_position_hashes = perpetual_updated_position_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let pos_index = transaction
         .get("margin_change")
@@ -864,35 +858,39 @@ pub fn restore_margin_update(
         };
 
         tree.update_leaf_node(&refund_note_hash, refund_idx);
-        updated_note_hashes.insert(refund_idx, refund_note_hash);
+        updated_state_hashes.insert(refund_idx, (LeafNodeType::Note, refund_note_hash));
 
         for note in notes_in.iter().skip(1) {
             let idx = note.get("index").unwrap().as_u64().unwrap();
             let note_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
 
             tree.update_leaf_node(&note_hash, idx);
-            updated_note_hashes.insert(idx, note_hash);
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_hash));
         }
+
+        // ? Update the position state tree
+        tree.update_leaf_node(&new_position_hash, pos_index);
+        updated_state_hashes.insert(pos_index, (LeafNodeType::Position, new_position_hash));
+
         drop(tree);
-        drop(updated_note_hashes);
-
-        perp_tree.update_leaf_node(&new_position_hash, pos_index);
-        updated_position_hashes.insert(pos_index, new_position_hash);
-
-        drop(perp_tree);
-        drop(updated_position_hashes);
+        drop(updated_state_hashes);
     } else {
         // * Removing margin ---- ---- ---- ----
 
         let return_collateral_note = rebuild_return_collateral_note(transaction);
 
         tree.update_leaf_node(&return_collateral_note.hash, return_collateral_note.index);
-        updated_note_hashes.insert(return_collateral_note.index, return_collateral_note.hash);
+        updated_state_hashes.insert(
+            return_collateral_note.index,
+            (LeafNodeType::Note, return_collateral_note.hash),
+        );
+
+        // ? Update the position state tree
+        tree.update_leaf_node(&new_position_hash, pos_index);
+        updated_state_hashes.insert(pos_index, (LeafNodeType::Position, new_position_hash));
 
         drop(tree);
-        drop(updated_note_hashes);
-        perp_tree.update_leaf_node(&new_position_hash, pos_index);
-        updated_position_hashes.insert(pos_index, new_position_hash);
+        drop(updated_state_hashes);
     }
 }
 
@@ -965,11 +963,11 @@ fn rebuild_return_collateral_note(transaction: &Map<String, Value>) -> Note {
 
 pub fn restore_note_split(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
 ) {
     let mut state_tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let notes_in = transaction
         .get("note_split")
@@ -1000,13 +998,13 @@ pub fn restore_note_split(
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
             state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
         }
 
         for i in notes_out.len()..notes_in.len() {
             let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
             state_tree.update_leaf_node(&BigUint::zero(), idx);
-            updated_note_hashes.insert(idx, BigUint::zero());
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
         }
     } else if notes_in.len() == notes_out.len() {
         for i in 0..notes_out.len() {
@@ -1015,7 +1013,7 @@ pub fn restore_note_split(
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
             state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
         }
     } else {
         for i in 0..notes_in.len() {
@@ -1024,7 +1022,7 @@ pub fn restore_note_split(
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
             state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
         }
 
         for i in notes_in.len()..notes_out.len() {
@@ -1033,25 +1031,23 @@ pub fn restore_note_split(
                 BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
 
             state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
+            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
         }
     }
 
     drop(state_tree);
-    drop(updated_note_hashes);
+    drop(updated_state_hashes);
 }
 
 // * OPEN ORDER TAB RESTORE FUNCTIONS ================================================================================
 
 pub fn restore_open_order_tab(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
 ) {
     let mut state_tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let base_notes_in = transaction
         .get("base_notes_in")
@@ -1071,14 +1067,14 @@ pub fn restore_open_order_tab(
         let idx = note.get("index").unwrap().as_u64().unwrap();
         // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
         state_tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
     if !base_refund_note.is_null() {
         let idx = base_refund_note.get("index").unwrap().as_u64().unwrap();
         let note_out_hash =
             BigUint::from_str(base_refund_note.get("hash").unwrap().as_str().unwrap()).unwrap();
         state_tree.update_leaf_node(&note_out_hash, idx);
-        updated_note_hashes.insert(idx, note_out_hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
     }
 
     // ? Quote notes
@@ -1086,47 +1082,38 @@ pub fn restore_open_order_tab(
         let idx = note.get("index").unwrap().as_u64().unwrap();
         // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
         state_tree.update_leaf_node(&BigUint::zero(), idx);
-        updated_note_hashes.insert(idx, BigUint::zero());
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
     if !quote_refund_note.is_null() {
         let idx = quote_refund_note.get("index").unwrap().as_u64().unwrap();
         let note_out_hash =
             BigUint::from_str(quote_refund_note.get("hash").unwrap().as_str().unwrap()).unwrap();
         state_tree.update_leaf_node(&note_out_hash, idx);
-        updated_note_hashes.insert(idx, note_out_hash);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
     }
 
-    drop(state_tree);
-    drop(updated_note_hashes);
-
     // ? Order tab
-
-    let mut tabs_state_tree_m = tabs_state_tree.lock();
-    let mut updated_tab_hashes_m = updated_tab_hashes.lock();
-
     let order_tab = transaction.get("order_tab").unwrap();
     let idx: u64 = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
     let tab_hash = order_tab.get("hash").unwrap().as_str().unwrap();
     let tab_hash = BigUint::from_str(tab_hash).unwrap();
 
-    tabs_state_tree_m.update_leaf_node(&tab_hash, idx);
-    updated_tab_hashes_m.insert(idx as u32, tab_hash);
+    state_tree.update_leaf_node(&tab_hash, idx);
+    updated_state_hashes.insert(idx, (LeafNodeType::OrderTab, tab_hash));
 
-    drop(tabs_state_tree_m);
-    drop(updated_tab_hashes_m);
+    drop(state_tree);
+    drop(updated_state_hashes);
 }
 
 // * CLOSE ORDER TAB RESTORE FUNCTIONS ================================================================================
 
 pub fn restore_close_order_tab(
     tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     transaction: &Map<String, Value>,
 ) {
     let mut state_tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
 
     let base_return_note_index = transaction.get("base_return_note_idx").unwrap();
     let base_return_note_hash = transaction.get("base_return_note_hash").unwrap();
@@ -1141,141 +1128,31 @@ pub fn restore_close_order_tab(
         &base_return_note_hash,
         base_return_note_index.as_u64().unwrap(),
     );
-    updated_note_hashes.insert(
+    updated_state_hashes.insert(
         base_return_note_index.as_u64().unwrap(),
-        base_return_note_hash,
+        (LeafNodeType::Note, base_return_note_hash),
     );
 
     state_tree.update_leaf_node(
         &quote_refund_note_hash,
         quote_return_note_index.as_u64().unwrap(),
     );
-    updated_note_hashes.insert(
+    updated_state_hashes.insert(
         quote_return_note_index.as_u64().unwrap(),
-        quote_refund_note_hash,
+        (LeafNodeType::Note, quote_refund_note_hash),
     );
 
-    drop(state_tree);
-    drop(updated_note_hashes);
-
     // ? Order tab
-
-    let mut tabs_state_tree_m = tabs_state_tree.lock();
-    let mut updated_tab_hashes_m = updated_tab_hashes.lock();
-
     let order_tab = transaction.get("order_tab").unwrap();
     let idx: u64 = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
+    let updated_tab_hash = order_tab.get("updated_tab_hash").unwrap().as_str().unwrap();
+    let updated_tab_hash = BigUint::from_str(updated_tab_hash).unwrap();
 
-    tabs_state_tree_m.update_leaf_node(&BigUint::zero(), idx);
-    updated_tab_hashes_m.insert(idx as u32, BigUint::zero());
+    state_tree.update_leaf_node(&updated_tab_hash, idx);
+    updated_state_hashes.insert(idx, (LeafNodeType::OrderTab, updated_tab_hash));
 
-    drop(tabs_state_tree_m);
-    drop(updated_tab_hashes_m);
+    drop(state_tree);
+    drop(updated_state_hashes);
 }
 
 // * MODIFY ORDER TAB RESTORE FUNCTIONS ================================================================================
-
-pub fn restore_modify_order_tab(
-    tree_m: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes_m: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
-    transaction: &Map<String, Value>,
-) {
-    let mut state_tree = tree_m.lock();
-    let mut updated_note_hashes = updated_note_hashes_m.lock();
-
-    let is_add = transaction.get("is_add").unwrap().as_bool().unwrap();
-
-    if is_add {
-        let base_notes_in = transaction
-            .get("base_notes_in")
-            .unwrap()
-            .as_array()
-            .unwrap();
-        let base_refund_note = transaction.get("base_refund_note").unwrap();
-        let quote_notes_in = transaction
-            .get("quote_notes_in")
-            .unwrap()
-            .as_array()
-            .unwrap();
-        let quote_refund_note = transaction.get("quote_refund_note").unwrap();
-
-        // ? Base notes
-        for note in base_notes_in {
-            let idx = note.get("index").unwrap().as_u64().unwrap();
-            // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
-            state_tree.update_leaf_node(&BigUint::zero(), idx);
-            updated_note_hashes.insert(idx, BigUint::zero());
-        }
-        if !base_refund_note.is_null() {
-            let idx = base_refund_note.get("index").unwrap().as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(base_refund_note.get("hash").unwrap().as_str().unwrap()).unwrap();
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
-        }
-
-        // ? Quote notes
-        for note in quote_notes_in {
-            let idx = note.get("index").unwrap().as_u64().unwrap();
-            // let note_out_hash = BigUint::from_str(note.get("hash").unwrap().as_str().unwrap()).unwrap();
-            state_tree.update_leaf_node(&BigUint::zero(), idx);
-            updated_note_hashes.insert(idx, BigUint::zero());
-        }
-        if !quote_refund_note.is_null() {
-            let idx = quote_refund_note.get("index").unwrap().as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(quote_refund_note.get("hash").unwrap().as_str().unwrap())
-                    .unwrap();
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_note_hashes.insert(idx, note_out_hash);
-        }
-    } else {
-        let base_return_note_index = transaction.get("base_return_note_idx").unwrap();
-        let base_return_note_hash = transaction.get("base_return_note_hash").unwrap();
-        let base_return_note_hash =
-            BigUint::from_str(base_return_note_hash.as_str().unwrap()).unwrap();
-
-        let quote_return_note_index = transaction.get("quote_return_note_idx").unwrap();
-        let quote_refund_note_hash = transaction.get("quote_return_note_hash").unwrap();
-        let quote_refund_note_hash =
-            BigUint::from_str(quote_refund_note_hash.as_str().unwrap()).unwrap();
-
-        state_tree.update_leaf_node(
-            &base_return_note_hash,
-            base_return_note_index.as_u64().unwrap(),
-        );
-        updated_note_hashes.insert(
-            base_return_note_index.as_u64().unwrap(),
-            base_return_note_hash,
-        );
-
-        state_tree.update_leaf_node(
-            &quote_refund_note_hash,
-            quote_return_note_index.as_u64().unwrap(),
-        );
-        updated_note_hashes.insert(
-            quote_return_note_index.as_u64().unwrap(),
-            quote_refund_note_hash,
-        );
-    }
-
-    drop(state_tree);
-    drop(updated_note_hashes);
-
-    // ? Order tab ---------- ------------ ----------------- ----------------
-    let mut tabs_state_tree_m = tabs_state_tree.lock();
-    let mut updated_tab_hashes_m = updated_tab_hashes.lock();
-
-    let order_tab = transaction.get("prev_order_tab").unwrap();
-    let idx: u64 = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
-    let new_tab_hash = transaction.get("new_tab_hash").unwrap().as_str().unwrap();
-    let new_tab_hash = BigUint::from_str(new_tab_hash).unwrap();
-
-    tabs_state_tree_m.update_leaf_node(&new_tab_hash, idx);
-    updated_tab_hashes_m.insert(idx as u32, new_tab_hash);
-
-    drop(tabs_state_tree_m);
-    drop(updated_tab_hashes_m);
-}

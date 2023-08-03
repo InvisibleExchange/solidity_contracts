@@ -233,7 +233,6 @@ pub async fn submit_perpetual_order_inner(
     backup_storage: &Arc<Mutex<BackupStorage>>,
     swap_output_json: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
     perp_rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>,
     perp_order_books: &HashMap<u16, Arc<TokioMutex<OrderBook>>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
@@ -292,7 +291,7 @@ pub async fn submit_perpetual_order_inner(
         }
     } else {
         if let Err(err_msg) =
-            verify_position_existence(&perp_order.position.as_ref().unwrap(), &perp_state_tree)
+            verify_position_existence(&perp_order.position.as_ref().unwrap(), &state_tree)
         {
             return send_order_error_reply(err_msg);
         }

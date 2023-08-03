@@ -29,6 +29,7 @@ use super::perp_helpers::perp_swap_outptut::{
 };
 use super::{perp_order::PerpOrder, perp_position::PerpPosition, OrderSide};
 use super::{PositionEffectType, VALID_COLLATERAL_TOKENS};
+use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
 use crate::transactions::transaction_helpers::swap_helpers::unblock_order;
 use crate::trees::superficial_tree::SuperficialTree;
@@ -87,14 +88,12 @@ impl PerpSwap {
     pub fn execute(
         &self,
         state_tree: Arc<Mutex<SuperficialTree>>,
-        updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_state_hashes: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_perp_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
         //
-        perpetual_state_tree: Arc<Mutex<SuperficialTree>>,
         perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>, // (pfr_note, amount_filled, spent_margin)
         partialy_filled_positions: Arc<Mutex<HashMap<String, (PerpPosition, u64)>>>, // (position, synthetic filled)
-        perpetual_updated_position_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
         //
         index_price: u64,
         min_funding_idxs: Arc<Mutex<HashMap<u32, u32>>>,
@@ -120,13 +119,11 @@ impl PerpSwap {
         let thread_id: ThreadId = std::thread::current().id();
         let current_funding_idx = swap_funding_info.current_funding_idx;
 
-        let perpetual_state_tree_c = perpetual_state_tree.clone();
         let blocked_perp_order_ids_c = blocked_perp_order_ids.clone();
 
         let (execution_output_a, execution_output_b) = thread::scope(move |s| {
             // ? ORDER A ------------------------------------------------------------------------------------------------
             let state_tree__ = state_tree.clone();
-            let perpetual_state_tree__ = perpetual_state_tree_c.clone();
             let blocked_perp_order_ids__ = blocked_perp_order_ids.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
@@ -144,9 +141,9 @@ impl PerpSwap {
                             .verify_order_signature(&self.signature_a.as_ref().unwrap(), None)?;
 
                         // Get the zero indexes from the tree
-                        let mut per_state_tree = perpetual_state_tree__.lock();
-                        let perp_zero_idx = per_state_tree.first_zero_idx();
-                        drop(per_state_tree);
+                        let mut state_tree = state_tree__.lock();
+                        let perp_zero_idx = state_tree.first_zero_idx();
+                        drop(state_tree);
 
                         let init_margin = get_init_margin(&self.order_a, self.spent_synthetic);
 
@@ -191,7 +188,7 @@ impl PerpSwap {
 
                         // ? Verify the position hash is valid and exists in the state
                         let prev_position = verify_position_existence(
-                            &perpetual_state_tree__,
+                            &state_tree__,
                             &partialy_filled_positions__,
                             &self.order_a.position,
                             self.order_a.order_id,
@@ -235,7 +232,7 @@ impl PerpSwap {
 
                         // ? Verify the position hash is valid and exists in the state
                         let prev_position = verify_position_existence(
-                            &perpetual_state_tree__,
+                            &state_tree__,
                             &partialy_filled_positions__,
                             &self.order_a.position,
                             self.order_a.order_id,
@@ -283,7 +280,6 @@ impl PerpSwap {
             // ? ORDER B -----------------------------------------------------------------------------------------------
             let state_tree__ = state_tree.clone();
             let blocked_perp_order_ids__ = blocked_perp_order_ids.clone();
-            let perpetual_state_tree__ = perpetual_state_tree_c.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
             let swap_funding_info__ = swap_funding_info.clone();
@@ -300,9 +296,9 @@ impl PerpSwap {
                             .verify_order_signature(&self.signature_b.as_ref().unwrap(), None)?;
 
                         // Get the zero indexes from the tree
-                        let mut per_state_tree = perpetual_state_tree__.lock();
-                        let perp_zero_idx = per_state_tree.first_zero_idx();
-                        drop(per_state_tree);
+                        let mut state_tree = state_tree__.lock();
+                        let perp_zero_idx = state_tree.first_zero_idx();
+                        drop(state_tree);
 
                         let init_margin = get_init_margin(&self.order_b, self.spent_synthetic);
 
@@ -347,7 +343,7 @@ impl PerpSwap {
 
                         // ? Verify the position hash is valid and exists in the state
                         let prev_position = verify_position_existence(
-                            &perpetual_state_tree__,
+                            &state_tree__,
                             &partialy_filled_positions__,
                             &self.order_b.position,
                             self.order_b.order_id,
@@ -391,7 +387,7 @@ impl PerpSwap {
 
                         // ? Verify the position hash is valid and exists in the state
                         let prev_position = verify_position_existence(
-                            &perpetual_state_tree__,
+                            &state_tree__,
                             &partialy_filled_positions__,
                             &self.order_b.position,
                             self.order_b.order_id,
@@ -477,9 +473,7 @@ impl PerpSwap {
 
             // ! State updates after order a
             let state_tree__ = state_tree.clone();
-            let updated_note_hashes__ = updated_note_hashes.clone();
-            let perpetual_state_tree__ = perpetual_state_tree.clone();
-            let perpetual_updated_position_hashes__ = perpetual_updated_position_hashes.clone();
+            let updated_state_hashes__ = updated_state_hashes.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
             let blocked_perp_order_ids__ = blocked_perp_order_ids.clone();
@@ -507,7 +501,7 @@ impl PerpSwap {
                     if execution_output_a_clone.prev_pfr_note.is_none() {
                         update_state_after_swap_first_fill(
                             &state_tree__,
-                            &updated_note_hashes__,
+                            &updated_state_hashes__,
                             &self.order_a.open_order_fields.as_ref().unwrap().notes_in,
                             &self.order_a.open_order_fields.as_ref().unwrap().refund_note,
                             new_pfr_note.as_ref(),
@@ -516,7 +510,7 @@ impl PerpSwap {
                     } else {
                         update_state_after_swap_later_fills(
                             &state_tree__,
-                            &updated_note_hashes__,
+                            &updated_state_hashes__,
                             execution_output_a_clone.prev_pfr_note.unwrap(),
                             new_pfr_note.as_ref(),
                         )?;
@@ -538,7 +532,7 @@ impl PerpSwap {
 
                     let return_collateral_note: Note = return_collateral_on_position_close(
                         &state_tree__,
-                        &updated_note_hashes__,
+                        &updated_state_hashes__,
                         idx,
                         execution_output_a.collateral_returned,
                         VALID_COLLATERAL_TOKENS[0],
@@ -561,8 +555,8 @@ impl PerpSwap {
 
                 // ! Update perpetual state for order A
                 update_perpetual_state(
-                    &perpetual_state_tree__,
-                    &perpetual_updated_position_hashes__,
+                    &state_tree__,
+                    &updated_state_hashes__,
                     &self.order_a.position_effect_type,
                     execution_output_a.position_index,
                     execution_output_a.position.as_ref(),
@@ -585,9 +579,7 @@ impl PerpSwap {
 
             // ! State updates after order b
             let state_tree__ = state_tree.clone();
-            let updated_note_hashes__ = updated_note_hashes.clone();
-            let perpetual_state_tree__ = perpetual_state_tree.clone();
-            let perpetual_updated_position_hashes__ = perpetual_updated_position_hashes.clone();
+            let updated_state_hashes__ = updated_state_hashes.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
             let partialy_filled_positions__ = partialy_filled_positions.clone();
             let blocked_perp_order_ids__ = blocked_perp_order_ids.clone();
@@ -615,7 +607,7 @@ impl PerpSwap {
                     if execution_output_b_clone.prev_pfr_note.is_none() {
                         update_state_after_swap_first_fill(
                             &state_tree__,
-                            &updated_note_hashes__,
+                            &updated_state_hashes__,
                             &self.order_b.open_order_fields.as_ref().unwrap().notes_in,
                             &self.order_b.open_order_fields.as_ref().unwrap().refund_note,
                             new_pfr_note.as_ref(),
@@ -624,7 +616,7 @@ impl PerpSwap {
                     } else {
                         update_state_after_swap_later_fills(
                             &state_tree__,
-                            &updated_note_hashes__,
+                            &updated_state_hashes__,
                             execution_output_b_clone.prev_pfr_note.unwrap(),
                             new_pfr_note.as_ref(),
                         )?;
@@ -646,7 +638,7 @@ impl PerpSwap {
 
                     let return_collateral_note_: Note = return_collateral_on_position_close(
                         &state_tree__,
-                        &updated_note_hashes__,
+                        &updated_state_hashes__,
                         idx,
                         execution_output_b.collateral_returned,
                         VALID_COLLATERAL_TOKENS[0],
@@ -669,8 +661,8 @@ impl PerpSwap {
 
                 // ! Update perpetual state for order B
                 update_perpetual_state(
-                    &perpetual_state_tree__,
-                    &perpetual_updated_position_hashes__,
+                    &state_tree__,
+                    &updated_state_hashes__,
                     &self.order_b.position_effect_type,
                     execution_output_b.position_index,
                     execution_output_b.position.as_ref(),

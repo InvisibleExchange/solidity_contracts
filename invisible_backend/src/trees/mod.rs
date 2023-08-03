@@ -21,14 +21,6 @@ use crate::utils::crypto_utils::pedersen;
 pub mod superficial_tree;
 mod tree_utils;
 
-// TODO: If memory requirements are too high when updating the tree, we can split the updates into smaller chunks. (We still need to keep all the leaves in memory though. (*Solution??))
-
-#[derive(PartialEq)]
-pub enum TreeStateType {
-    Spot,
-    Perpetual,
-}
-
 #[derive(Debug, Clone)]
 pub struct Tree {
     pub leaf_nodes: Vec<BigUint>,
@@ -154,16 +146,9 @@ impl Tree {
 
     // I/O Operations --------------------------------------------------
 
-    pub fn store_to_disk(
-        &self,
-        tree_state_type: &TreeStateType,
-        tree_index: u32,
-    ) -> Result<(), Box<dyn Error>> {
-        let str = if *tree_state_type == TreeStateType::Spot {
-            "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string()
-        } else {
-            "./storage/merkle_trees/perpetual_tree/".to_string() + &tree_index.to_string()
-        };
+    pub fn store_to_disk(&self, tree_index: u32) -> Result<(), Box<dyn Error>> {
+        let str = "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string();
+
         let path = Path::new(&str);
 
         let mut file: File = File::create(path)?;
@@ -188,17 +173,8 @@ impl Tree {
         Ok(())
     }
 
-    pub fn from_disk(
-        tree_state_type: &TreeStateType,
-        tree_index: u32,
-        depth: u32,
-        shift: u32,
-    ) -> Result<Tree, Box<dyn Error>> {
-        let str = if *tree_state_type == TreeStateType::Spot {
-            "./storage/merkle_trees/state_tree/"
-        } else {
-            "./storage/merkle_trees/perpetual_tree/"
-        };
+    pub fn from_disk(tree_index: u32, depth: u32, shift: u32) -> Result<Tree, Box<dyn Error>> {
+        let str = "./storage/merkle_trees/state_tree/";
         let path_str = str.to_string() + &tree_index.to_string();
         let path = Path::new(&path_str);
 

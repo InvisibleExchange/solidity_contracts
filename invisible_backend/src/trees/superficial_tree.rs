@@ -7,7 +7,7 @@ use std::{
 use num_bigint::BigUint;
 use num_traits::Zero;
 
-use super::{Tree, TreeStateType};
+use super::Tree;
 
 pub struct SuperficialTree {
     pub leaf_nodes: Vec<BigUint>,
@@ -74,14 +74,8 @@ impl SuperficialTree {
 
     // -----------------------------------------------------------------
 
-    pub fn from_disk(
-        tree_state_type: &TreeStateType,
-    ) -> Result<SuperficialTree, Box<dyn std::error::Error>> {
-        let str = if *tree_state_type == TreeStateType::Spot {
-            "./storage/merkle_trees/state_tree".to_string()
-        } else {
-            "./storage/merkle_trees/perpetual_tree".to_string()
-        };
+    pub fn from_disk() -> Result<SuperficialTree, Box<dyn std::error::Error>> {
+        let str = "./storage/merkle_trees/state_tree".to_string();
         let dir = fs::read_dir(&str);
 
         let partitions = match dir {

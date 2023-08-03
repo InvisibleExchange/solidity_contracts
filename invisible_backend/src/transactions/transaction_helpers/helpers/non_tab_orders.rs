@@ -8,6 +8,7 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::DUST_AMOUNT_PER_ASSET,
+    transaction_batch::transaction_batch::LeafNodeType,
     transactions::{
         limit_order::LimitOrder,
         transaction_helpers::{
@@ -213,7 +214,7 @@ pub fn execute_non_tab_order_modifications(
 
 pub fn update_state_after_non_tab_order(
     tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_note_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     thread_id: ThreadId,
     is_first_fill: bool,

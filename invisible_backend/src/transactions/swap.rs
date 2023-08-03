@@ -21,6 +21,7 @@ use super::transaction_helpers::swap_helpers::{
     TxExecutionThreadOutput,
 };
 use super::transaction_helpers::transaction_output::TransactionOutptut;
+use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
 use crate::utils::errors::{send_swap_error, SwapThreadExecutionError, TransactionExecutionError};
@@ -71,10 +72,8 @@ impl Swap {
     fn execute_swap(
         &self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        tabs_state_tree_m: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
-        updated_tab_hashes_m: Arc<Mutex<HashMap<u32, BigUint>>>,
+        updated_state_hashes_m: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -115,7 +114,6 @@ impl Swap {
 
         let swap_execution_handle = thread::scope(move |s| {
             let tree = tree_m.clone();
-            let tabs_state_tree = tabs_state_tree_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
 
@@ -127,7 +125,6 @@ impl Swap {
                 let (is_partially_filled, note_info_output, updated_order_tab, new_amount_filled) =
                     execute_order(
                         &tree,
-                        &tabs_state_tree,
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_a,
@@ -148,7 +145,6 @@ impl Swap {
             });
 
             let tree = tree_m.clone();
-            let tabs_state_tree = tabs_state_tree_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
 
@@ -160,7 +156,6 @@ impl Swap {
                 let (is_partially_filled, note_info_output, updated_order_tab, new_amount_filled) =
                     execute_order(
                         &tree,
-                        &tabs_state_tree,
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_b,
@@ -216,9 +211,7 @@ impl Swap {
 
             // ? Order a ----------------------------------------
             let tree = tree_m.clone();
-            let tabs_state_tree = tabs_state_tree_m.clone();
-            let updated_note_hashes = updated_note_hashes_m.clone();
-            let updated_tab_hashes = updated_tab_hashes_m.clone();
+            let updated_state_hashes = updated_state_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
             let rollback_safeguard = rollback_safeguard_m.clone();
@@ -227,18 +220,13 @@ impl Swap {
             let update_state_handle_a = s.spawn(move |_| {
                 update_state_after_order(
                     &tree,
-                    &tabs_state_tree,
-                    &updated_note_hashes,
-                    &updated_tab_hashes,
+                    &updated_state_hashes,
                     &rollback_safeguard,
                     thread_id,
                     &self.order_a,
                     &self.order_a.spot_note_info,
                     &order_a_output_clone.note_info_output,
                     &order_a_output_clone.updated_order_tab,
-                    // &order_a_output_clone.swap_note,
-                    // &order_a_output_clone.new_partial_fill_info,
-                    // &order_a_output_clone.prev_partial_fill_refund_note,
                 )?;
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
 
@@ -255,9 +243,7 @@ impl Swap {
 
             // ? Order b ----------------------------------------
             let tree = tree_m.clone();
-            let tabs_state_tree = tabs_state_tree_m.clone();
-            let updated_note_hashes = updated_note_hashes_m.clone();
-            let updated_tab_hashes = updated_tab_hashes_m.clone();
+            let updated_state_hashes = updated_state_hashes_m.clone();
             let partial_fill_tracker = partial_fill_tracker_m.clone();
             let blocked_order_ids = blocked_order_ids_m.clone();
             let rollback_safeguard = rollback_safeguard_m.clone();
@@ -266,18 +252,13 @@ impl Swap {
             let update_state_handle_b = s.spawn(move |_| {
                 update_state_after_order(
                     &tree,
-                    &tabs_state_tree,
-                    &updated_note_hashes,
-                    &updated_tab_hashes,
+                    &updated_state_hashes,
                     &rollback_safeguard,
                     thread_id,
                     &self.order_b,
                     &self.order_b.spot_note_info,
                     &order_b_output_clone.note_info_output,
                     &order_b_output_clone.updated_order_tab,
-                    // &order_b_output_clone.swap_note,
-                    // &order_b_output_clone.new_partial_fill_info,
-                    // &order_b_output_clone.prev_partial_fill_refund_note,
                 )?;
 
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
@@ -457,10 +438,8 @@ impl Transaction for Swap {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        tabs_state_tree: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker_m: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
-        updated_tab_hashes_m: Arc<Mutex<HashMap<u32, BigUint>>>,
+        updated_state_hashes_m: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids_m: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -470,10 +449,8 @@ impl Transaction for Swap {
         let swap_response = self
             .execute_swap(
                 tree_m,
-                tabs_state_tree,
                 partial_fill_tracker_m,
-                updated_note_hashes_m,
-                updated_tab_hashes_m,
+                updated_state_hashes_m,
                 swap_output_json_m,
                 blocked_order_ids_m,
                 rollback_safeguard_m,

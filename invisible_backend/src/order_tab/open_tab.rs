@@ -10,6 +10,7 @@ use firestore_db_and_auth::ServiceSession;
 
 use crate::{
     server::grpc::engine_proto::OpenOrderTabReq,
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{crypto_utils::pedersen_on_vec, notes::Note, storage::BackupStorage},
 };
@@ -28,9 +29,7 @@ pub fn open_order_tab(
     backup_storage: &Arc<Mutex<BackupStorage>>,
     open_order_tab_req: OpenOrderTabReq,
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    order_tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_tab_hashes: &Arc<Mutex<HashMap<u32, BigUint>>>,
+    updated_state_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     swap_output_json_m: &Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
 ) -> std::result::Result<OrderTab, String> {
     let sig_pub_key: BigUint;
@@ -55,7 +54,7 @@ pub fn open_order_tab(
     // ? Check that the token pair is valid
 
     // ? Check that the notes spent exist
-    let state_tree_m = state_tree.lock();
+    let mut state_tree_m = state_tree.lock();
     // & BASE TOKEN —————————————————————————
     let mut base_notes_in = Vec::new();
     for note_ in open_order_tab_req.base_notes_in.into_iter() {
@@ -146,8 +145,6 @@ pub fn open_order_tab(
     // ? Get the public key from the sum of the notes
     sig_pub_key = EcPoint::from(&pub_key_sum).x.to_biguint().unwrap();
 
-    drop(state_tree_m);
-
     // ? Create an OrderTab object and verify against base and quote amounts
     let order_tab = OrderTab::try_from(open_order_tab_req.order_tab.unwrap());
     if let Err(e) = order_tab {
@@ -158,13 +155,11 @@ pub fn open_order_tab(
     let prev_order_tab;
     if open_order_tab_req.add_only {
         // ? Verify that the order tab exists
-        let tab_state_tree_m = order_tabs_state_tree.lock();
 
-        let leaf_hash = tab_state_tree_m.get_leaf_by_index(order_tab.tab_idx as u64);
+        let leaf_hash = state_tree_m.get_leaf_by_index(order_tab.tab_idx as u64);
         if leaf_hash != order_tab.hash {
             return Err("order tab does not exist".to_string());
         }
-        drop(tab_state_tree_m);
 
         // ? Adding to an existing order tab
         prev_order_tab = Some(order_tab.clone());
@@ -181,13 +176,13 @@ pub fn open_order_tab(
         order_tab.quote_amount = quote_amount;
 
         // ? Set the tab index
-        let mut tabs_state_tree = order_tabs_state_tree.lock();
-        let z_index = tabs_state_tree.first_zero_idx();
+        let z_index = state_tree_m.first_zero_idx();
         order_tab.tab_idx = z_index as u32;
-        drop(tabs_state_tree);
 
         order_tab.update_hash();
     }
+
+    drop(state_tree_m);
 
     // ? Verify the signature ---------------------------------------------------------------------
     let signature = Signature::try_from(open_order_tab_req.signature.unwrap_or_default())
@@ -232,9 +227,7 @@ pub fn open_order_tab(
     // ? UPDATE THE STATE TREE --------------------------------------------------------------------
     open_tab_state_updates(
         state_tree,
-        updated_note_hashes,
-        order_tabs_state_tree,
-        updated_tab_hashes,
+        updated_state_hashes,
         order_tab.clone(),
         base_notes_in,
         quote_notes_in,
@@ -279,7 +272,7 @@ pub fn verfiy_open_order_sig(
         &z
     };
     hash_inputs.push(&base_refund_note_hash);
-    
+
     let quote_refund_note_hash = if quote_refund_note.is_some() {
         &quote_refund_note.as_ref().unwrap().hash
     } else {

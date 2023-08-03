@@ -66,8 +66,6 @@ pub struct EngineService {
     pub swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
     //
     pub state_tree: Arc<Mutex<SuperficialTree>>,
-    pub perp_state_tree: Arc<Mutex<SuperficialTree>>,
-    pub tabs_state_tree: Arc<Mutex<SuperficialTree>>,
     //
     pub partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     pub perpetual_partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64, u64)>>>,
@@ -125,7 +123,6 @@ impl Engine for EngineService {
             &self.backup_storage,
             &self.swap_output_json,
             &self.state_tree,
-            &self.perp_state_tree,
             &self.perp_rollback_safeguard,
             &self.perp_order_books,
             &self.ws_connections,
@@ -395,13 +392,7 @@ impl Engine for EngineService {
         &self,
         req: Request<StateInfoReq>,
     ) -> Result<Response<StateInfoRes>, Status> {
-        return get_state_info_inner(
-            &self.state_tree,
-            &self.perp_state_tree,
-            &self.tabs_state_tree,
-            req,
-        )
-        .await;
+        return get_state_info_inner(&self.state_tree, req).await;
     }
 
     async fn get_funding_info(

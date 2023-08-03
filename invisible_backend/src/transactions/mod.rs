@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::{
+    transaction_batch::transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{errors::TransactionExecutionError, notes::Note, storage::BackupStorage},
 };
@@ -25,11 +26,9 @@ pub trait Transaction {
 
     fn execute_transaction(
         &mut self,
-        tree: Arc<Mutex<SuperficialTree>>,
-        tabs_state_tree: Arc<Mutex<SuperficialTree>>,
+        state_tree: Arc<Mutex<SuperficialTree>>,
         partial_fill_tracker: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes: Arc<Mutex<HashMap<u64, BigUint>>>,
-        updated_tab_hashes: Arc<Mutex<HashMap<u32, BigUint>>>,
+        updated_state_hashes: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         blocked_order_ids: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,

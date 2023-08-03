@@ -19,7 +19,10 @@ use crate::{
     utils::notes::Note,
 };
 
-use super::tx_batch_structs::{FundingInfo, GlobalConfig, GlobalDexState};
+use super::{
+    transaction_batch::LeafNodeType,
+    tx_batch_structs::{FundingInfo, GlobalConfig, GlobalDexState},
+};
 
 // * HELPERS * //
 
@@ -39,27 +42,40 @@ where
 /// This is usefull in the cairo program to know how many slots to allocate for the outputs
 ///
 pub fn get_final_updated_counts(
-    updated_note_hashes: &HashMap<u64, BigUint>,
-    perpetual_updated_position_hashes: &HashMap<u64, BigUint>,
-) -> [u32; 4] {
-    let mut num_output_notes: u32 = 0; //= self.updated_note_hashes.len() as u32;
+    updated_state_hashes: &HashMap<u64, (LeafNodeType, BigUint)>,
+) -> [u32; 6] {
+    let mut num_output_notes: u32 = 0; //= self.updated_state_hashes.len() as u32;
     let mut num_zero_notes: u32 = 0;
     let mut num_output_positions: u32 = 0; // = self.perpetual_updated_position_hashes.len() as u32;
     let mut num_empty_positions: u32 = 0;
+    let mut num_output_tabs: u32 = 0;
+    let mut num_empty_tabs: u32 = 0;
 
-    for (_, leaf_hash) in updated_note_hashes.iter() {
+    for (_, (leaf_type, leaf_hash)) in updated_state_hashes.iter() {
         if leaf_hash == &BigUint::zero() {
-            num_zero_notes += 1;
+            match leaf_type {
+                LeafNodeType::Note => {
+                    num_zero_notes += 1;
+                }
+                LeafNodeType::Position => {
+                    num_empty_positions += 1;
+                }
+                LeafNodeType::OrderTab => {
+                    num_empty_tabs += 1;
+                }
+            }
         } else {
-            num_output_notes += 1;
-        }
-    }
-
-    for (_, leaf_hash) in perpetual_updated_position_hashes.iter() {
-        if leaf_hash == &BigUint::zero() {
-            num_empty_positions += 1;
-        } else {
-            num_output_positions += 1;
+            match leaf_type {
+                LeafNodeType::Note => {
+                    num_output_notes += 1;
+                }
+                LeafNodeType::Position => {
+                    num_output_positions += 1;
+                }
+                LeafNodeType::OrderTab => {
+                    num_output_tabs += 1;
+                }
+            }
         }
     }
 
@@ -68,6 +84,8 @@ pub fn get_final_updated_counts(
         num_zero_notes,
         num_output_positions,
         num_empty_positions,
+        num_output_tabs,
+        num_empty_tabs,
     ];
 }
 //
@@ -82,14 +100,12 @@ pub fn get_json_output(
     price_info_json: Value,
     swap_output_json: &Vec<Map<String, Value>>,
     preimage: Map<String, Value>,
-    perpetual_preimage: Map<String, Value>,
 ) -> serde_json::Map<String, Value> {
     let dex_state_json = serde_json::to_value(&global_dex_state).unwrap();
     let global_config_json = serde_json::to_value(&global_config).unwrap();
     let funding_info_json = serde_json::to_value(&funding_info).unwrap();
     let swaps_json = serde_json::to_value(swap_output_json).unwrap();
     let preimage_json = serde_json::to_value(preimage).unwrap();
-    let perpetual_preimage_json = serde_json::to_value(perpetual_preimage).unwrap();
 
     let mut output_json = serde_json::Map::new();
     output_json.insert(String::from("global_dex_state"), dex_state_json);
@@ -98,7 +114,6 @@ pub fn get_json_output(
     output_json.insert(String::from("price_info"), price_info_json);
     output_json.insert(String::from("transactions"), swaps_json);
     output_json.insert(String::from("preimage"), preimage_json);
-    output_json.insert(String::from("perpetual_preimage"), perpetual_preimage_json);
 
     return output_json;
 }
@@ -162,7 +177,7 @@ pub fn fetch_snapshot_data() -> std::result::Result<
 }
 
 pub fn split_hashmap(
-    hashmap: HashMap<u64, BigUint>,
+    hashmap: HashMap<u64, (LeafNodeType, BigUint)>,
     chunk_size: usize,
 ) -> Vec<(usize, HashMap<u64, BigUint>)> {
     let max_key = *hashmap.keys().max().unwrap_or(&0);
@@ -182,7 +197,7 @@ pub fn split_hashmap(
                     let submap_end = (submap_index + 1) * chunk_size;
                     **key >= submap_start as u64 && **key < submap_end as u64
                 })
-                .map(|(key, value)| (key % chunk_size as u64, value.clone()))
+                .map(|(key, (_type, value))| (key % chunk_size as u64, value.clone()))
                 .collect();
 
             (submap_index, submap)
@@ -201,7 +216,7 @@ pub fn split_hashmap(
 /// # Arguments
 /// * `state_tree` - The state tree
 /// * `perp_state_tree` - The perp state tree
-/// * `updated_note_hashes` - The updated note hashes
+/// * `updated_state_hashes` - The updated note hashes
 /// * `updated_position_hashes` - The updated position hashes
 /// * `notes_in` - The notes that are being added to the position
 /// * `refund_note` - The refund note (if necessary)
@@ -210,16 +225,14 @@ pub fn split_hashmap(
 ///
 pub fn add_margin_state_updates(
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    updated_position_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     notes_in: &Vec<Note>,
     refund_note: Option<Note>,
     position_index: u64,
     new_position_hash: &BigUint,
 ) -> std::result::Result<(), String> {
     let mut tree = state_tree.lock();
-    let mut updated_note_hashes = updated_note_hashes.lock();
+    let mut updated_state_hashes = updated_state_hashes.lock();
 
     for note in notes_in.iter() {
         let leaf_hash = tree.get_leaf_by_index(note.index);
@@ -230,27 +243,25 @@ pub fn add_margin_state_updates(
 
     if let Some(refund_note) = refund_note {
         tree.update_leaf_node(&refund_note.hash, notes_in[0].index);
-        updated_note_hashes.insert(notes_in[0].index, refund_note.hash);
+        updated_state_hashes.insert(notes_in[0].index, (LeafNodeType::Note, refund_note.hash));
     } else {
         tree.update_leaf_node(&BigUint::zero(), notes_in[0].index);
-        updated_note_hashes.insert(notes_in[0].index, BigUint::zero());
+        updated_state_hashes.insert(notes_in[0].index, (LeafNodeType::Note, BigUint::zero()));
     }
 
     for note in notes_in.iter().skip(1) {
         tree.update_leaf_node(&BigUint::zero(), note.index);
-        updated_note_hashes.insert(note.index, BigUint::zero());
+        updated_state_hashes.insert(note.index, (LeafNodeType::Note, BigUint::zero()));
     }
+
+    tree.update_leaf_node(&new_position_hash, position_index);
+    updated_state_hashes.insert(
+        position_index,
+        (LeafNodeType::Note, new_position_hash.clone()),
+    );
+
     drop(tree);
-    drop(updated_note_hashes);
-
-    let mut perp_tree = perp_state_tree.lock();
-    let mut updated_position_hashes = updated_position_hashes.lock();
-
-    perp_tree.update_leaf_node(&new_position_hash, position_index);
-    updated_position_hashes.insert(position_index, new_position_hash.clone());
-
-    drop(perp_tree);
-    drop(updated_position_hashes);
+    drop(updated_state_hashes);
 
     Ok(())
 }
@@ -262,7 +273,7 @@ pub fn add_margin_state_updates(
 /// # Arguments
 /// * `state_tree` - The state tree
 /// * `perp_state_tree` - The perp state tree
-/// * `updated_note_hashes` - The updated note hashes
+/// * `updated_state_hashes` - The updated note hashes
 /// * `updated_position_hashes` - The updated position hashes
 /// * `return_collateral_note` - The return collateral note
 /// * `position_index` - The index of the position
@@ -270,30 +281,28 @@ pub fn add_margin_state_updates(
 ///
 pub fn reduce_margin_state_updates(
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
-    updated_note_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
-    updated_position_hashes: &Arc<Mutex<HashMap<u64, BigUint>>>,
+    updated_state_hashes: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     return_collateral_note: Note,
     position_index: u64,
     new_position_hash: &BigUint,
 ) {
     let mut tree = state_tree.lock();
-    let mut updated_note_hashes = updated_note_hashes.lock();
+    let mut updated_state_hashes = updated_state_hashes.lock();
 
     tree.update_leaf_node(&return_collateral_note.hash, return_collateral_note.index);
-    updated_note_hashes.insert(return_collateral_note.index, return_collateral_note.hash);
+    updated_state_hashes.insert(
+        return_collateral_note.index,
+        (LeafNodeType::Note, return_collateral_note.hash),
+    );
+
+    tree.update_leaf_node(&new_position_hash, position_index);
+    updated_state_hashes.insert(
+        position_index,
+        (LeafNodeType::Position, new_position_hash.clone()),
+    );
 
     drop(tree);
-    drop(updated_note_hashes);
-
-    let mut perp_tree = perp_state_tree.lock();
-    let mut updated_position_hashes = updated_position_hashes.lock();
-
-    perp_tree.update_leaf_node(&new_position_hash, position_index);
-    updated_position_hashes.insert(position_index, new_position_hash.clone());
-
-    drop(perp_tree);
-    drop(updated_position_hashes);
+    drop(updated_state_hashes);
 }
 
 // * FUNDING FUNCTIONS ================================================================================

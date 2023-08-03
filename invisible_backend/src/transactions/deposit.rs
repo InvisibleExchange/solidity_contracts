@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
+use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{
     send_deposit_error, DepositThreadExecutionError, TransactionExecutionError,
@@ -43,7 +44,7 @@ impl Deposit {
     pub fn execute_deposit(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
+        updated_state_hashes_m: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
         session: &Arc<Mutex<ServiceSession>>,
@@ -91,8 +92,8 @@ impl Deposit {
             let mut tree = tree_m.lock();
             update_state_after_deposit(
                 &mut tree,
-                &updated_note_hashes_m,
-                rollback_safeguard_m,
+                &updated_state_hashes_m,
+                &rollback_safeguard_m,
                 &self.notes,
             )?;
             drop(tree);
@@ -176,10 +177,8 @@ impl Transaction for Deposit {
     fn execute_transaction(
         &mut self,
         tree_m: Arc<Mutex<SuperficialTree>>,
-        _: Arc<Mutex<SuperficialTree>>,
         _: Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
-        updated_note_hashes_m: Arc<Mutex<HashMap<u64, BigUint>>>,
-        _: Arc<Mutex<HashMap<u32, BigUint>>>,
+        updated_state_hashes_m: Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
         swap_output_json_m: Arc<Mutex<Vec<serde_json::Map<String, Value>>>>,
         _: Arc<Mutex<HashMap<u64, bool>>>,
         rollback_safeguard_m: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
@@ -189,7 +188,7 @@ impl Transaction for Deposit {
         let zero_idxs = self
             .execute_deposit(
                 tree_m,
-                updated_note_hashes_m,
+                updated_state_hashes_m,
                 swap_output_json_m,
                 rollback_safeguard_m,
                 session,

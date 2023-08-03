@@ -299,8 +299,6 @@ pub async fn get_orders_inner(
 
 pub async fn get_state_info_inner(
     state_tree: &Arc<Mutex<SuperficialTree>>,
-    perp_state_tree: &Arc<Mutex<SuperficialTree>>,
-    tabs_state_tree: &Arc<Mutex<SuperficialTree>>,
     _: Request<StateInfoReq>,
 ) -> Result<Response<StateInfoRes>, Status> {
     tokio::task::yield_now().await;
@@ -311,26 +309,10 @@ pub async fn get_state_info_inner(
         .iter()
         .map(|x| x.to_string())
         .collect();
-    let perp_state_tree = perp_state_tree.lock();
-    let perp_tree_leaves = perp_state_tree
-        .leaf_nodes
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
-    let tabs_state_tree = tabs_state_tree.lock();
-    let tabs_tree_leaves = tabs_state_tree
-        .leaf_nodes
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
     drop(state_tree);
-    drop(perp_state_tree);
-    drop(tabs_state_tree);
 
     let reply = StateInfoRes {
         state_tree: spot_tree_leaves,
-        perpetual_state_tree: perp_tree_leaves,
-        tabs_state_tree: tabs_tree_leaves,
     };
 
     return Ok(Response::new(reply));
