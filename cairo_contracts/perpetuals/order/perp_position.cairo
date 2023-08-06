@@ -15,7 +15,7 @@ from starkware.cairo.common.ec_point import EcPoint
 from helpers.utils import Note, get_price
 from rollup.global_config import token_decimals, price_decimals, GlobalConfig
 
-from perpetuals.order.order_structs import PerpPosition
+from perpetuals.order.order_structs import PerpPosition, PositionHeader
 
 from perpetuals.order.order_hash import _hash_position_internal, _hash_position_header
 
@@ -81,7 +81,6 @@ func construct_new_position{
         entry_price,
         liquidation_price,
         bankruptcy_price,
-        position_address,
         funding_idx,
         idx,
         hash,

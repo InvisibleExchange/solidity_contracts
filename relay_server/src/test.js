@@ -13,7 +13,7 @@ const SERVER_URL = "localhost:50052";
 
 const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
-async function main() {
+async function finalizeBatch() {
   client.finalize_batch({}, function (err, response) {
     if (err) {
       console.log(err);
@@ -25,33 +25,18 @@ async function main() {
   // ========================
 }
 
-// main();
-
-async function main2() {
+async function getStateInfo() {
   client.get_state_info({}, function (err, response) {
     if (err) {
       console.log(err);
     } else {
       console.log(response);
-
-      // let res_map = {};
-      // for (let i = 0; i < response.state_tree.length; i++) {
-      //   const element = response.state_tree[i];
-
-      //   if (element != 0) {
-      //     res_map[i] = element;
-      //   }
-      // }
-
-      // console.log(res_map);
     }
   });
 }
 
-main2();
-
 // ===========================
-async function main3() {
+async function getFundingInfo() {
   client.get_funding_info({}, function (err, response) {
     if (err) {
       console.log(err);
@@ -61,4 +46,4 @@ async function main3() {
   });
 }
 
-// main3();
+// ===========================

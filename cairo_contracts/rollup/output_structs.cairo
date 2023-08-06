@@ -3,6 +3,7 @@ from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.dict_access import DictAccess
 from starkware.cairo.common.bitwise import bitwise_xor, bitwise_and
+from starkware.cairo.common.registers import get_fp_and_pc
 
 from helpers.utils import Note, hash_note
 from deposits_withdrawals.deposits.deposit_utils import Deposit
@@ -10,6 +11,7 @@ from deposits_withdrawals.withdrawals.withdraw_utils import Withdrawal
 
 from perpetuals.order.order_structs import PerpPosition
 from perpetuals.order.order_hash import verify_position_hash
+from order_tabs.order_tab import OrderTab, TabHeader, verify_order_tab_hash
 
 from unshielded_swaps.constants import BIT_64_AMOUNT
 from rollup.global_config import GlobalConfig
@@ -18,17 +20,16 @@ struct GlobalDexState {
     config_code: felt,  // why do we need this? (rename)
     init_state_root: felt,
     final_state_root: felt,
-    init_perp_state_root: felt,
-    final_perp_state_root: felt,
     state_tree_depth: felt,
-    perp_tree_depth: felt,
     global_expiration_timestamp: felt,
     n_deposits: felt,
     n_withdrawals: felt,
+    n_output_notes: felt,
+    n_empty_notes: felt,
     n_output_positions: felt,
     n_empty_positions: felt,
-    n_output_notes: felt,
-    n_zero_notes: felt,
+    n_output_tabs: felt,
+    n_empty_tabs: felt,
 }
 
 // Represents the struct of data written to the program output for each Note Modifictaion.
@@ -87,108 +88,144 @@ struct ZeroOutput {
 }
 
 // * ================================================================================================================================================================0
-// * NOTES * //
+// * STATE * //
 
-// func write_note_dict_to_output{
-//     pedersen_ptr: HashBuiltin*,
-//     bitwise_ptr: BitwiseBuiltin*,
-//     note_output_ptr: NoteDiffOutput*,
-//     zero_note_output_ptr: ZeroOutput*,
-// }(note_dict_start: DictAccess*, n_output_notes: felt) {
-//     alloc_locals;
-
-// if (n_output_notes == 0) {
-//         return ();
-//     }
-
-// let idx: felt = note_dict_start.key;
-//     let note_hash: felt = note_dict_start.new_value;
-
-// if (note_hash == 0) {
-//         _write_zero_note_to_output(idx);
-
-// let note_dict_ptr = note_dict_start + DictAccess.SIZE;
-//         return write_note_dict_to_output(note_dict_ptr, n_output_notes - 1);
-//     }
-
-// local note: Note;
-//     %{
-//         note_ = output_notes[ids.idx]
-
-// memory[ids.note.address_ + ADDRESS_OFFSET + 0 ] = int(note_["address"]["x"])
-//         memory[ids.note.address_ + ADDRESS_OFFSET + 1 ] = int(note_["address"]["y"])
-//         memory[ids.note.address_ + TOKEN_OFFSET] = int(note_["token"])
-//         memory[ids.note.address_ + AMOUNT_OFFSET] = int(note_["amount"])
-//         memory[ids.note.address_ + BLINDING_FACTOR_OFFSET] = int(note_["blinding"])
-//         memory[ids.note.address_ + INDEX_OFFSET] = int(note_["index"])
-//         memory[ids.note.address_ + HASH_OFFSET] = int(note_["hash"])
-//     %}
-
-// let (hash: felt) = hash_note(note);
-
-// %{
-//         #     if ids.note_hash != ids.hash:
-//         #         print("ERROR: index is : ", ids.idx)
-//         #         print("ERROR: note hash is : ", ids.note_hash)
-//         #         print("ERROR: note hash should be : ", ids.hash)
-//         #         print("ERROR: note is : ", note_)
-//         #
-//     %}
-
-// assert note_hash = hash;
-
-// _write_new_note_to_output(note);
-
-// let note_dict_ptr = note_dict_start + DictAccess.SIZE;
-//     return write_note_dict_to_output(note_dict_ptr, n_output_notes - 1);
-// }
-
-// ?: Loop backwards through the notes array and write the last update for each index to the program output
-func write_note_updates_to_output{
+func write_state_updates_to_output{
     pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
     bitwise_ptr: BitwiseBuiltin*,
     note_output_ptr: NoteDiffOutput*,
-    zero_note_output_ptr: ZeroOutput*,
-}(note_outputs: Note*, i: felt) {
-    if (i == 0) {
+    empty_note_output_ptr: ZeroOutput*,
+    position_output_ptr: PerpPositionOutput*,
+    empty_position_output_ptr: ZeroOutput*,
+    tab_output_ptr: OrderTabOutput*,
+    empty_tab_output_ptr: ZeroOutput*,
+}(state_dict_start: DictAccess*, n_state_outputs: felt, note_outputs: Note*) {
+    alloc_locals;
+
+    if (n_state_outputs == 0) {
         return ();
     }
 
-    let note = note_outputs[i - 1];
-    let note_idx = note.index;
+    let idx: felt = state_dict_start.key;
+    let leaf_hash: felt = state_dict_start.new_value;
 
-    // ? Check if the index in the array already exists
-    if (nondet %{ ids.note_idx in stored_indexes %} != 0) {
-        // ? If it exists then get the note at that index and prove that it does and skip the update
-        local array_position_idx: felt;
-        %{ ids.array_position_idx = stored_indexes[ids.note_idx] %}
+    if (nondet %{ leaf_node_types[ids.idx] == "note" %} != 0) {
+        write_note_update(note_outputs, idx, leaf_hash);
 
-        assert_le(i - 1, array_position_idx);
-
-        let prev_note_at_idx = note_outputs[array_position_idx];
-
-        assert prev_note_at_idx.index = note_idx;
-    } else {
-        // ? If it does not exist then write the note to the output and store the index with hints
-        if (note.hash == 0) {
-            _write_zero_note_to_output(note_idx);
-        } else {
-            _write_new_note_to_output(note);
-        }
-
-        %{ stored_indexes[ids.note_idx] = i-1 %}
+        let state_dict_start = state_dict_start + DictAccess.SIZE;
+        return write_state_updates_to_output(state_dict_start, n_state_outputs - 1, note_outputs);
     }
 
-    return write_note_updates_to_output(note_outputs_len, note_outputs, i - 1);
+    if (nondet %{ leaf_node_types[ids.idx] == "position" %} != 0) {
+        write_position_update(idx, leaf_hash);
+
+        let state_dict_start = state_dict_start + DictAccess.SIZE;
+        return write_state_updates_to_output(state_dict_start, n_state_outputs - 1, note_outputs);
+    }
+
+    if (nondet %{ leaf_node_types[ids.idx] == "order_tab" %} != 0) {
+        write_order_tab_update(idx, leaf_hash);
+
+        let state_dict_start = state_dict_start + DictAccess.SIZE;
+        return write_state_updates_to_output(state_dict_start, n_state_outputs - 1, note_outputs);
+    }
+
+    return ();
 }
 
-// * ================================================================================================================================================================0
+// ?: Loop backwards through the notes array and write the last update for each index to the program output
+func write_note_update{
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    note_output_ptr: NoteDiffOutput*,
+    empty_note_output_ptr: ZeroOutput*,
+}(note_outputs: Note*, idx: felt, hash: felt) {
+    alloc_locals;
+
+    if (hash == 0) {
+        _write_zero_note_to_output(idx);
+
+        return ();
+    }
+
+    local array_position_idx: felt;
+    %{ ids.array_position_idx = int(note_output_idxs[ids.idx]) %}  // TODO: implement note_output_idxs
+
+    let note_ouput: Note = note_outputs[array_position_idx];
+    assert note_ouput.index = idx;
+    assert note_ouput.hash = hash;
+
+    _write_new_note_to_output(note_ouput);
+
+    return ();
+}
+
+func write_position_update{
+    pedersen_ptr: HashBuiltin*,
+    bitwise_ptr: BitwiseBuiltin*,
+    position_output_ptr: PerpPositionOutput*,
+    empty_position_output_ptr: ZeroOutput*,
+}(idx: felt, hash: felt) {
+    alloc_locals;
+
+    let (__fp__, _) = get_fp_and_pc();
+
+    if (hash == 0) {
+        _write_empty_position_to_output(idx);
+
+        return ();
+    }
+
+    local position: PerpPosition;
+    %{ read_output_position(ids.position.address_, ids.idx) %}
+
+    verify_position_hash(position);
+    assert position.index = idx;
+    assert position.hash = hash;
+
+    _write_position_info_to_output(position);
+
+    return ();
+}
+
+func write_order_tab_update{
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    bitwise_ptr: BitwiseBuiltin*,
+    tab_output_ptr: OrderTabOutput*,
+    empty_tab_output_ptr: ZeroOutput*,
+}(idx: felt, hash: felt) {
+    alloc_locals;
+
+    let (__fp__, _) = get_fp_and_pc();
+
+    if (hash == 0) {
+        _write_empty_tab_to_output(idx);
+
+        return ();
+    }
+
+    local order_tab: OrderTab;
+    %{ read_output_order_tab(ids.order_tab.address_, ids.idx) %}
+
+    verify_order_tab_hash(order_tab);
+    assert order_tab.tab_idx = idx;
+    assert order_tab.hash = hash;
+
+    _write_order_tab_info_to_output(order_tab);
+
+    return ();
+}
+
+// * ================================================================================================================================================================
 // * DEPOSITS/WITHDRAWALS * //
 
 func write_deposit_info_to_output{
     pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
     deposit_output_ptr: DepositTransactionOutput*,
-    accumulated_deposit_hashes: DictAccess*,
+    accumulated_deposit_hash: felt,
 }(deposit: Deposit) {
     alloc_locals;
 
@@ -202,23 +239,16 @@ func write_deposit_info_to_output{
 
     let deposit_output_ptr = deposit_output_ptr + DepositTransactionOutput.SIZE;
 
-    // & Update the accumulated deposit hashes --------------------------------------
-    // ? Get the previous accumulated hash
-    local prev_hash: felt;
-    %{ ids.prev_hash = accumulated_deposit_hashes[ids.chain_id] %}
+    // & Update the accumulated deposit hashes --------------------------------------ž
+
     // ? The hash of the current deposit
     let (current_hash: felt) = hash2{hash_ptr=pedersen_ptr}(
         output.batched_deposit_info, output.stark_key
     );
     // ? hash the previous accumulated hash with the current deposit hash to get the new accumulated hash
-    let (new_hash: felt) = hash2{hash_ptr=pedersen_ptr}(prev_hash, current_hash);
+    let (new_hash: felt) = hash2{hash_ptr=pedersen_ptr}(accumulated_deposit_hash, current_hash);
 
-    let accumulated_deposit_hashes_ptr = accumulated_deposit_hashes;
-    assert accumulated_deposit_hashes_ptr.key = chain_id;
-    assert accumulated_deposit_hashes_ptr.prev_value = prev_hash;
-    assert accumulated_deposit_hashes_ptr.new_value = new_hash;
-
-    let accumulated_deposit_hashes = accumulated_deposit_hashes + DictAccess.SIZE;
+    let accumulated_deposit_hash = new_hash;
 
     return ();
 }
@@ -235,7 +265,7 @@ func write_withdrawal_info_to_output{
     let output: WithdrawalTransactionOutput* = withdraw_output_ptr;
 
     assert output.batched_withdraw_info = (
-        (withdrawal.withdrawal_id * 2 ** 32) + withdrawal.token
+        (withdrawal.withdrawal_chain * 2 ** 32) + withdrawal.token
     ) * 2 ** 64 + withdrawal.amount;
     assert output.withdraw_address = withdrawal.withdrawal_address;
 
@@ -265,8 +295,8 @@ func write_withdrawal_info_to_output{
 func write_accumulated_deposit_hashes_to_output{accumulated_hashes_ptr: AccumulatedHashesOutput*}(
     squashed_deposit_hashes_dict: DictAccess*, squashed_deposit_withdrawal_dict: DictAccess*
 ) {
-    local arr_len: felt;
-    local arr: felt*;
+    local chain_ids_len: felt;
+    local chain_ids: felt*;
     %{
         chain_ids = program_input["global_dex_state"]["chain_ids"]
 
@@ -278,7 +308,7 @@ func write_accumulated_deposit_hashes_to_output{accumulated_hashes_ptr: Accumula
     %}
 
     return write_accumulated_deposit_hashes_to_output_inner(
-        squashed_deposit_hashes_dict, squashed_deposit_withdrawal_dict, len
+        squashed_deposit_hashes_dict, squashed_deposit_withdrawal_dict, chain_ids_len, chain_ids
     );
 }
 
@@ -389,131 +419,26 @@ func write_accumulated_deposit_hashes_to_output_inner{
     }
 }
 
-
-
-// * ================================================================================================================================================================0
-// * POSITIONS * //
-
-func write_position_dict_to_output{
-    pedersen_ptr: HashBuiltin*,
-    position_output_ptr: PerpPositionOutput*,
-    empty_position_output_ptr: ZeroOutput*,
-}(position_dict_start: DictAccess*, n_output_positions: felt) {
-    alloc_locals;
-
-    if (n_output_positions == 0) {
-        return ();
-    }
-
-    let idx: felt = position_dict_start.key;
-    let position_hash: felt = position_dict_start.new_value;
-
-    if (position_hash == 0) {
-        write_empty_position_to_output(idx);
-
-        let position_dict_ptr = position_dict_start + DictAccess.SIZE;
-        return write_position_dict_to_output(position_dict_ptr, n_output_positions - 1);
-    }
-
-    local position: PerpPosition;
-    %{
-        position_ = output_positions[ids.idx]
-        memory[ids.position.address_ + PERP_POSITION_ORDER_SIDE_OFFSET] = int(position_["order_side"])
-        memory[ids.position.address_ + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
-        memory[ids.position.address_ + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(position_["collateral_token"])
-        memory[ids.position.address_ + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position_["position_size"])
-        memory[ids.position.address_ + PERP_POSITION_MARGIN_OFFSET] = int(position_["margin"])
-        memory[ids.position.address_ + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(position_["entry_price"])
-        memory[ids.position.address_ + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(position_["liquidation_price"])
-        memory[ids.position.address_ + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(position_["bankruptcy_price"])
-        memory[ids.position.address_ + PERP_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
-        memory[ids.position.address_ + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position_["last_funding_idx"])
-        memory[ids.position.address_ + PERP_POSITION_INDEX_OFFSET] = int(position_["index"])
-        memory[ids.position.address_ + PERP_POSITION_HASH_OFFSET] = int(position_["hash"])
-        memory[ids.position.address_ + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
-    %}
-
-    verify_position_hash(position);
-    assert position.hash = position_hash;
-
-    write_position_info_to_output(position);
-
-    let position_dict_ptr = position_dict_start + DictAccess.SIZE;
-    return write_position_dict_to_output(position_dict_ptr, n_output_positions - 1);
-}
-
-// * ================================================================================================================================================================0
-// * ORDER TABS * //
-
-func write_order_tab_dict_to_output{
-    pedersen_ptr: HashBuiltin*,
-    order_tab_output_ptr: OrderTabOutput*,
-    empty_order_tabs_output_ptr: ZeroOutput*,
-}(order_tab_dict_start: DictAccess*, n_output_tabs: felt) {
-    alloc_locals;
-
-    if (n_output_tabs == 0) {
-        return ();
-    }
-
-    let idx: felt = order_tab_dict_start.key;
-    let tab_hash: felt = order_tab_dict_start.new_value;
-
-    if (tab_hash == 0) {
-        write_empty_tab_to_output(idx);
-
-        let tab_dict_ptr = order_tab_dict_start + DictAccess.SIZE;
-        return write_order_tab_dict_to_output(tab_dict_ptr, n_output_tabs - 1);
-    }
-
-    local order_tab: OrderTab;
-    // %{
-    //     position_ = output_positions[ids.idx]
-    //     memory[ids.position.address_ + PERP_POSITION_ORDER_SIDE_OFFSET] = int(position_["order_side"])
-    //     memory[ids.position.address_ + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
-    //     memory[ids.position.address_ + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(position_["collateral_token"])
-    //     memory[ids.position.address_ + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position_["position_size"])
-    //     memory[ids.position.address_ + PERP_POSITION_MARGIN_OFFSET] = int(position_["margin"])
-    //     memory[ids.position.address_ + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(position_["entry_price"])
-    //     memory[ids.position.address_ + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(position_["liquidation_price"])
-    //     memory[ids.position.address_ + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(position_["bankruptcy_price"])
-    //     memory[ids.position.address_ + PERP_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
-    //     memory[ids.position.address_ + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position_["last_funding_idx"])
-    //     memory[ids.position.address_ + PERP_POSITION_INDEX_OFFSET] = int(position_["index"])
-    //     memory[ids.position.address_ + PERP_POSITION_HASH_OFFSET] = int(position_["hash"])
-    //     memory[ids.position.address_ + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
-    // %}
-
-    // verify_position_hash(position);
-    // assert position.hash = position_hash;
-
-    write_order_tab_info_to_output(order_tab);
-
-    let tab_dict_ptr = order_tab_dict_start + DictAccess.SIZE;
-    return write_order_tab_dict_to_output(tab_dict_ptr, n_output_tabs - 1);
-}
-
 // * ================================================================================================================================================================0
 // * INIT OUTPUT STRUCTS * //
 
 func init_output_structs{pedersen_ptr: HashBuiltin*}(dex_state_ptr: GlobalDexState*) {
     %{
         global_dex_state = program_input["global_dex_state"]
+        program_input_counts = global_dex_state["program_input_counts"]
         ids.dex_state_ptr.config_code = int(global_dex_state["config_code"])
         ids.dex_state_ptr.init_state_root = int(global_dex_state["init_state_root"])
         ids.dex_state_ptr.final_state_root = int(global_dex_state["final_state_root"])
-        ids.dex_state_ptr.init_perp_state_root = int(global_dex_state["init_perp_state_root"])
-        ids.dex_state_ptr.final_perp_state_root = int(global_dex_state["final_perp_state_root"])
         ids.dex_state_ptr.state_tree_depth = int(global_dex_state["state_tree_depth"])
-        ids.dex_state_ptr.perp_tree_depth = int(global_dex_state["perp_tree_depth"])
         ids.dex_state_ptr.global_expiration_timestamp = int(global_dex_state["global_expiration_timestamp"])
-        ids.dex_state_ptr.n_deposits = int(global_dex_state["n_deposits"])
-        ids.dex_state_ptr.n_withdrawals = int(global_dex_state["n_withdrawals"])
-        ids.dex_state_ptr.n_output_positions = int(global_dex_state["n_output_positions"])
-        ids.dex_state_ptr.n_empty_positions = int(global_dex_state["n_empty_positions"])
-        ids.dex_state_ptr.n_output_notes = int(global_dex_state["n_output_notes"]) 
-        ids.dex_state_ptr.n_zero_notes = int(global_dex_state["n_zero_notes"])
-
+        ids.dex_state_ptr.n_deposits = int(program_input_counts["n_deposits"])
+        ids.dex_state_ptr.n_withdrawals = int(program_input_counts["n_withdrawals"])
+        ids.dex_state_ptr.n_output_positions = int(program_input_counts["n_output_positions"])
+        ids.dex_state_ptr.n_empty_positions = int(program_input_counts["n_empty_positions"])
+        ids.dex_state_ptr.n_output_notes = int(program_input_counts["n_output_notes"]) 
+        ids.dex_state_ptr.n_empty_notes = int(program_input_counts["n_empty_notes"])
+        ids.dex_state_ptr.n_output_tabs = int(program_input_counts["n_output_tabs"]) 
+        ids.dex_state_ptr.n_empty_tabs = int(program_input_counts["n_empty_tabs"])
 
         global_config = program_input["global_config"]
 
@@ -585,22 +510,22 @@ func _write_new_note_to_output{
     return ();
 }
 
-func _write_zero_note_to_output{pedersen_ptr: HashBuiltin*, zero_note_output_ptr: ZeroOutput*}(
+func _write_zero_note_to_output{pedersen_ptr: HashBuiltin*, empty_note_output_ptr: ZeroOutput*}(
     index: felt
 ) {
     alloc_locals;
 
-    let output: ZeroOutput* = zero_note_output_ptr;
+    let output: ZeroOutput* = empty_note_output_ptr;
 
     assert output.index = index;
 
-    let zero_note_output_ptr = zero_note_output_ptr + ZeroOutput.SIZE;
+    let empty_note_output_ptr = empty_note_output_ptr + ZeroOutput.SIZE;
 
     return ();
 }
 
 // * Positions * //
-func write_position_info_to_output{
+func _write_position_info_to_output{
     position_output_ptr: PerpPositionOutput*, pedersen_ptr: HashBuiltin*
 }(position: PerpPosition) {
     alloc_locals;
@@ -609,22 +534,24 @@ func write_position_info_to_output{
 
     // & | index (32 bits) | synthetic_token (32 bits) | position_size (64 bits) | order_side (8 bits) | allow_partial_liquidations (8 bit)
     assert output.batched_position_info_slot1 = (
-        ((position.index * 2 ** 32) + position.synthetic_token) * 2 ** 32 + position.position_size
-    ) * 2 ** 16 + position.order_side * 2 ** 8 + position.allow_partial_liquidations;
+        ((position.index * 2 ** 32) + position.position_header.synthetic_token) * 2 ** 32 +
+        position.position_size
+    ) * 2 ** 16 + position.order_side * 2 ** 8 +
+        position.position_header.allow_partial_liquidations;
 
     // & | entry_price (64 bits) | liquidation_price (64 bits) | last_funding_idx (32 bits)
     assert output.batched_position_info_slot2 = (
         ((position.entry_price * 2 ** 64) + position.liquidation_price) * 2 ** 32 +
         position.last_funding_idx
     );
-    assert output.public_key = position.position_address;
+    assert output.public_key = position.position_header.position_address;
 
     let position_output_ptr = position_output_ptr + PerpPositionOutput.SIZE;
 
     return ();
 }
 
-func write_empty_position_to_output{empty_position_output_ptr: ZeroOutput*}(position_idx: felt) {
+func _write_empty_position_to_output{empty_position_output_ptr: ZeroOutput*}(position_idx: felt) {
     alloc_locals;
 
     let output: ZeroOutput* = empty_position_output_ptr;
@@ -637,12 +564,12 @@ func write_empty_position_to_output{empty_position_output_ptr: ZeroOutput*}(posi
 }
 
 // * Order Tabs * //
-func write_order_tab_info_to_output{
-    order_tab_output_ptr: OrderTabOutput*, pedersen_ptr: HashBuiltin*
-}(order_tab: OrderTab*) {
+func _write_order_tab_info_to_output{
+    bitwise_ptr: BitwiseBuiltin*, tab_output_ptr: OrderTabOutput*, pedersen_ptr: HashBuiltin*
+}(order_tab: OrderTab) {
     alloc_locals;
 
-    let output: OrderTabOutput* = order_tab_output_ptr;
+    let output: OrderTabOutput* = tab_output_ptr;
 
     let tab_header: TabHeader* = &order_tab.tab_header;
 
@@ -653,10 +580,11 @@ func write_order_tab_info_to_output{
 
     // & format: | index (32 bits) | base_token (32 bits) | quote_token (32 bits) | base hidden amount (64 bits)
     // &          | quote hidden amount (64 bits) |  is_smart_contract (8 bits) | is_perp (8 bits) |
-    let o1 = ((tab_header.index * 2 ** 32) + tab_header.base_token * 2 ** 32) +
+    let o1 = ((order_tab.tab_idx * 2 ** 32) + tab_header.base_token * 2 ** 32) +
         tab_header.quote_token;
     let o2 = ((o1 * 2 ** 32) + base_hidden_amount * 2 ** 64) + quote_hidden_amount;
-    assert output.batched_tab_info_slot1 = (o2 * 2 ** 64) + is_smart_contract * 2 ** 8 + is_perp;
+    assert output.batched_tab_info_slot1 = (o2 * 2 ** 64) + tab_header.is_smart_contract * 2 ** 8 +
+        tab_header.is_perp;
 
     let (base_commitment: felt) = hash2{hash_ptr=pedersen_ptr}(
         order_tab.base_amount, tab_header.base_blinding
@@ -669,19 +597,19 @@ func write_order_tab_info_to_output{
     assert output.quote_commitment = quote_commitment;
     assert output.public_key = tab_header.pub_key;
 
-    let order_tab_output_ptr = order_tab_output_ptr + OrderTabOutput.SIZE;
+    let tab_output_ptr = tab_output_ptr + OrderTabOutput.SIZE;
 
     return ();
 }
 
-func write_empty_tab_to_output{empty_order_tabs_output_ptr: ZeroOutput*}(tab_idx: felt) {
+func _write_empty_tab_to_output{empty_tab_output_ptr: ZeroOutput*}(tab_idx: felt) {
     alloc_locals;
 
-    let output: ZeroOutput* = empty_order_tabs_output_ptr;
+    let output: ZeroOutput* = empty_tab_output_ptr;
 
     assert output.index = tab_idx;
 
-    let empty_order_tabs_output_ptr = empty_order_tabs_output_ptr + ZeroOutput.SIZE;
+    let empty_tab_output_ptr = empty_tab_output_ptr + ZeroOutput.SIZE;
 
     return ();
 }

@@ -176,6 +176,7 @@ impl OrderBook {
                     ts,
                     is_market,
                     false,
+                    false,
                 );
             }
 
@@ -287,6 +288,7 @@ impl OrderBook {
                     ts,
                     is_market,
                     true,
+                    false,
                 );
 
                 for (order, ts) in pending_orders {
@@ -325,6 +327,7 @@ impl OrderBook {
         ts: SystemTime,
         is_market_order: bool,
         is_retry: bool,
+        is_amend: bool,
     ) -> u64 {
         let qty_left = order.qty_left;
 
@@ -360,6 +363,7 @@ impl OrderBook {
                     ts,
                     is_market_order,
                     is_retry,
+                    is_amend,
                 );
             }
 
@@ -391,12 +395,23 @@ impl OrderBook {
                     is_spot = false;
                 }
 
+                // ? Set the order hashes are correct
                 match &mut opposite_order.order {
                     Order::Spot(ord) => {
                         ord.set_hash();
                     }
                     Order::Perp(ord) => {
                         ord.set_hash();
+                    }
+                }
+                if is_amend {
+                    match &mut order.order {
+                        Order::Spot(ord) => {
+                            ord.set_hash();
+                        }
+                        Order::Perp(ord) => {
+                            ord.set_hash();
+                        }
                     }
                 }
 
@@ -458,6 +473,7 @@ impl OrderBook {
                         ts,
                         is_market_order,
                         is_retry,
+                        false,
                     );
                 }
 
@@ -501,33 +517,6 @@ impl OrderBook {
             results.push(Err(Failed::OrderNotFound(order_id)));
         }
     }
-
-    // fn process_order_amend(
-    //     &mut self,
-    //     results: &mut OrderProcessingResult,
-    //     order_id: u64,
-    //     side: OrderSide,
-    //     new_price: f64,
-    //     new_expiration: u64,
-    //     signature: Signature,
-    //     user_id: u64,
-    // ) {
-    //     let order_queue = match side {
-    //         OrderSide::Bid => &mut self.bid_queue,
-    //         OrderSide::Ask => &mut self.ask_queue,
-    //     };
-
-    //     let ts = SystemTime::now();
-    //     if order_queue.amend(order_id, user_id, new_price, new_expiration, signature, ts) {
-    //         results.push(Ok(Success::Amended {
-    //             id: order_id,
-    //             new_price,
-    //             ts,
-    //         }));
-    //     } else {
-    //         results.push(Err(Failed::OrderNotFound(order_id)));
-    //     }
-    // }
 
     fn process_order_amend(
         &mut self,
@@ -586,6 +575,7 @@ impl OrderBook {
                 ts,
                 true,
                 false,
+                true,
             );
         } else {
             results.push(Err(Failed::OrderNotFound(order_id)));
@@ -1143,6 +1133,10 @@ impl OrderBook {
         let mut max_order_id: u64 = 0;
 
         for order in spot_bid_orders {
+            if order.order.is_none() {
+                continue;
+            }
+
             if order.amount
                 <= order.order.as_ref().unwrap().amount_received
                     - DUST_AMOUNT_PER_ASSET
@@ -1161,6 +1155,10 @@ impl OrderBook {
         }
 
         for order in spot_ask_orders {
+            if order.order.is_none() {
+                continue;
+            }
+
             if order.amount
                 <= order.order.as_ref().unwrap().amount_spent
                     - DUST_AMOUNT_PER_ASSET[&order.order.as_ref().unwrap().token_spent.to_string()]

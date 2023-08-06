@@ -20,34 +20,33 @@ from starkware.cairo.common.hash_state import (
     hash_update_single,
 )
 
-from helpers.utils import Note
-from helpres.signatures.signatures import verify_open_order_tab_signature
+from helpers.utils import Note, sum_notes
+from helpers.signatures.signatures import verify_open_order_tab_signature
 
 from rollup.output_structs import ZeroOutput, NoteDiffOutput
 from rollup.global_config import GlobalConfig
 
-from order_tabs.order_tab import OrderTab, hash_tab_header, hash_order_tab
-from order_tabs.update_dicts import open_tab_state_note_updates, add_new_tab_to_state
+from order_tabs.order_tab import OrderTab, verify_order_tab_hash, update_order_tab_hash
+from order_tabs.update_dicts import (
+    open_tab_state_note_updates,
+    add_new_tab_to_state,
+    update_tab_in_state,
+)
 from order_tabs.close_order_tab import handle_order_tab_input
 
 func open_order_tab{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    order_tab_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
-    zero_note_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
-}(
-    order_tab: OrderTab,
-    base_notes_in_len: felt,
-    base_notes_in: Note*,
-    base_refund_note: Note,
-    quote_notes_in_len: felt,
-    quote_notes_in: Note*,
-    quote_refund_note: Note,
-) {
+}() {
+    alloc_locals;
+
+    let (__fp__, _) = get_fp_and_pc();
+
     // ? Handle inputs
     local order_tab: OrderTab;
     handle_order_tab_input(&order_tab);
@@ -68,26 +67,41 @@ func open_order_tab{
     );
 
     local add_only: felt;
-    %{ ids.add_only = current_tab_interaction["add_only"] %}
+    %{ ids.add_only = current_order["add_only"] %}
 
     // ?
     let (base_amounts_sum: felt) = sum_notes(
-        base_notes_in_len, base_notes_in, order_tab.base_token, 0
+        base_notes_in_len, base_notes_in, order_tab.tab_header.base_token, 0
     );
     let base_refund_note_amount = base_refund_note.amount;
+    if (base_refund_note.hash != 0) {
+        assert base_refund_note.index = base_notes_in[0].index;
+    }
 
     let (quote_amounts_sum: felt) = sum_notes(
-        quote_notes_in_len, quote_notes_in, order_tab.quote_token, 0
+        quote_notes_in_len, quote_notes_in, order_tab.tab_header.quote_token, 0
     );
     let quote_refund_note_amount = quote_refund_note.amount;
+    if (quote_refund_note.hash != 0) {
+        assert quote_refund_note.index = quote_notes_in[0].index;
+    }
 
     let base_amount = base_amounts_sum - base_refund_note_amount;
     let quote_amount = quote_amounts_sum - quote_refund_note_amount;
 
     with_attr error_message("ORDER TAB HASH IS INVALID") {
-        assert order_tab.tab_header.hash = hash_tab_header(&order_tab.tab_header);
-        assert order_tab.hash = hash_order_tab(&order_tab);
+        verify_order_tab_hash(order_tab);
     }
+
+    // ? Update the dictionaries
+    open_tab_state_note_updates(
+        base_notes_in_len,
+        base_notes_in,
+        quote_notes_in_len,
+        quote_notes_in,
+        base_refund_note,
+        quote_refund_note,
+    );
 
     if (add_only == 1) {
         // & ADDING TO EXISTING ORDER TAB
@@ -97,7 +111,7 @@ func open_order_tab{
         let updated_quote_amount = order_tab.quote_amount + quote_amount;
 
         let updated_tab_hash = update_order_tab_hash(
-            &order_tab.tab_header, updated_base_amount, updated_quote_amount
+            order_tab.tab_header, updated_base_amount, updated_quote_amount
         );
 
         // ? Verify the signature
@@ -113,9 +127,9 @@ func open_order_tab{
         );
 
         // ? Update the dictionaries
-        update_tab_in_state(
-            &order_tab, updated_base_amount, updated_quote_amount, updated_tab_hash
-        );
+        update_tab_in_state(order_tab, updated_base_amount, updated_quote_amount, updated_tab_hash);
+
+        return ();
     } else {
         // & OPENING NEW ORDER TAB
         with_attr error_message("INVALID AMOUNTS IN OPEN ORDER TAB") {
@@ -137,17 +151,9 @@ func open_order_tab{
 
         // ? Update the dictionaries
         add_new_tab_to_state(order_tab);
-    }
 
-    // ? Update the dictionaries
-    open_tab_state_note_updates(
-        base_notes_in_len,
-        base_notes_in,
-        quote_notes_in_len,
-        quote_notes_in,
-        base_refund_note,
-        quote_refund_note,
-    );
+        return ();
+    }
 }
 
 func handle_inputs{pedersen_ptr: HashBuiltin*}(
@@ -160,7 +166,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
 ) {
     %{
         ##* BASE INPUT NOTES =============================================================
-        input_notes = current_tab_interaction["base_notes_in"]
+        input_notes = current_order ["base_notes_in"]
 
         memory[ids.base_notes_in_len] = len(input_notes)
         memory[ids.base_notes_in] = notes_ = segments.add()
@@ -173,7 +179,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
             memory[notes_ + i* NOTE_SIZE + INDEX_OFFSET] = int(input_notes[i]["index"])
             memory[notes_ + i* NOTE_SIZE + HASH_OFFSET] = int(input_notes[i]["hash"])
 
-        refund_note__  = current_tab_interaction["base_refund_note"]
+        refund_note__  = current_order ["base_refund_note"]
         if refund_note__ is not None:
             memory[ids.base_refund_note.address_ + ADDRESS_OFFSET+0] = int(refund_note__["address"]["x"])
             memory[ids.base_refund_note.address_ + ADDRESS_OFFSET+1] = int(refund_note__["address"]["y"])
@@ -193,9 +199,9 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
 
 
         ##* QUOTE INPUT NOTES =============================================================
-        input_notes = current_tab_interaction["quote_notes_in"]
+        input_notes = current_order ["quote_notes_in"]
 
-          memory[ids.quote_notes_in_len] = len(input_notes)
+        memory[ids.quote_notes_in_len] = len(input_notes)
         memory[ids.quote_notes_in] = notes_ = segments.add()
         for i in range(len(input_notes)):
             memory[notes_ + i* NOTE_SIZE + ADDRESS_OFFSET+0] = int(input_notes[i]["address"]["x"])
@@ -206,7 +212,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
             memory[notes_ + i* NOTE_SIZE + INDEX_OFFSET] = int(input_notes[i]["index"])
             memory[notes_ + i* NOTE_SIZE + HASH_OFFSET] = int(input_notes[i]["hash"])
 
-        refund_note__  = current_tab_interaction["quote_refund_note"]
+        refund_note__  = current_order ["quote_refund_note"]
         if refund_note__ is not None:
             memory[ids.quote_refund_note.address_ + ADDRESS_OFFSET+0] = int(refund_note__["address"]["x"])
             memory[ids.quote_refund_note.address_ + ADDRESS_OFFSET+1] = int(refund_note__["address"]["y"])

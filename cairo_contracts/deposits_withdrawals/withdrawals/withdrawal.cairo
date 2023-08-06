@@ -22,7 +22,7 @@ from deposits_withdrawals.withdrawals.withdraw_utils import (
     get_withdraw_and_refund_notes,
     verify_withdraw_notes,
 )
-from helpers.spot_helpers.dict_updates import withdraw_note_dict_updates
+from helpers.spot_helpers.dict_updates import withdraw_state_dict_updates
 
 from rollup.output_structs import (
     NoteDiffOutput,
@@ -37,8 +37,8 @@ func verify_withdrawal{
     ecdsa_ptr: SignatureBuiltin*,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
     accumulated_withdrawal_hashes: DictAccess*,
-    note_dict: DictAccess*,
-    zero_note_output_ptr: ZeroOutput*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
 }() {
     alloc_locals;
 
@@ -60,7 +60,7 @@ func verify_withdrawal{
     verify_withdraw_notes(withdraw_notes_len, withdraw_notes, refund_note, withdrawal);
 
     // Update the note dict
-    withdraw_note_dict_updates(withdraw_notes_len, withdraw_notes, refund_note);
+    withdraw_state_dict_updates(withdraw_notes_len, withdraw_notes, refund_note);
 
     // Todo Should write empty notes to output
 

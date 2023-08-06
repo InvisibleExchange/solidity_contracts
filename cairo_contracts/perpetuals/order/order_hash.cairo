@@ -65,11 +65,11 @@ func verify_close_order_hash{pedersen_ptr: HashBuiltin*}(
     return ();
 }
 
-func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition*) {
-    let header_hash = _hash_position_header(
-        &position.position_header.synthetic_token,
-        &position.position_header.allow_partial_liquidations,
-        &position.position_header.position_address,
+func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
+    let (header_hash) = _hash_position_header(
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
+        position.position_header.position_address,
     );
 
     assert header_hash = position.position_header.hash;
@@ -119,8 +119,6 @@ func _hash_position_header{pedersen_ptr: HashBuiltin*}(
     synthetic_token: felt, allow_partial_liquidations: felt, position_address: felt
 ) -> (res: felt) {
     alloc_locals;
-
-    let input_one = 2 * order_side + allow_partial_liquidations;
 
     let hash_ptr = pedersen_ptr;
     with hash_ptr {

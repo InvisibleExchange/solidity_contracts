@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
+    path::Path,
     str::FromStr,
     sync::Arc,
     thread::{self, JoinHandle, ThreadId},
@@ -33,7 +34,7 @@ use crate::{
         transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
         Transaction,
     },
-    utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
+    utils::firestore::{start_add_note_thread, start_add_position_thread},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -83,7 +84,9 @@ use crate::transaction_batch::{
 
 // TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
 
-#[derive(Clone)]
+pub const TREE_DEPTH: u32 = 32;
+
+#[derive(Clone, Debug)]
 pub enum LeafNodeType {
     Note,
     Position,
@@ -874,7 +877,6 @@ impl TransactionBatch {
     // * =================================================================
     // * FINALIZE BATCH
 
-    const TREE_DEPTH: u32 = 32;
     pub fn finalize_batch(&mut self) -> Result<(), BatchFinalizationError> {
         // & Get the merkle trees from the beginning of the batch from disk
 
@@ -887,7 +889,7 @@ impl TransactionBatch {
         let latest_output_json = self.swap_output_json.clone();
         let latest_output_json = latest_output_json.lock();
 
-        let current_batch_index = main_storage.latest_batch;
+        let _current_batch_index = main_storage.latest_batch;
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
@@ -938,7 +940,7 @@ impl TransactionBatch {
             1234, // todo: Could be a version code and a tx_batch count
             &prev_spot_root,
             &new_spot_root,
-            Self::TREE_DEPTH,
+            TREE_DEPTH,
             global_expiration_timestamp,
             num_output_notes,
             num_zero_notes,
@@ -966,26 +968,26 @@ impl TransactionBatch {
             preimage_json,
         );
 
-        // // Todo: This is for testing only ----------------------------
-        // let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
-        // std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
-        // // Todo: This is for testing only ----------------------------
+        // Todo: This is for testing only ----------------------------
+        let path = Path::new("../cairo_contracts/transaction_batch/tx_batch_input.json");
+        std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
+        // Todo: This is for testing only ----------------------------
 
-        // & Write transaction batch json to database
-        let _handle = tokio::spawn(async move {
-            if let Err(e) =
-                upload_file_to_storage(current_batch_index.to_string(), output_json).await
-            {
-                println!("Error uploading file to storage: {:?}", e);
-            }
-        });
+        // // & Write transaction batch json to database
+        // let _handle = tokio::spawn(async move {
+        //     if let Err(e) =
+        //         upload_file_to_storage(current_batch_index.to_string(), output_json).await
+        //     {
+        //         println!("Error uploading file to storage: {:?}", e);
+        //     }
+        // });
 
         println!("Transaction batch finalized successfully!");
 
         Ok(())
     }
 
-    const PARTITION_SIZE_EXPONENT: u32 = 12; //16;
+    const PARTITION_SIZE_EXPONENT: u32 = 12;
     pub fn update_trees(
         &mut self,
         updated_state_hashes: HashMap<u64, (LeafNodeType, BigUint)>,
@@ -1031,7 +1033,7 @@ impl TransactionBatch {
             0
         };
         let depth = if tree_index == u32::MAX {
-            Self::TREE_DEPTH - Self::PARTITION_SIZE_EXPONENT
+            TREE_DEPTH - Self::PARTITION_SIZE_EXPONENT
         } else {
             Self::PARTITION_SIZE_EXPONENT
         };
@@ -1041,9 +1043,15 @@ impl TransactionBatch {
 
         let prev_root = batch_init_tree.root.clone();
 
+        // println!("prev_root {:?}", prev_root);
+        // println!("updated_state_hashes {:?}", updated_state_hashes);
+        // println!("batch_init_tree leaves {:?}", batch_init_tree.leaf_nodes);
+
         batch_init_tree.batch_transition_updates(&updated_state_hashes, preimage_json);
 
         let new_root = batch_init_tree.root.clone();
+
+        // println!("new spot root {:?}", new_root);
 
         if let Err(e) = batch_init_tree.store_to_disk(tree_index) {
             println!("Error storing tree to disk: {:?}", e);

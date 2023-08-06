@@ -381,14 +381,7 @@ pub struct GlobalDexState {
     pub final_state_root: String,
     pub state_tree_depth: u32,
     pub global_expiration_timestamp: u32,
-    pub n_output_notes: u32,
-    pub n_zero_notes: u32,
-    pub n_output_positions: u32,
-    pub n_empty_positions: u32,
-    pub num_output_tabs: u32,
-    pub num_empty_tabs: u32,
-    pub n_deposits: u32,
-    pub n_withdrawals: u32,
+    pub program_input_counts: ProgramInputCounts,
     pub chain_ids: Vec<u32>,
 }
 
@@ -400,11 +393,11 @@ impl GlobalDexState {
         state_tree_depth: u32,
         global_expiration_timestamp: u32,
         n_output_notes: u32,
-        n_zero_notes: u32,
+        n_empty_notes: u32,
         n_output_positions: u32,
         n_empty_positions: u32,
-        num_output_tabs: u32,
-        num_empty_tabs: u32,
+        n_output_tabs: u32,
+        n_empty_tabs: u32,
         n_deposits: u32,
         n_withdrawals: u32,
         chain_ids: Vec<u32>,
@@ -412,23 +405,39 @@ impl GlobalDexState {
         let init_state_root = init_state_root.to_string();
         let final_state_root = final_state_root.to_string();
 
+        let program_input_counts = ProgramInputCounts {
+            n_output_notes,
+            n_empty_notes,
+            n_output_positions,
+            n_empty_positions,
+            n_output_tabs,
+            n_empty_tabs,
+            n_deposits,
+            n_withdrawals,
+        };
+
         GlobalDexState {
             config_code,
             init_state_root,
             final_state_root,
             state_tree_depth,
             global_expiration_timestamp,
-            n_output_notes,
-            n_zero_notes,
-            n_output_positions,
-            n_empty_positions,
-            num_output_tabs,
-            num_empty_tabs,
-            n_deposits,
-            n_withdrawals,
+            program_input_counts,
             chain_ids,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProgramInputCounts {
+    pub n_output_notes: u32,
+    pub n_output_positions: u32,
+    pub n_output_tabs: u32,
+    pub n_empty_notes: u32,
+    pub n_empty_positions: u32,
+    pub n_empty_tabs: u32,
+    pub n_deposits: u32,
+    pub n_withdrawals: u32,
 }
 
 // * Global Config

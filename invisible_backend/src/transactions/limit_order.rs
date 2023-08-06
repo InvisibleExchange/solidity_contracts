@@ -139,6 +139,8 @@ fn hash_order(
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
+    // & H({expiration_timestamp, token_spent, token_received, amount_spent, amount_received, fee_limit, note_info_hash, order_tab_pub_key})
+
     let expiration_timestamp = BigUint::from_u64(expiration_timestamp).unwrap();
     hash_inputs.push(&expiration_timestamp);
     let token_spent = BigUint::from_u32(token_spent).unwrap();
@@ -193,7 +195,7 @@ impl SpotNotesInfo {
             .map(|note| &note.hash)
             .collect::<Vec<&BigUint>>();
 
-        let z = BigUint::zero();
+        let z: BigUint = BigUint::zero();
         let refund_hash: &BigUint;
         if self.refund_note.is_some() {
             refund_hash = &self.refund_note.as_ref().unwrap().hash

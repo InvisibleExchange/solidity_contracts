@@ -1,183 +1,166 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.cairo.common.dict import dict_new, dict_write, dict_update, dict_squash, dict_read
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.merkle_multi_update import merkle_multi_update
-from starkware.cairo.common.math import unsigned_div_rem, assert_le
-from starkware.cairo.common.math_cmp import is_le
 
-from invisible_swaps.order.invisible_order import Invisibl3Order
-from rollup.output_structs import write_zero_note_to_output, ZeroOutput
-from helpers.utils import Note, construct_new_note, sum_notes, hash_note, validate_fee_taken
+from helpers.utils import Note
+from helpers.spot_helpers.dict_updates import _update_multi_inner
+
+from order_tabs.order_tab import OrderTab
 
 func open_tab_state_note_updates{
-    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
 }(
     base_notes_in_len: felt,
     base_notes_in: Note*,
     quote_notes_in_len: felt,
     quote_notes_in: Note*,
-    base_refund_note: Note*,
-    quote_refund_note: Note*,
+    base_refund_note: Note,
+    quote_refund_note: Note,
 ) {
+    alloc_locals;
+
     // ? Remove the notes from the state
     _update_multi_inner(base_notes_in_len, base_notes_in);
     _update_multi_inner(quote_notes_in_len, quote_notes_in);
 
+    let pedersen_tmp = pedersen_ptr;
+
     // ? add the refund notes
     if (base_refund_note.hash != 0) {
-        // * Update the note dict
-        let note_dict_ptr = note_dict;
-        note_dict_ptr.key = base_notes_in[0].index;
-        note_dict_ptr.prev_value = 0;
-        note_dict_ptr.new_value = base_refund_note.hash;
+        add_refund_note(base_notes_in[0].index, base_refund_note);
 
-        let note_dict = note_dict + DictAccess.SIZE;
-
-        // ? store to an array used for program outputs
-        if (base_refund_note.hash != 0) {
-            assert note_updates[0] = base_refund_note;
-            note_updates = &note_updates[1];
-        }
-
-        // %{
-        //     if ids.base_refund_note.hash != 0:
-        //         output_notes[ids.base_refund_note.index] = {
-        //             "address": {"x": ids.base_refund_note.address.x, "y": ids.base_refund_note.address.y},
-        //             "hash": ids.base_refund_note.hash,
-        //             "index": ids.base_refund_note.index,
-        //             "blinding": ids.base_refund_note.blinding_factor,
-        //             "token": ids.base_refund_note.token,
-        //             "amount": ids.base_refund_note.amount,
-        //         }
-        // %}
-    }
-    if (quote_refund_note.hash != 0) {
-        // * Update the note dict
-        let note_dict_ptr = note_dict;
-        note_dict_ptr.key = quote_notes_in[0].index;
-        note_dict_ptr.prev_value = 0;
-        note_dict_ptr.new_value = quote_refund_note.hash;
-
-        let note_dict = note_dict + DictAccess.SIZE;
-
-        // ? store to an array used for program outputs
         if (quote_refund_note.hash != 0) {
-            assert note_updates[0] = quote_refund_note;
-            note_updates = &note_updates[1];
+            add_refund_note(quote_notes_in[0].index, quote_refund_note);
+
+            let pedersen_ptr = pedersen_tmp;
+            return ();
         }
 
-        // %{
-        //     if ids.quote_refund_note.hash != 0:
-        //         output_notes[ids.quote_refund_note.index] = {
-        //             "address": {"x": ids.quote_refund_note.address.x, "y": ids.quote_refund_note.address.y},
-        //             "hash": ids.quote_refund_note.hash,
-        //             "index": ids.quote_refund_note.index,
-        //             "blinding": ids.quote_refund_note.blinding_factor,
-        //             "token": ids.quote_refund_note.token,
-        //             "amount": ids.quote_refund_note.amount,
-        //         }
-        // %}
+        let pedersen_ptr = pedersen_tmp;
+        return ();
+    } else {
+        if (quote_refund_note.hash != 0) {
+            add_refund_note(quote_notes_in[0].index, quote_refund_note);
+
+            let pedersen_ptr = pedersen_tmp;
+            return ();
+        }
+        let pedersen_ptr = pedersen_tmp;
+        return ();
     }
+}
+
+func add_refund_note{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*}(
+    index: felt, refund_note: Note
+) {
+    alloc_locals;
+
+    // * Update the note dict
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = index;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = refund_note.hash;
+
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    // ? store to an array used for program outputs
+    %{ leaf_node_types[ids.index] = "note" %}
+    %{
+        note_output_idxs[ids.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
+
+    assert note_updates[0] = refund_note;
+    let note_updates = &note_updates[1];
 
     return ();
 }
 
 func close_tab_note_state_updates{
-    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
-}(order_tab: OrderTab*, base_return_note: Note*, quote_return_note: Note*) {
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
+}(base_return_note: Note, quote_return_note: Note) {
     // * Update the note dict
-    let note_dict_ptr = note_dict;
-    note_dict_ptr.key = base_return_note.index;
-    note_dict_ptr.prev_value = 0;
-    note_dict_ptr.new_value = base_return_note.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = base_return_note.index;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = base_return_note.hash;
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = base_return_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
-    // %{
-    //     if ids.base_return_note.hash != 0:
-    //         output_notes[ids.base_return_note.index] = {
-    //             "address": {"x": ids.base_return_note.address.x, "y": ids.base_return_note.address.y},
-    //             "hash": ids.base_return_note.hash,
-    //             "index": ids.base_return_note.index,
-    //             "blinding": ids.base_return_note.blinding_factor,
-    //             "token": ids.base_return_note.token,
-    //             "amount": ids.base_return_note.amount,
-    //         }
-    // %}
+    %{ leaf_node_types[ids.base_return_note.index] = "note" %}
+    %{
+        note_output_idxs[ids.base_return_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
-    let note_dict_ptr = note_dict;
-    note_dict_ptr.key = quote_return_note.index;
-    note_dict_ptr.prev_value = 0;
-    note_dict_ptr.new_value = quote_return_note.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = quote_return_note.index;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = quote_return_note.hash;
+    %{ leaf_node_types[ids.quote_return_note.index] = "note" %}
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = quote_return_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
-    // %{
-    //     if ids.quote_return_note.hash != 0:
-    //         output_notes[ids.quote_return_note.index] = {
-    //             "address": {"x": ids.quote_return_note.address.x, "y": ids.quote_return_note.address.y},
-    //             "hash": ids.quote_return_note.hash,
-    //             "index": ids.quote_return_note.index,
-    //             "blinding": ids.quote_return_note.blinding_factor,
-    //             "token": ids.quote_return_note.token,
-    //             "amount": ids.quote_return_note.amount,
-    //         }
-    // %}
+    %{ leaf_node_types[ids.quote_return_note.index] = "note" %}
+    %{
+        note_output_idxs[ids.quote_return_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
     return ();
 }
 
 // ? ORDER TAB UPDATES ===================================================
-func add_new_tab_to_state{pedersen_ptr: HashBuiltin*, order_tab_dict: DictAccess*}(
-    order_tab: OrderTab*
+func add_new_tab_to_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
+    order_tab: OrderTab
 ) {
-    let tab_dict_ptr = order_tab_dict;
-    tab_dict_ptr.key = order_tab.index;
-    tab_dict_ptr.prev_value = 0;
-    tab_dict_ptr.new_value = order_tab.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = order_tab.tab_idx;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = order_tab.hash;
 
-    let order_tab_dict = order_tab_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
-    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.order_tab.base_amount, ids.order_tab.quote_amount, ids.order_tab.hash ) %}
+    %{ leaf_node_types[ids.order_tab.tab_idx] = "order_tab" %}
+    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.order_tab.tab_idx, ids.order_tab.base_amount, ids.order_tab.quote_amount, ids.order_tab.hash ) %}
 
     return ();
 }
 
-func remove_tab_from_state{pedersen_ptr: HashBuiltin*, tab_dict: DictAccess*}(
-    order_tab: OrderTab*
+func remove_tab_from_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
+    order_tab: OrderTab
 ) {
-    let tab_dict_ptr = tab_dict;
-    tab_dict_ptr.key = order_tab.index;
-    tab_dict_ptr.prev_value = order_tab.hash;
-    tab_dict_ptr.new_value = 0;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = order_tab.tab_idx;
+    assert state_dict_ptr.prev_value = order_tab.hash;
+    assert state_dict_ptr.new_value = 0;
 
-    let tab_dict = tab_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    %{ leaf_node_types[ids.order_tab.tab_idx] = "order_tab" %}
 
     return ();
 }
 
-func update_tab_in_state{pedersen_ptr: HashBuiltin*, tab_dict: DictAccess*}(
-    prev_order_tab: OrderTab*, new_base_amount: felt, new_quote_amount: felt, updated_tab_hash: felt
+func update_tab_in_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
+    prev_order_tab: OrderTab, new_base_amount: felt, new_quote_amount: felt, updated_tab_hash: felt
 ) {
-    let tab_dict_ptr = tab_dict;
-    tab_dict_ptr.key = prev_order_tab.index;
-    tab_dict_ptr.prev_value = prev_order_tab.hash;
-    tab_dict_ptr.new_value = updated_tab_hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = prev_order_tab.tab_idx;
+    assert state_dict_ptr.prev_value = prev_order_tab.hash;
+    assert state_dict_ptr.new_value = updated_tab_hash;
 
-    let tab_dict = tab_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
-    %{ store_output_order_tab(ids.order_tab.tab_header.address_, new_base_amount, new_quote_amount, updated_tab_hash) %}
+    %{ leaf_node_types[ids.prev_order_tab.tab_idx] = "order_tab" %}
+    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.prev_order_tab.tab_idx, new_base_amount, new_quote_amount, updated_tab_hash) %}
 
     return ();
 }

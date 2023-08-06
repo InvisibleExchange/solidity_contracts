@@ -26,11 +26,11 @@ pub fn open_tab_state_updates(
     let mut updated_state_hashes_m = updated_state_hashes.lock();
     for note in base_notes_in.into_iter() {
         state_tree_m.update_leaf_node(&BigUint::zero(), note.index);
-        updated_state_hashes_m.insert(note.index, (LeafNodeType::Note, note.hash));
+        updated_state_hashes_m.insert(note.index, (LeafNodeType::Note, BigUint::zero()));
     }
     for note in quote_notes_in.into_iter() {
         state_tree_m.update_leaf_node(&BigUint::zero(), note.index);
-        updated_state_hashes_m.insert(note.index, (LeafNodeType::Note, note.hash));
+        updated_state_hashes_m.insert(note.index, (LeafNodeType::Note, BigUint::zero()));
     }
     if let Some(note) = base_refund_note {
         state_tree_m.update_leaf_node(&note.hash, note.index);

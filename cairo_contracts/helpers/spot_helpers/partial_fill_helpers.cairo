@@ -14,7 +14,7 @@ from invisible_swaps.order.invisible_order import Invisibl3Order
 
 from helpers.utils import Note, construct_new_note, sum_notes, hash_note, validate_fee_taken
 
-func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
+func refund_partial_fill{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*}(
     order: Invisibl3Order, address: felt, blinding: felt, unspent_amount: felt, prev_hash: felt
 ) {
     //
@@ -23,27 +23,22 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, not
 
     // * Update the note dict with the new notes
 
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = pfr_note.index;
-    assert note_dict_ptr.prev_value = prev_hash;
-    assert note_dict_ptr.new_value = pfr_note.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = pfr_note.index;
+    assert state_dict_ptr.prev_value = prev_hash;
+    assert state_dict_ptr.new_value = pfr_note.hash;
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = pfr_note;
     note_updates = &note_updates[1];
 
-    // %{
-    //     output_notes[ids.pfr_note.index] = {
-    //            "address": {"x": ids.pfr_note.address.x, "y": ids.pfr_note.address.y},
-    //            "hash": ids.pfr_note.hash,
-    //            "index": ids.pfr_note.index,
-    //            "blinding": ids.pfr_note.blinding_factor,
-    //            "token": ids.pfr_note.token,
-    //            "amount": ids.pfr_note.amount,
-    //        }
-    // %}
+    %{ leaf_node_types[ids.pfr_note.index] = "note" %}
+   %{
+        note_output_idxs[ids.pfr_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
     return ();
 }

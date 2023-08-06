@@ -125,6 +125,8 @@ fn hash_header(
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, base_blinding, quote_bliding, pub_key})
+
     let is_perp = if is_perp {
         BigUint::one()
     } else {

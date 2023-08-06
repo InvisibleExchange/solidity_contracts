@@ -4,8 +4,22 @@ from starkware.cairo.common.ec import ec_add
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.ec_point import EcPoint
 
+from starkware.cairo.common.hash_state import (
+    hash_init,
+    hash_finalize,
+    hash_update,
+    hash_update_single,
+)
+
 from helpers.utils import Note
-from perpetuals.order.order_structs import PerpOrder, OpenOrderFields, PerpPosition
+from perpetuals.order.order_structs import (
+    PerpOrder,
+    OpenOrderFields,
+    CloseOrderFields,
+    PerpPosition,
+)
+
+from perpetuals.order.order_hash import _hash_close_order_fields
 
 // * SPOT SIGNATURES * //
 func verify_spot_signature{ecdsa_ptr: SignatureBuiltin*}(
@@ -29,6 +43,23 @@ func verify_spot_signature{ecdsa_ptr: SignatureBuiltin*}(
     return (pub_key_sum,);
 }
 
+func verify_spot_tab_order_signature{ecdsa_ptr: SignatureBuiltin*}(
+    tx_hash: felt, tab_pub_key: felt
+) {
+    alloc_locals;
+
+    local sig_r: felt;
+    local sig_s: felt;
+    %{
+        ids.sig_r = int(signature[0]) 
+        ids.sig_s = int(signature[1])
+    %}
+
+    return verify_ecdsa_signature(
+        message=tx_hash, public_key=tab_pub_key, signature_r=sig_r, signature_s=sig_s
+    );
+}
+
 func verify_sig{ecdsa_ptr: SignatureBuiltin*}(tx_hash: felt, pub_key: EcPoint) {
     alloc_locals;
 
@@ -39,7 +70,7 @@ func verify_sig{ecdsa_ptr: SignatureBuiltin*}(tx_hash: felt, pub_key: EcPoint) {
         ids.sig_s = int(signature[1])
     %}
 
-    verify_ecdsa_signature(
+    return verify_ecdsa_signature(
         message=tx_hash, public_key=pub_key.x, signature_r=sig_r, signature_s=sig_s
     );
 
@@ -83,7 +114,7 @@ func verify_order_signature{pedersen_ptr: HashBuiltin*, ecdsa_ptr: SignatureBuil
 
     verify_ecdsa_signature(
         message=order_hash,
-        public_key=position.position_address,
+        public_key=position.position_header.position_address,
         signature_r=sig_r,
         signature_s=sig_s,
     );
@@ -123,7 +154,7 @@ func verify_margin_change_signature{pedersen_ptr: HashBuiltin*, ecdsa_ptr: Signa
 }
 
 // * ORDER TAB SIGNATURES * //
-func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
+func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*, pedersen_ptr: HashBuiltin*}(
     prev_tab_hash: felt,
     new_tab_hash: felt,
     base_notes_len: felt,
@@ -147,6 +178,7 @@ func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
     local sig_r: felt;
     local sig_s: felt;
     %{
+        signature = current_order["signature"]
         ids.sig_r = int(signature[0]) 
         ids.sig_s = int(signature[1])
     %}
@@ -158,12 +190,12 @@ func verify_open_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
     return ();
 }
 
-func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
+func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*, pedersen_ptr: HashBuiltin*}(
     tab_hash: felt,
     base_amount_change: felt,
     quote_amount_change: felt,
-    base_close_order_fields: CloseOrderFields*,
-    quote_close_order_fields: CloseOrderFields*,
+    base_close_order_fields: CloseOrderFields,
+    quote_close_order_fields: CloseOrderFields,
     pub_key: felt,
 ) {
     alloc_locals;
@@ -171,11 +203,14 @@ func verify_close_order_tab_signature{ecdsa_ptr: SignatureBuiltin*}(
     let (base_fields_hash: felt) = _hash_close_order_fields(base_close_order_fields);
     let (quote_fields_hash: felt) = _hash_close_order_fields(quote_close_order_fields);
 
-    let hash = _get_close_tab_hash_internal(tab_hash, base_fields_hash, quote_fields_hash);
+    let hash = _get_close_tab_hash_internal(
+        tab_hash, base_amount_change, quote_amount_change, base_fields_hash, quote_fields_hash
+    );
 
     local sig_r: felt;
     local sig_s: felt;
     %{
+        signature = current_order["signature"]
         ids.sig_r = int(signature[0]) 
         ids.sig_s = int(signature[1])
     %}

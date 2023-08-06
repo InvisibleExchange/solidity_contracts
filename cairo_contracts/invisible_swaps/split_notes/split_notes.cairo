@@ -6,7 +6,9 @@ from starkware.cairo.common.registers import get_fp_and_pc
 
 from helpers.utils import Note, sum_notes
 
-func execute_note_split{pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: DictAccess*}() {
+func execute_note_split{
+    pedersen_ptr: HashBuiltin*, range_check_ptr, state_dict: DictAccess*, note_updates: Note*
+}() {
     alloc_locals;
 
     local token: felt;
@@ -51,7 +53,7 @@ func execute_note_split{pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: 
 }
 
 func write_notes_out_over_notes_in{
-    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*,
 }(notes_in_len: felt, notes_in: Note*, notes_out_len: felt, notes_out: Note*, len: felt) {
     if (len == 0) {
         return ();
@@ -63,27 +65,22 @@ func write_notes_out_over_notes_in{
     let note_in: Note = notes_in[0];
     let note_out: Note = notes_out[0];
 
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = note_in.index;
-    assert note_dict_ptr.prev_value = note_in.hash;
-    assert note_dict_ptr.new_value = note_out.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = note_in.index;
+    assert state_dict_ptr.prev_value = note_in.hash;
+    assert state_dict_ptr.new_value = note_out.hash;
 
-    // %{
-    //     output_notes[ids.note_in.index] = {
-    //            "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
-    //            "hash": ids.note_out.hash,
-    //            "index": ids.note_in.index,
-    //            "blinding": ids.note_out.blinding_factor,
-    //            "token": ids.note_out.token,
-    //            "amount": ids.note_out.amount,
-    //        }
-    // %}
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = note_out;
     note_updates = &note_updates[1];
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    %{ leaf_node_types[ids.note_in.index] = "note" %}
+    %{
+        note_output_idxs[ids.note_in.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
     return write_notes_out_over_notes_in(
         notes_in_len - 1, &notes_in[1], notes_out_len - 1, &notes_out[1], len - 1
@@ -91,7 +88,7 @@ func write_notes_out_over_notes_in{
 }
 
 func write_notes_out_over_empty{
-    pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
 }(notes_out_len: felt, notes_out: Note*) {
     alloc_locals;
 
@@ -105,34 +102,29 @@ func write_notes_out_over_empty{
     local zero_idx: felt;
     %{ ids.zero_idx = int(current_split_info["zero_idxs"].pop(0)) %}
 
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = zero_idx;
-    assert note_dict_ptr.prev_value = 0;
-    assert note_dict_ptr.new_value = note_out.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = zero_idx;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = note_out.hash;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = note_out;
     note_updates = &note_updates[1];
 
-    // %{
-    //     output_notes[ids.zero_idx] = {
-    //            "address": {"x": ids.note_out.address.x, "y": ids.note_out.address.y},
-    //            "hash": ids.note_out.hash,
-    //            "index": ids.zero_idx,
-    //            "blinding": ids.note_out.blinding_factor,
-    //            "token": ids.note_out.token,
-    //            "amount": ids.note_out.amount,
-    //        }
-    // %}
+    %{ leaf_node_types[ids.zero_idx] = "note" %}
+    %{
+        note_output_idxs[ids.zero_idx] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     return write_notes_out_over_empty(notes_out_len - 1, &notes_out[1]);
 }
 
-func remove_extra_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, note_updates: Note*}(
-    notes_in_len: felt, notes_in: Note*
-) {
+func remove_extra_notes_in{
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
+}(notes_in_len: felt, notes_in: Note*) {
     if (notes_in_len == 0) {
         return ();
     }
@@ -140,17 +132,14 @@ func remove_extra_notes_in{pedersen_ptr: HashBuiltin*, note_dict: DictAccess*, n
     // * Update the note dict
     let note_in: Note = notes_in[0];
 
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = note_in.index;
-    assert note_dict_ptr.prev_value = note_in.hash;
-    assert note_dict_ptr.new_value = 0;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = note_in.index;
+    assert state_dict_ptr.prev_value = note_in.hash;
+    assert state_dict_ptr.new_value = 0;
 
-    // ? store to an array used for program outputs
-    let (zero_note) = get_zero_note(note_in.index);
-    assert note_updates[0] = zero_note;
-    note_updates = &note_updates[1];
+    let state_dict = state_dict + DictAccess.SIZE;
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    %{ leaf_node_types[ids.note_in.index] = "note" %}
 
     return remove_extra_notes_in(notes_in_len - 1, &notes_in[1]);
 }

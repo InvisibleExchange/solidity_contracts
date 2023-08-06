@@ -33,12 +33,10 @@ func execute_perpetual_swap{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
-    zero_note_output_ptr: ZeroOutput*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }() {
     alloc_locals;

@@ -44,21 +44,6 @@ pub fn check_tab_order_validity(
         ));
     }
 
-    // ? Check that the tab has not expired  --------------------------------------------
-    // let now = SystemTime::now();
-    // let seconds_since_epoch = now
-    //     .duration_since(SystemTime::UNIX_EPOCH)
-    //     .expect("Time went backwards")
-    //     .as_secs() as u32;
-
-    // if order_tab.tab_header.expiration_timestamp < seconds_since_epoch {
-    //     return Err(send_swap_error(
-    //         "order_tab has expired".to_string(),
-    //         Some(order.order_id),
-    //         None,
-    //     ));
-    // }
-
     let is_buy = order_tab.tab_header.base_token == order.token_received;
 
     // ? Check that the order tab has sufficiennt balance to cover the order ---------------

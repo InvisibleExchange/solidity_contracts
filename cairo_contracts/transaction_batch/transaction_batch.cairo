@@ -2,22 +2,9 @@
 
 from starkware.cairo.common.cairo_builtins import HashBuiltin, SignatureBuiltin, BitwiseBuiltin
 from starkware.cairo.common.alloc import alloc
-from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.cairo.common.dict import dict_new, dict_write, dict_update, dict_squash, dict_read
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.cairo_secp.bigint import BigInt3, bigint_to_uint256, uint256_to_bigint
-from starkware.cairo.common.cairo_secp.ec import EcPoint
 from starkware.cairo.common.merkle_multi_update import merkle_multi_update
-from starkware.cairo.common.math import unsigned_div_rem, assert_le
-from starkware.cairo.common.math_cmp import is_le
 from starkware.cairo.common.squash_dict import squash_dict
-from starkware.cairo.common.hash_state import (
-    hash_init,
-    hash_finalize,
-    hash_update,
-    hash_update_single,
-)
 
 from invisible_swaps.swap.invisible_swap import execute_swap
 from deposits_withdrawals.deposits.deposit import verify_deposit
@@ -28,18 +15,22 @@ from perpetuals.prices.prices import PriceRange, get_price_ranges
 from perpetuals.perp_swap.perpetual_swap import execute_perpetual_swap
 from perpetuals.transaction.change_margin import execute_margin_change
 
+from order_tabs.open_order_tab import open_order_tab
+from order_tabs.close_order_tab import close_order_tab
+
 from invisible_swaps.split_notes.split_notes import execute_note_split
+from helpers.utils import Note
 
 from rollup.python_definitions import python_define_utils
 from rollup.output_structs import (
     GlobalDexState,
     NoteDiffOutput,
+    PerpPositionOutput,
+    OrderTabOutput,
     ZeroOutput,
     WithdrawalTransactionOutput,
     DepositTransactionOutput,
-    PerpPositionOutput,
-    write_note_dict_to_output,
-    write_position_dict_to_output,
+    write_state_updates_to_output,
     init_output_structs,
     AccumulatedHashesOutput,
 )
@@ -66,26 +57,19 @@ func main{
 
     // * INITIALIZE DICTIONARIES ***********************************************
 
-    local note_dict: DictAccess*;  // Dictionary of updated notes (idx -> note hash)
+    local state_dict: DictAccess*;  // Dictionary of updated notes (idx -> note hash)
     local fee_tracker_dict: DictAccess*;  // Dictionary of fees collected (token -> fees collected)
-    local position_dict: DictAccess*;  // Dictionary of updated positions (idx -> position hash)
     local order_tab_dict: DictAccess*;  // Dictionary of updated order tabs (idx -> tab hash)
-    local accumulated_deposit_hashes: DictAccess*;  // Dictionary of the accumulated deposit hashes (chain id -> hash)
     local accumulated_withdrawal_hashes: DictAccess*;  // Dictionary of the accumulated withdrawal hashes (chain id -> hash)
-
     %{
-        ids.note_dict = segments.add()
+        ids.state_dict = segments.add()
         ids.fee_tracker_dict = segments.add()
-        ids.position_dict = segments.add()
         ids.order_tab_dict = segments.add()
-        ids.accumulated_deposit_hashes = segments.add()
         ids.accumulated_withdrawal_hashes = segments.add()
     %}
-    let note_dict_start = note_dict;
+    let state_dict_start = state_dict;
     let fee_tracker_dict_start = fee_tracker_dict;
-    let position_dict_start = position_dict;
     let order_tab_dict_start = order_tab_dict;
-    let accumulated_deposit_hashes_start = accumulated_deposit_hashes;
     let accumulated_withdrawal_hashes_start = accumulated_withdrawal_hashes;
 
     // ? Initialize state update arrays
@@ -101,17 +85,30 @@ func main{
     local n_chains: felt;
     local n_deposits: felt;
     local n_withdrawals: felt;
-    local n_output_positions: felt;
-    local n_empty_positions: felt;
+    //
     local n_output_notes: felt;
+    local n_output_positions: felt;
+    local n_output_tabs: felt;
+    //
+    local n_empty_notes: felt;
+    local n_empty_positions: felt;
+    local n_empty_tabs: felt;
+    //
     local global_config_len: felt;
     %{
+        program_input_counts = program_input["global_dex_state"]["program_input_counts"]
         ids.n_chains = len(program_input["global_dex_state"]["chain_ids"]) * ids.AccumulatedHashesOutput.SIZE
-        ids.n_deposits = int(program_input["global_dex_state"]["n_deposits"]) *  ids.DepositTransactionOutput.SIZE
-        ids.n_withdrawals = int(program_input["global_dex_state"]["n_withdrawals"]) * ids.WithdrawalTransactionOutput.SIZE
-        ids.n_output_positions = int(program_input["global_dex_state"]["n_output_positions"]) * ids.PerpPositionOutput.SIZE
-        ids.n_empty_positions = int(program_input["global_dex_state"]["n_empty_positions"])  * ids.ZeroOutput.SIZE
-        ids.n_output_notes = int(program_input["global_dex_state"]["n_output_notes"]) * ids.NoteDiffOutput.SIZE
+        ids.n_deposits = int(program_input_counts["n_deposits"]) *  ids.DepositTransactionOutput.SIZE
+        ids.n_withdrawals = int(program_input_counts["n_withdrawals"]) * ids.WithdrawalTransactionOutput.SIZE
+        #
+        ids.n_output_notes = int(program_input_counts["n_output_notes"]) * ids.NoteDiffOutput.SIZE
+        ids.n_output_positions = int(program_input_counts["n_output_positions"]) * ids.PerpPositionOutput.SIZE
+        ids.n_output_tabs = int(program_input_counts["n_output_tabs"]) * ids.OrderTabOutput.SIZE
+        #
+        ids.n_empty_notes = int(program_input_counts["n_empty_notes"])  * ids.ZeroOutput.SIZE
+        ids.n_empty_positions = int(program_input_counts["n_empty_positions"])  * ids.ZeroOutput.SIZE
+        ids.n_empty_tabs = int(program_input_counts["n_empty_tabs"])  * ids.ZeroOutput.SIZE
+
 
         assets_len = len(program_input["global_config"]["assets"])
         observers_len = len(program_input["global_config"]["observers"])
@@ -130,18 +127,25 @@ func main{
     local withdraw_output_ptr: WithdrawalTransactionOutput* = cast(
         deposit_output_ptr + n_deposits, WithdrawalTransactionOutput*
     );
-    local position_output_ptr: PerpPositionOutput* = cast(
-        withdraw_output_ptr + n_withdrawals, PerpPositionOutput*
-    );
-    // indexes of positions to be removed
-    local empty_position_output_ptr: ZeroOutput* = cast(
-        position_output_ptr + n_output_positions, ZeroOutput*
-    );
+
+    // new ouput state leaves
     local note_output_ptr: NoteDiffOutput* = cast(
-        empty_position_output_ptr + n_empty_positions, NoteDiffOutput*
+        withdraw_output_ptr + n_withdrawals, NoteDiffOutput*
     );
-    // indexes of notes to be removed
-    local zero_note_output_ptr: ZeroOutput* = cast(note_output_ptr + n_output_notes, ZeroOutput*);
+    local position_output_ptr: PerpPositionOutput* = cast(
+        note_output_ptr + n_output_notes, PerpPositionOutput*
+    );
+    local tab_output_ptr: OrderTabOutput* = cast(
+        position_output_ptr + n_output_positions, OrderTabOutput*
+    );
+    // zero output state leaves
+    local empty_note_output_ptr: ZeroOutput* = cast(tab_output_ptr + n_output_tabs, ZeroOutput*);
+    local empty_position_output_ptr: ZeroOutput* = cast(
+        empty_note_output_ptr + n_empty_notes, ZeroOutput*
+    );
+    local empty_tab_output_ptr: ZeroOutput* = cast(
+        empty_position_output_ptr + n_empty_positions, ZeroOutput*
+    );
 
     // Initialize output sections
     init_output_structs(dex_state_ptr);
@@ -161,16 +165,17 @@ func main{
         import time
         t1_start = time.time()
     %}
+    let accumulated_deposit_hash = 0;
     execute_transactions{
-        note_dict=note_dict,
+        state_dict=state_dict,
+        note_updates=note_updates,
         fee_tracker_dict=fee_tracker_dict,
-        position_dict=position_dict,
         deposit_output_ptr=deposit_output_ptr,
-        accumulated_deposit_hashes=accumulated_deposit_hashes,
+        accumulated_deposit_hash=accumulated_deposit_hash,
         withdraw_output_ptr=withdraw_output_ptr,
         accumulated_withdrawal_hashes=accumulated_withdrawal_hashes,
         empty_position_output_ptr=empty_position_output_ptr,
-        zero_note_output_ptr=zero_note_output_ptr,
+        empty_note_output_ptr=empty_note_output_ptr,
         funding_info=funding_info,
         global_config=global_config,
     }();
@@ -180,14 +185,6 @@ func main{
     %}
 
     // * Squash dictionaries =============================================================================
-
-    local squashed_deposit_hashes_dict: DictAccess*;
-    %{ ids.squashed_deposit_hashes_dict = segments.add() %}
-    let (squashed_deposit_hashes_dict_end) = squash_dict(
-        dict_accesses=accumulated_deposit_hashes_start,
-        dict_accesses_end=accumulated_deposit_hashes,
-        squashed_dict=squashed_deposit_hashes_dict,
-    );
 
     // ------------------------------------------------------------------------------
 
@@ -201,111 +198,58 @@ func main{
 
     // ------------------------------------------------------------------------------
 
-    local squashed_note_dict: DictAccess*;
-    %{ ids.squashed_note_dict = segments.add() %}
-    let (squashed_note_dict_end) = squash_dict(
-        dict_accesses=note_dict_start, dict_accesses_end=note_dict, squashed_dict=squashed_note_dict
+    local squashed_state_dict: DictAccess*;
+    %{ ids.squashed_state_dict = segments.add() %}
+    let (squashed_state_dict_end) = squash_dict(
+        dict_accesses=state_dict_start,
+        dict_accesses_end=state_dict,
+        squashed_dict=squashed_state_dict,
     );
-    local squashed_note_dict_len = (squashed_note_dict_end - squashed_note_dict) / DictAccess.SIZE;
-
-    // ------------------------------------------------------------------------------
-
-    local squashed_position_dict: DictAccess*;
-    %{ ids.squashed_position_dict = segments.add() %}
-    let (squashed_position_dict_end) = squash_dict(
-        dict_accesses=position_dict_start,
-        dict_accesses_end=position_dict,
-        squashed_dict=squashed_position_dict,
-    );
-    local squashed_position_dict_len = (squashed_position_dict_end - squashed_position_dict) /
+    local squashed_state_dict_len = (squashed_state_dict_end - squashed_state_dict) /
         DictAccess.SIZE;
 
-    // ------------------------------------------------------------------------------
-
-    local squashed_tab_dict: DictAccess*;
-    %{ ids.squashed_tab_dict = segments.add() %}
-    let (squashed_tab_dict_end) = squash_dict(
-        dict_accesses=order_tab_dict_start,
-        dict_accesses_end=order_tab_dict,
-        squashed_dict=squashed_tab_dict,
-    );
-    local squashed_tab_dict_len = (squashed_tab_dict_end - squashed_tab_dict) / DictAccess.SIZE;
+    %{
+        print("len: ", ids.squashed_state_dict_len)
+        for i in range(ids.squashed_state_dict_len):
+            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +0])
+            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +1])
+            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +2])
+            print("======")
+    %}
 
     // * VERIFY MERKLE TREE UPDATES ******************************************************
 
     verify_merkle_tree_updates(
         dex_state_ptr.init_state_root,
         dex_state_ptr.final_state_root,
-        dex_state_ptr.init_perp_state_root,
-        dex_state_ptr.final_perp_state_root,
-        squashed_note_dict,
-        squashed_note_dict_len,
-        squashed_position_dict,
-        squashed_position_dict_len,
+        squashed_state_dict,
+        squashed_state_dict_len,
         dex_state_ptr.state_tree_depth,
-        dex_state_ptr.perp_tree_depth,
     );
 
     // * WRITE NEW NOTES AND POSITIONS TO THE PROGRAM OUTPUT ******************************
 
-    let note_updates_len = note_updates - note_updates_start;
     %{ stored_indexes = {} %}
-    write_note_updates_to_output{
+    write_state_updates_to_output{
         pedersen_ptr=pedersen_ptr,
         bitwise_ptr=bitwise_ptr,
         note_output_ptr=note_output_ptr,
-        zero_note_output_ptr=zero_note_output_ptr,
-    }(note_updates_start, note_updates_len);
-
-    write_position_dict_to_output{
-        pedersen_ptr=pedersen_ptr,
+        empty_note_output_ptr=empty_note_output_ptr,
         position_output_ptr=position_output_ptr,
         empty_position_output_ptr=empty_position_output_ptr,
-    }(squashed_position_dict, squashed_position_dict_len);
+        tab_output_ptr=tab_output_ptr,
+        empty_tab_output_ptr=empty_tab_output_ptr,
+    }(squashed_state_dict, squashed_state_dict_len, note_updates_start);
 
-    write_order_tab_dict_to_output{
-        pedersen_ptr=pedersen_ptr,
-        order_tab_output_ptr=, // Todo
-        empty_order_tabs_output_ptr= , // todo
-    }(squashed_tab_dict, squashed_tab_dict_len);
-
-
-//     func write_order_tab_dict_to_output{
-//     pedersen_ptr: HashBuiltin*,
-//     order_tab_output_ptr: OrderTabOutput*,
-//     empty_order_tabs_output_ptr: ZeroOutput*,
-// }(order_tab_dict_start: DictAccess*, n_output_tabs: felt) {
-//     alloc_locals;
-
-
-    write_accumulated_hashes_to_output{accumulated_hashes_ptr=accumulated_hashes}(
-        squashed_deposit_hashes_dict,
-        squashed_deposit_hashes_dict_len,
-        squashed_deposit_withdrawal_dict,
-        squashed_deposit_withdrawal_dict_len,
-    );
-
-    // local note_dict_len = (note_dict - note_dict_start) / DictAccess.SIZE;
-    // %{
-    //     for i in range(ids.squashed_note_dict_len):
-    //         print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +0])
-    //         # print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +1])
-    //         print(memory[ids.squashed_note_dict.address_ + i*ids.DictAccess.SIZE +2])
-    //         # print("======")
-
-    // print("======")
-    // %}
-    // // local pos_dict_len = (position_dict - position_dict_start) / DictAccess.SIZE;
-    // %{
-    //     for i in range(ids.squashed_position_dict_len):
-    //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +0])
-    //         # print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +1])
-    //         print(memory[ids.squashed_position_dict.address_ + i*ids.DictAccess.SIZE +2])
-    //         # print("======")
-    // %}
+    // write_accumulated_hashes_to_output{accumulated_hashes_ptr=accumulated_hashes}(
+    //     squashed_deposit_hashes_dict,
+    //     squashed_deposit_hashes_dict_len,
+    //     squashed_deposit_withdrawal_dict,
+    //     squashed_deposit_withdrawal_dict_len,
+    // );
 
     // update the output ptr to point to the end of the program output
-    local output_ptr: felt = cast(zero_note_output_ptr, felt);
+    local output_ptr: felt = cast(empty_tab_output_ptr + n_empty_tabs, felt);
 
     %{ print("all good") %}
 
@@ -316,16 +260,15 @@ func execute_transactions{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
-    position_dict: DictAccess*,
-    order_tab_dict: DictAccess*,
     deposit_output_ptr: DepositTransactionOutput*,
-    accumulated_deposit_hashes: DictAccess*,
+    accumulated_deposit_hash: felt,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
     accumulated_withdrawal_hashes: DictAccess*,
     empty_position_output_ptr: ZeroOutput*,
-    zero_note_output_ptr: ZeroOutput*,
+    empty_note_output_ptr: ZeroOutput*,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
 }() {
@@ -372,12 +315,7 @@ func execute_transactions{
     if (nondet %{ tx_type == "perpetual_swap" %} != 0) {
         %{ current_swap = current_transaction %}
 
-        %{ t1_note_split = time.time() %}
         execute_perpetual_swap();
-        %{
-            t2_note_split = time.time()
-            print("perp swap time: ", t2_note_split - t1_note_split)
-        %}
 
         return execute_transactions();
     }
@@ -403,6 +341,20 @@ func execute_transactions{
         execute_margin_change();
 
         return execute_transactions();
+    }
+    if (nondet %{ tx_type == "open_order_tab" %} != 0) {
+        %{ current_order = current_transaction %}
+
+        open_order_tab();
+
+        return execute_transactions();
+    }
+    if (nondet %{ tx_type == "close_order_tab" %} != 0) {
+        %{ current_order = current_transaction %}
+
+        close_order_tab();
+
+        return execute_transactions();
     } else {
         %{ print("unknown transaction type: ", current_transaction) %}
         return execute_transactions();
@@ -412,14 +364,9 @@ func execute_transactions{
 func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     prev_root: felt,
     new_root: felt,
-    perpetual_prev_root: felt,
-    perpetual_new_root: felt,
-    squashed_note_dict: DictAccess*,
-    squashed_note_dict_len: felt,
-    squashed_position_dict: DictAccess*,
-    squashed_position_dict_len: felt,
+    squashed_state_dict: DictAccess*,
+    squashed_state_dict_len: felt,
     state_tree_depth: felt,
-    perp_tree_depth: felt,
 ) {
     %{ t1_merkle = time.time() %}
     %{
@@ -427,28 +374,11 @@ func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
         preimage = {int(k):[int(x) for x in v] for k,v in preimage.items()}
     %}
     merkle_multi_update{hash_ptr=pedersen_ptr}(
-        squashed_note_dict, squashed_note_dict_len, state_tree_depth, prev_root, new_root
+        squashed_state_dict, squashed_state_dict_len, state_tree_depth, prev_root, new_root
     );
     %{
         t2_merkle = time.time()
         print("merkle update time: ", t2_merkle - t1_merkle)
-    %}
-
-    %{ t1_merkle = time.time() %}
-    %{
-        preimage = program_input["perpetual_preimage"]
-        preimage = {int(k):[int(x) for x in v] for k,v in preimage.items()}
-    %}
-    merkle_multi_update{hash_ptr=pedersen_ptr}(
-        squashed_position_dict,
-        squashed_position_dict_len,
-        perp_tree_depth,
-        perpetual_prev_root,
-        perpetual_new_root,
-    );
-    %{
-        t2_merkle = time.time()
-        print("perpetual merkle update time: ", t2_merkle - t1_merkle)
     %}
 
     return ();

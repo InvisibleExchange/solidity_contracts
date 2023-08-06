@@ -217,37 +217,3 @@ pub async fn start_periodic_updates(
 //
 
 //
-
-// fn update_and_compare(
-//     prev_bid_queue: &mut HashMap<usize, (f64, u64)>,
-//     prev_ask_queue: &mut HashMap<usize, (f64, u64)>,
-//     bid_queue: Vec<(f64, u64, u64, u64)>,
-//     ask_queue: Vec<(f64, u64, u64, u64)>,
-// ) -> (Vec<(usize, (f64, u64, u64))>, Vec<(usize, (f64, u64, u64))>) {
-//     let mut bid_diffs: Vec<(usize, (f64, u64, u64))> = Vec::new();
-
-//     bid_queue
-//         .iter()
-//         .enumerate()
-//         .for_each(|(i, bid)| match prev_bid_queue.get(&i) {
-//             Some(prev_bid) if prev_bid.0 == bid.0 && prev_bid.1 == bid.1 => {}
-//             _ => {
-//                 bid_diffs.push((i, (bid.0, bid.1, bid.2)));
-//                 prev_bid_queue.insert(i, (bid.0, bid.1));
-//             }
-//         });
-
-//     let mut ask_diffs: Vec<(usize, (f64, u64, u64))> = Vec::new();
-//     ask_queue
-//         .iter()
-//         .enumerate()
-//         .for_each(|(i, ask)| match prev_ask_queue.get(&i) {
-//             Some(prev_ask) if prev_ask.0 == ask.0 && prev_ask.1 == ask.1 => {}
-//             _ => {
-//                 ask_diffs.push((i, (ask.0, ask.1, ask.2)));
-//                 prev_ask_queue.insert(i, (ask.0, ask.1));
-//             }
-//         });
-
-//     (bid_diffs, ask_diffs)
-// }

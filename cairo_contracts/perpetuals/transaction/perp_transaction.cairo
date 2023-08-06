@@ -61,22 +61,20 @@ from rollup.global_config import get_dust_amount
 
 from helpers.perp_helpers.partial_fill_helpers_perp import refund_partial_fill, remove_prev_pfr_note
 from helpers.perp_helpers.dict_updates import (
-    update_note_dict,
-    update_rc_note_dict,
-    update_position_dict,
-    update_position_dict_on_close,
+    update_state_dict,
+    update_rc_state_dict,
+    update_position_state,
+    update_position_state_on_close,
 )
 
 func execute_perpetual_transaction{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
-    zero_note_output_ptr: ZeroOutput*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,
@@ -158,11 +156,10 @@ func execute_open_order{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
-    zero_note_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,
@@ -209,13 +206,13 @@ func execute_open_order{
         );
 
         // ? Add the position to the position dict and program output
-        update_position_dict(0, position);
+        update_position_state(0, position);
 
         // ? Refund excess margin if necessary
         refund_unspent_margin_first_fill(order, open_order_fields, init_margin, spent_synthetic);
 
         // ? Update note dict
-        update_note_dict(
+        update_state_dict(
             open_order_fields.notes_in_len,
             open_order_fields.notes_in,
             open_order_fields.refund_note,
@@ -252,7 +249,7 @@ func execute_open_order{
         );
 
         // ? Add the position to the position dict and program output
-        update_position_dict(prev_position_hash, position);
+        update_position_state(prev_position_hash, position);
 
         // ? Refund excess margin if necessary
         refund_unspent_margin_later_fills(
@@ -267,8 +264,8 @@ func execute_modify_order{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
@@ -283,7 +280,7 @@ func execute_modify_order{
 
     // ? Take a fee
     validate_fee_taken(fee_taken, order, spent_collateral);
-    take_fee(position.collateral_token, fee_taken); // TODO : FIGURE THIS OUT
+    take_fee(global_config.collateral_token, fee_taken);  // TODO : FIGURE THIS OUT
 
     let (price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
 
@@ -293,14 +290,14 @@ func execute_modify_order{
         );
 
         // ? Add the position to the position dict and program output
-        update_position_dict(prev_position_hash, position);
+        update_position_state(prev_position_hash, position);
     } else {
         let (prev_position_hash: felt, position: PerpPosition) = reduce_position_size(
             order, position, spent_synthetic, fee_taken, price
         );
 
         // ? Add the position to the position dict and program output
-        update_position_dict(prev_position_hash, position);
+        update_position_state(prev_position_hash, position);
     }
 
     return ();
@@ -310,11 +307,10 @@ func execute_close_order{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,
@@ -328,7 +324,7 @@ func execute_close_order{
 
     // ? Take a fee
     validate_fee_taken(fee_taken, order, spent_collateral);
-    take_fee(position.collateral_token, fee_taken);
+    take_fee(global_config.collateral_token, fee_taken);
 
     assert_not_equal(order.order_side, position.order_side);
 
@@ -343,13 +339,13 @@ func execute_close_order{
 
     let (return_collateral_note: Note) = construct_new_note(
         close_order_fields.return_collateral_address,
-        position.collateral_token,
+        global_config.collateral_token,
         collateral_returned,
         close_order_fields.return_collateral_blinding,
         index,
     );
 
-    update_rc_note_dict(return_collateral_note);
+    update_rc_state_dict(return_collateral_note);
 
     return ();
 }
@@ -358,10 +354,10 @@ func execute_liquidation_order{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     funding_info: FundingInfo*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(order: PerpOrder, position: PerpPosition, spent_collateral: felt, spent_synthetic: felt) {
     alloc_locals;
@@ -382,8 +378,8 @@ func execute_liquidation_order{
 func open_new_position{
     range_check_ptr,
     pedersen_ptr: HashBuiltin*,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,
@@ -422,7 +418,8 @@ func open_new_position{
 func add_margin_to_position{
     range_check_ptr,
     pedersen_ptr: HashBuiltin*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
 }(order: PerpOrder, init_margin: felt, fee_taken: felt, leverage: felt, entry_price: felt) -> (
@@ -449,7 +446,8 @@ func add_margin_to_position{
 func increase_position_size{
     range_check_ptr,
     pedersen_ptr: HashBuiltin*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
 }(
@@ -474,7 +472,8 @@ func increase_position_size{
 func reduce_position_size{
     range_check_ptr,
     pedersen_ptr: HashBuiltin*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
 }(
@@ -508,9 +507,9 @@ func reduce_position_size{
 func close_position{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     funding_info: FundingInfo*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,
@@ -537,7 +536,7 @@ func close_position{
             position, close_price, fee_taken, funding_idx
         );
 
-        update_position_dict_on_close(prev_position_hash, position_idx);
+        update_position_state_on_close(prev_position_hash, position_idx);
 
         return (collateral_returned,);
     } else {
@@ -551,7 +550,7 @@ func close_position{
         );
 
         // ? Removes the position to the position dict and program output
-        update_position_dict(prev_position_hash, position);
+        update_position_state(prev_position_hash, position);
 
         return (collateral_returned,);
     }
@@ -560,9 +559,9 @@ func close_position{
 func liquidate_position{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     funding_info: FundingInfo*,
-    empty_position_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }(order: PerpOrder, position: PerpPosition, spent_synthetic: felt, close_price: felt) -> (
     leftover_value: felt
@@ -584,7 +583,7 @@ func liquidate_position{
             position, close_price, funding_idx
         );
 
-        update_position_dict_on_close(prev_position_hash, position_idx);
+        update_position_state_on_close(prev_position_hash, position_idx);
 
         return (leftover_value,);
     } else {
@@ -598,7 +597,7 @@ func liquidate_position{
         );
 
         // ? Removes the position to the position dict and program output
-        update_position_dict(prev_position_hash, position);
+        update_position_state(prev_position_hash, position);
 
         return (leftover_value,);
     }
@@ -609,7 +608,8 @@ func liquidate_position{
 func refund_unspent_margin_first_fill{
     range_check_ptr: felt,
     pedersen_ptr: HashBuiltin*,
-    note_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     global_config: GlobalConfig*,
 }(order: PerpOrder, open_order_fields: OpenOrderFields, init_margin: felt, spent_synthetic: felt) {
     alloc_locals;
@@ -649,7 +649,8 @@ func refund_unspent_margin_first_fill{
 func refund_unspent_margin_later_fills{
     range_check_ptr,
     pedersen_ptr: HashBuiltin*,
-    note_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     global_config: GlobalConfig*,
 }(
     order: PerpOrder,

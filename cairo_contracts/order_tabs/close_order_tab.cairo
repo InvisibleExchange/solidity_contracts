@@ -4,41 +4,39 @@ from starkware.cairo.common.cairo_builtins import HashBuiltin, SignatureBuiltin,
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.registers import get_fp_and_pc
-from starkware.cairo.common.dict import dict_new, dict_write, dict_update, dict_squash, dict_read
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.cairo_secp.bigint import BigInt3, bigint_to_uint256, uint256_to_bigint
-from starkware.cairo.common.cairo_secp.ec import EcPoint
-from starkware.cairo.common.merkle_multi_update import merkle_multi_update
-from starkware.cairo.common.uint256 import Uint256
-from starkware.cairo.common.math import unsigned_div_rem, assert_le
+from starkware.cairo.common.math import assert_le
 from starkware.cairo.common.math_cmp import is_le
 from starkware.cairo.common.squash_dict import squash_dict
-from starkware.cairo.common.hash_state import (
-    hash_init,
-    hash_finalize,
-    hash_update,
-    hash_update_single,
-)
 
 from helpers.utils import Note, construct_new_note
-from helpres.signatures.signatures import verify_close_order_tab_signature
+from helpers.signatures.signatures import verify_close_order_tab_signature
+
+from perpetuals.order.order_structs import CloseOrderFields
 
 from rollup.output_structs import ZeroOutput, NoteDiffOutput
 from rollup.global_config import GlobalConfig, get_dust_amount
 
-from order_tabs.order_tab import OrderTab, hash_tab_header, hash_order_tab
-from order_tabs.update_dicts import close_tab_note_state_updates, remove_tab_from_state
+from order_tabs.order_tab import OrderTab, verify_order_tab_hash, update_order_tab_hash
+from order_tabs.update_dicts import (
+    close_tab_note_state_updates,
+    remove_tab_from_state,
+    update_tab_in_state,
+)
 
 func close_order_tab{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
-    note_dict: DictAccess*,
-    order_tab_dict: DictAccess*,
+    state_dict: DictAccess*,
+    note_updates: Note*,
     fee_tracker_dict: DictAccess*,
-    zero_tab_output_ptr: ZeroOutput*,
     global_config: GlobalConfig*,
 }() {
+    alloc_locals;
+
+    let (__fp__, _) = get_fp_and_pc();
+
     // ? Handle inputs
     local order_tab: OrderTab;
     handle_order_tab_input(&order_tab);
@@ -50,13 +48,12 @@ func close_order_tab{
     local base_amount_change: felt;
     local quote_amount_change: felt;
     %{
-        base_amount_change = current_tab_interaction["base_amount_change"]
-        quote_amount_change = current_tab_interaction["quote_amount_change"]
+        ids.base_amount_change = int(current_order["base_amount_change"])
+        ids.quote_amount_change = int(current_order["quote_amount_change"])
     %}
 
     with_attr error_message("ORDER TAB HASH IS INVALID") {
-        assert order_tab.tab_header.hash = hash_tab_header(&order_tab.tab_header);
-        assert order_tab.hash = hash_order_tab(&order_tab);
+        let header_hash = verify_order_tab_hash(order_tab);
     }
 
     // ? Verify the signature
@@ -64,9 +61,9 @@ func close_order_tab{
         order_tab.hash,
         base_amount_change,
         quote_amount_change,
-        &base_close_order_fields,
-        &quote_close_order_fields,
-        &order_tab.tab_header.pub_key,
+        base_close_order_fields,
+        quote_close_order_fields,
+        order_tab.tab_header.pub_key,
     );
 
     let base_token = order_tab.tab_header.base_token;
@@ -80,11 +77,11 @@ func close_order_tab{
     local base_idx: felt;
     local quote_idx: felt;
     %{
-        ids.base_idx = current_tab_interaction["base_return_note_idx"]
-        ids.quote_idx = current_tab_interaction["quote_return_note_idx"]
+        ids.base_idx = current_order ["base_return_note_idx"]
+        ids.quote_idx = current_order ["quote_return_note_idx"]
     %}
 
-    let base_return_note = construct_new_note(
+    let (base_return_note: Note) = construct_new_note(
         base_close_order_fields.return_collateral_address,
         base_token,
         base_amount_change,
@@ -92,7 +89,7 @@ func close_order_tab{
         base_idx,
     );
 
-    let quote_return_note = construct_new_note(
+    let (quote_return_note: Note) = construct_new_note(
         quote_close_order_fields.return_collateral_address,
         quote_token,
         quote_amount_change,
@@ -106,11 +103,16 @@ func close_order_tab{
     let is_closable_2 = is_le(order_tab.quote_amount - quote_amount_change, quote_dust_amount);
     let is_closable = is_closable_1 * is_closable_2;
 
+    // ? Update the state dicts
+    close_tab_note_state_updates(base_return_note, quote_return_note);
+
     if (is_closable == 1) {
         // ? Position is closable
 
         // ? Update the tab dict
-        remove_tab_from_state(&order_tab);
+        remove_tab_from_state(order_tab);
+
+        return ();
     } else {
         // ? Decrease the position size
 
@@ -119,17 +121,14 @@ func close_order_tab{
         let updated_quote_amount = order_tab.quote_amount - quote_amount_change;
 
         let updated_tab_hash = update_order_tab_hash(
-            &order_tab.tab_header, updated_base_amount, updated_quote_amount
+            order_tab.tab_header, updated_base_amount, updated_quote_amount
         );
 
         // ? Update the tab dict
-        update_tab_in_state(
-            &order_tab, updated_base_amount, updated_quote_amount, updated_tab_hash
-        );
-    }
+        update_tab_in_state(order_tab, updated_base_amount, updated_quote_amount, updated_tab_hash);
 
-    // ? Update the state dicts
-    close_tab_note_state_updates(base_return_note, quote_return_note);
+        return ();
+    }
 }
 
 func handle_order_tab_input{pedersen_ptr: HashBuiltin*}(order_tab: OrderTab*) {
@@ -137,14 +136,13 @@ func handle_order_tab_input{pedersen_ptr: HashBuiltin*}(order_tab: OrderTab*) {
         order_tab_addr = ids.order_tab.address_
         tab_header_addr = order_tab_addr + ORDER_TAB_TAB_HEADER_OFFSET
 
-        order_tab_input = current_tab_interaction["order_tab"]
+        order_tab_input = current_order["order_tab"]
         memory[order_tab_addr + ORDER_TAB_TAB_IDX_OFFSET] = int(order_tab_input["tab_idx"])
         memory[order_tab_addr + ORDER_TAB_BASE_AMOUNT_OFFSET] = int(order_tab_input["base_amount"])
         memory[order_tab_addr + ORDER_TAB_QUOTE_AMOUNT_OFFSET] = int(order_tab_input["quote_amount"])
         memory[order_tab_addr + ORDER_TAB_HASH_OFFSET] = int(order_tab_input["hash"])
 
         tab_header = order_tab_input["tab_header"]
-        memory[tab_header_addr + TAB_HEADER_EXPIRATION_TIMESTAMP_OFFSET] = int(tab_header["expiration_timestamp"])
         memory[tab_header_addr + TAB_HEADER_IS_PERP_OFFSET] = int(tab_header["is_perp"])
         memory[tab_header_addr + TAB_HEADER_IS_SMART_CONTRACT_OFFSET] = int(tab_header["is_smart_contract"])
         memory[tab_header_addr + TAB_HEADER_BASE_TOKEN_OFFSET] = int(tab_header["base_token"])
@@ -162,8 +160,8 @@ func get_close_order_fields{pedersen_ptr: HashBuiltin*}(
     base_close_order_fields: CloseOrderFields*, quote_close_order_fields: CloseOrderFields*
 ) {
     %{
-        base_close_order_field_inputs = current_tab_interaction["base_close_order_fields"]
-        quote_close_order_field_inputs = current_tab_interaction["quote_close_order_fields"]
+        base_close_order_field_inputs = current_order ["base_close_order_fields"]
+        quote_close_order_field_inputs = current_order ["quote_close_order_fields"]
 
         memory[ids.base_close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(base_close_order_field_inputs["dest_received_address"]["x"])
         memory[ids.base_close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(base_close_order_field_inputs["dest_received_blinding"])

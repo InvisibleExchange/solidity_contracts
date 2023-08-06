@@ -1,5 +1,6 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.alloc import alloc
+from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.hash_state import (
     hash_init,
@@ -10,16 +11,7 @@ from starkware.cairo.common.hash_state import (
 from starkware.cairo.common.ec import EcPoint
 from helpers.utils import Note, hash_note, hash_notes_array
 
-struct OrderTab {
-    tab_idx: felt,
-    tab_header: TabHeader,
-    base_amount: felt,
-    quote_amount: felt,
-    hash: felt,
-}
-
 struct TabHeader {
-    expiration_timestamp: felt,
     is_perp: felt,
     is_smart_contract: felt,
     base_token: felt,
@@ -30,7 +22,15 @@ struct TabHeader {
     hash: felt,
 }
 
-func hash_order_tab{pedersen_ptr: HashBuiltin*, range_check_ptr}(order_tab: OrderTab*) -> felt {
+struct OrderTab {
+    tab_idx: felt,
+    tab_header: TabHeader,
+    base_amount: felt,
+    quote_amount: felt,
+    hash: felt,
+}
+
+func hash_order_tab{pedersen_ptr: HashBuiltin*, range_check_ptr}(order_tab: OrderTab) -> felt {
     alloc_locals;
 
     let (base_commitment: felt) = hash2{hash_ptr=pedersen_ptr}(
@@ -54,8 +54,18 @@ func hash_order_tab{pedersen_ptr: HashBuiltin*, range_check_ptr}(order_tab: Orde
     }
 }
 
+func verify_order_tab_hash{pedersen_ptr: HashBuiltin*, range_check_ptr}(order_tab: OrderTab) {
+    let header_hash = hash_tab_header(order_tab.tab_header);
+    assert header_hash = order_tab.tab_header.hash;
+
+    let order_tab_hash = hash_order_tab(order_tab);
+    assert order_tab_hash = order_tab.hash;
+
+    return ();
+}
+
 func update_order_tab_hash{pedersen_ptr: HashBuiltin*, range_check_ptr}(
-    tab_header: TabHeader*, base_amount: felt, quote_amount: felt
+    tab_header: TabHeader, base_amount: felt, quote_amount: felt
 ) -> felt {
     alloc_locals;
 
@@ -80,13 +90,12 @@ func update_order_tab_hash{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     }
 }
 
-func hash_tab_header{pedersen_ptr: HashBuiltin*, range_check_ptr}(tab_header: TabHeader*) -> felt {
+func hash_tab_header{pedersen_ptr: HashBuiltin*, range_check_ptr}(tab_header: TabHeader) -> felt {
     alloc_locals;
 
     let hash_ptr = pedersen_ptr;
     with hash_ptr {
         let (hash_state_ptr) = hash_init();
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.expiration_timestamp);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.is_perp);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.is_smart_contract);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.base_token);

@@ -27,10 +27,10 @@ from rollup.global_config import GlobalConfig
 func execute_margin_change{
     pedersen_ptr: HashBuiltin*,
     range_check_ptr,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
+    state_dict: DictAccess*,
     ecdsa_ptr: SignatureBuiltin*,
     global_config: GlobalConfig*,
+    note_updates: Note*,
 }() {
     alloc_locals;
 
@@ -61,7 +61,7 @@ func execute_margin_change{
     if (is_increase == 1) {
         // ? Sum notes and verify amount being spent
         let (total_notes_in: felt) = sum_notes(
-            notes_in_len, notes_in, position.collateral_token, 0
+            notes_in_len, notes_in, global_config.collateral_token, 0
         );
         assert_le(margin_change + refund_note.amount, total_notes_in);
 
@@ -77,7 +77,7 @@ func execute_margin_change{
 
         let (return_collateral_note: Note) = construct_new_note(
             close_order_fields.return_collateral_address,
-            position.collateral_token,
+            global_config.collateral_token,
             return_value,
             close_order_fields.return_collateral_blinding,
             index,
@@ -91,11 +91,7 @@ func execute_margin_change{
 }
 
 func update_state_after_increase{
-    pedersen_ptr: HashBuiltin*,
-    range_check_ptr,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
-    note_updates: Note*,
+    pedersen_ptr: HashBuiltin*, range_check_ptr, state_dict: DictAccess*, note_updates: Note*
 }(
     notes_in_len: felt,
     notes_in: Note*,
@@ -103,106 +99,89 @@ func update_state_after_increase{
     position: PerpPosition,
     prev_position_hash: felt,
 ) {
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = notes_in[0].index;
-    assert note_dict_ptr.prev_value = notes_in[0].hash;
-    assert note_dict_ptr.new_value = refund_note.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = notes_in[0].index;
+    assert state_dict_ptr.prev_value = notes_in[0].hash;
+    assert state_dict_ptr.new_value = refund_note.hash;
 
     // ? store to an array used for program outputs
     if (refund_note.hash != 0) {
+        %{ leaf_node_types[ids.refund_note.index] = "note" %}
+        %{
+            note_output_idxs[ids.refund_note.index] = note_outputs_len 
+            note_outputs_len += 1
+        %}
+
         assert note_updates[0] = refund_note;
         note_updates = &note_updates[1];
     }
 
-    // %{
-    //     output_notes[memory[ids.notes_in.address_ + INDEX_OFFSET]] = {
-    //         "address": {"x": ids.refund_note.address.x, "y": ids.refund_note.address.y},
-    //         "hash": ids.refund_note.hash,
-    //         "index": ids.refund_note.index,
-    //         "blinding": ids.refund_note.blinding_factor,
-    //         "token": ids.refund_note.token,
-    //         "amount": ids.refund_note.amount,
-    //     }
-    // %}
-
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // * Update the position dict
-    let position_dict_ptr = position_dict;
-    assert position_dict_ptr.key = position.index;
-    assert position_dict_ptr.prev_value = prev_position_hash;
-    assert position_dict_ptr.new_value = position.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = position.index;
+    assert state_dict_ptr.prev_value = prev_position_hash;
+    assert state_dict_ptr.new_value = position.hash;
 
-    let position_dict = position_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
+    %{ leaf_node_types[ids.position.index] = "position" %}
     %{ store_output_position(ids.position.address_, ids.position.index) %}
 
     return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
 }
 
 func update_state_after_increase_inner{
-    pedersen_ptr: HashBuiltin*,
-    range_check_ptr,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
-    note_updates: Note*,
+    pedersen_ptr: HashBuiltin*, range_check_ptr, state_dict: DictAccess*, note_updates: Note*
 }(notes_in_len: felt, notes_in: Note*) {
     if (notes_in_len == 0) {
         return ();
     }
 
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = notes_in[0].index;
-    assert note_dict_ptr.prev_value = notes_in[0].hash;
-    assert note_dict_ptr.new_value = 0;
+    let note_in0 = notes_in[0];
 
-    // ? store to an array used for program outputs
-    let (zero_note) = get_zero_note(note_in[0].index);
-    assert note_updates[0] = zero_note;
-    note_updates = &note_updates[1];
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = note_in0.index;
+    assert state_dict_ptr.prev_value = note_in0.hash;
+    assert state_dict_ptr.new_value = 0;
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    %{ leaf_node_types[ids.note_in0.index] = "note" %}
 
     return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
 }
 
 func update_state_after_decrease{
-    pedersen_ptr: HashBuiltin*,
-    range_check_ptr,
-    note_dict: DictAccess*,
-    position_dict: DictAccess*,
-    note_updates: Note*,
+    pedersen_ptr: HashBuiltin*, range_check_ptr, state_dict: DictAccess*, note_updates: Note*
 }(return_collateral_note: Note, position: PerpPosition, prev_position_hash: felt) {
-    let note_dict_ptr = note_dict;
-    assert note_dict_ptr.key = return_collateral_note.index;
-    assert note_dict_ptr.prev_value = 0;
-    assert note_dict_ptr.new_value = return_collateral_note.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = return_collateral_note.index;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = return_collateral_note.hash;
 
     // ? store to an array used for program outputs
     assert note_updates[0] = return_collateral_note;
     note_updates = &note_updates[1];
 
-    // %{
-    //     output_notes[ids.return_collateral_note.index] = {
-    //         "address": {"x": ids.return_collateral_note.address.x, "y": ids.return_collateral_note.address.y},
-    //         "hash": ids.return_collateral_note.hash,
-    //         "index": ids.return_collateral_note.index,
-    //         "blinding": ids.return_collateral_note.blinding_factor,
-    //         "token": ids.return_collateral_note.token,
-    //         "amount": ids.return_collateral_note.amount,
-    //     }
-    // %}
+    %{ leaf_node_types[ids.return_collateral_note.index] = "note" %}
+    %{
+        note_output_idxs[ids.return_collateral_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
 
-    let note_dict = note_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
     // * Update the position dict
-    let position_dict_ptr = position_dict;
-    assert position_dict_ptr.key = position.index;
-    assert position_dict_ptr.prev_value = prev_position_hash;
-    assert position_dict_ptr.new_value = position.hash;
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = position.index;
+    assert state_dict_ptr.prev_value = prev_position_hash;
+    assert state_dict_ptr.new_value = position.hash;
 
-    let position_dict = position_dict + DictAccess.SIZE;
+    let state_dict = state_dict + DictAccess.SIZE;
 
+    %{ leaf_node_types[ids.position.index] = "position" %}
     %{ store_output_position(ids.position.address_, ids.position.index) %}
 
     return ();
@@ -211,7 +190,7 @@ func update_state_after_decrease{
 // Hash the margin change message
 
 func hash_margin_change_message{
-    pedersen_ptr: HashBuiltin*, range_check_ptr, note_dict: DictAccess*
+    pedersen_ptr: HashBuiltin*, range_check_ptr, state_dict: DictAccess*
 }(
     margin_change: felt,
     notes_in_len: felt,

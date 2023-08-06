@@ -178,6 +178,8 @@ pub fn consistency_checks(
         ));
     }
 
+    
+
     // ? Check that the amounts swapped don't exceed the order amounts
     let dust_amount_a: u64 = DUST_AMOUNT_PER_ASSET[&order_a.token_spent.to_string()];
     let dust_amount_b: u64 = DUST_AMOUNT_PER_ASSET[&order_b.token_spent.to_string()];
@@ -257,6 +259,35 @@ pub fn consistency_checks(
             "Order ids are the same".to_string(),
             None,
             Some(format!("order ids are the same: {:?}", order_a.order_id)),
+        ));
+    }
+
+    // ? Check that the notes spent are all different for both orders (different indexes)
+    let mut valid = true;
+    let mut spent_indexes: Vec<u64> = Vec::new();
+
+    if let Some(note_info) = &order_a.spot_note_info {
+        note_info.notes_in.iter().for_each(|note| {
+            if spent_indexes.contains(&note.index) {
+                valid = false;
+            }
+            spent_indexes.push(note.index);
+        });
+    }
+    if let Some(note_info) = &order_b.spot_note_info {
+        note_info.notes_in.iter().for_each(|note| {
+            if spent_indexes.contains(&note.index) {
+                valid = false;
+            }
+            spent_indexes.push(note.index);
+        });
+    }
+
+    if !valid {
+        return Err(send_swap_error(
+            "note indexes are not unique".to_string(),
+            None,
+            None,
         ));
     }
 

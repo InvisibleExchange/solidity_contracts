@@ -413,6 +413,8 @@ pub fn consistency_checks(
         }
     }
 
+    // spent_synthetic: 3.984 , > perp_order.synthetic_amount: 0.100
+
     // ? Check that the amounts swapped don't exceed the order amounts
     let synthetic_dust_amount: u64 = DUST_AMOUNT_PER_ASSET[&order_a.synthetic_token.to_string()];
     let collateral_dust_amount: u64 =
@@ -491,6 +493,8 @@ pub fn consistency_checks(
             ));
         }
     }
+
+    
 
     // ? Check that the fees taken don't exceed the order fees
     if ((fee_taken_a as u128 * order_a.collateral_amount as u128)

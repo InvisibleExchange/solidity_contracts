@@ -81,7 +81,7 @@ pub fn close_order_tab(
     // ? VERIFY THE SIGNATURE --------------------------------------------------------------
     let signature = Signature::try_from(close_order_tab_req.signature.unwrap_or_default())
         .map_err(|err| err.to_string())?;
-    verfiy_close_order_hash(
+    let valid = verfiy_close_order_hash(
         &order_tab,
         base_amount_change,
         quote_amount_change,
@@ -89,6 +89,9 @@ pub fn close_order_tab(
         &quote_close_order_fields,
         &signature,
     );
+    if !valid {
+        return Err("Invalid Signature".to_string());
+    }
 
     // ? GENERATE THE RETURN NOTES ---------------------------------------------------------
     let base_return_note = Note::new(
@@ -186,6 +189,10 @@ pub fn verfiy_close_order_hash(
     hash_inputs.push(&quote_close_order_fields_hash);
 
     let hash = pedersen_on_vec(&hash_inputs);
+
+    println!("hash: {:?}", hash);
+    println!("signature: {:?}", signature);
+    println!("pub_key: {:?}", order_tab.tab_header.pub_key);
 
     let valid = verify(&order_tab.tab_header.pub_key, &hash, signature);
 

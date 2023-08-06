@@ -6,33 +6,33 @@ from starkware.cairo.common.pow import pow
 
 from unshielded_swaps.constants import MAX_AMOUNT, MAX_NONCE, MAX_EXPIRATION_TIMESTAMP
 from rollup.global_config import price_decimals, token_decimals, GlobalConfig, get_dust_amount
-from helpers.utils import Note, check_index_uniqueness, validate_fee_taken
+from helpers.utils import Note, check_index_uniqueness, validate_fee_taken, sum_notes
 
 from invisible_swaps.order.invisible_order import Invisibl3Order
 
-// TODO: ALL OF THIS IS NOT THE BEST
-func range_checks_{range_check_ptr}(
-    invisibl3_order: Invisibl3Order, refund_note: Note, spend_amount: felt
-) {
-    alloc_locals;
+// // TODO: ALL OF THIS IS NOT THE BEST
+// func range_checks_{range_check_ptr}(
+//     invisibl3_order: Invisibl3Order, refund_note: Note, spend_amount: felt
+// ) {
+//     alloc_locals;
 
-    assert_lt(invisibl3_order.amount_spent, MAX_AMOUNT);
-    assert_lt(invisibl3_order.amount_received, MAX_AMOUNT);
+// assert_lt(invisibl3_order.amount_spent, MAX_AMOUNT);
+//     assert_lt(invisibl3_order.amount_received, MAX_AMOUNT);
 
-    // todo new_filled_amount = prev_filled_amount + spent_amount  (only in later fills)
-    // todo assert_le(new_filled_amount, limit_order.amount_spent)
+// // todo new_filled_amount = prev_filled_amount + spent_amount  (only in later fills)
+//     // todo assert_le(new_filled_amount, limit_order.amount_spent)
 
-    assert_lt(invisibl3_order.order_id, MAX_NONCE);
+// assert_lt(invisibl3_order.order_id, MAX_NONCE);
 
-    // todo let global_expiration_timestamp = ...?
-    // todo assert_lt(global_expiration_timestamp, limit_order.expiration_timestamp)
-    assert_lt(invisibl3_order.expiration_timestamp, MAX_EXPIRATION_TIMESTAMP);
+// // todo let global_expiration_timestamp = ...?
+//     // todo assert_lt(global_expiration_timestamp, limit_order.expiration_timestamp)
+//     assert_lt(invisibl3_order.expiration_timestamp, MAX_EXPIRATION_TIMESTAMP);
 
-    assert_le(0, refund_note.amount);
-    assert_le(spend_amount, invisibl3_order.amount_spent);
+// assert_le(0, refund_note.amount);
+//     assert_le(spend_amount, invisibl3_order.amount_spent);
 
-    return ();
-}
+// return ();
+// }
 
 // --------------------------------------------------------------------------------------------------
 
@@ -43,13 +43,9 @@ func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
     spend_amountB: felt,
     fee_takenA: felt,
     fee_takenB: felt,
-    notes_in_A_len: felt,
-    notes_in_A: Note*,
-    notes_in_B_len: felt,
-    notes_in_B: Note*,
 ) {
     alloc_locals;
-    // todo: Check the tokens are valid
+    // TODO: Check the tokens are valid
 
     // ? Check that the tokens swapped match
     assert invisibl3_order_A.token_spent = invisibl3_order_B.token_received;
@@ -88,9 +84,20 @@ func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
         fee_takenB, invisibl3_order_B.fee_limit, spend_amountA, invisibl3_order_B.amount_received
     );
 
+    return ();
+}
+
+func not_tab_order_check{range_check_ptr}(
+    invisibl3_order: Invisibl3Order, notes_in_len: felt, notes_in: Note*, refund_note: Note
+) {
+    alloc_locals;
+
     // ? Verify note uniqueness
-    check_index_uniqueness(notes_in_A_len, notes_in_A);
-    check_index_uniqueness(notes_in_B_len, notes_in_B);
+    check_index_uniqueness(notes_in_len, notes_in);
+
+    // ? verify the sums match the refund and spend amounts
+    let (sum_inputs: felt) = sum_notes(notes_in_len, notes_in, invisibl3_order.token_spent, 0);
+    assert_le(invisibl3_order.amount_spent + refund_note.amount, sum_inputs);
 
     return ();
 }

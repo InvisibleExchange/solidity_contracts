@@ -26,7 +26,7 @@ from deposits_withdrawals.deposits.deposit_utils import (
     get_deposit_notes,
     verify_deposit_notes,
 )
-from helpers.spot_helpers.dict_updates import deposit_note_dict_updates
+from helpers.spot_helpers.dict_updates import deposit_state_dict_updates
 
 from rollup.output_structs import (
     NoteDiffOutput,
@@ -39,8 +39,9 @@ func verify_deposit{
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
     deposit_output_ptr: DepositTransactionOutput*,
-    accumulated_deposit_hashes: DictAccess*,
-    note_dict: DictAccess*,
+    accumulated_deposit_hash: felt,
+    state_dict: DictAccess*,
+    note_updates: Note*,
 }() {
     alloc_locals;
 
@@ -62,7 +63,7 @@ func verify_deposit{
     verify_deposit_notes(deposit_notes_len, deposit_notes, deposit);
 
     // Update the note dict
-    deposit_note_dict_updates(deposit_notes_len, deposit_notes);
+    deposit_state_dict_updates(deposit_notes_len, deposit_notes);
 
     // Write the deposit info to the output
     write_deposit_info_to_output(deposit);

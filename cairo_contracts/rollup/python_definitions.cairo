@@ -5,16 +5,26 @@ from perpetuals.order.order_structs import (
     OpenOrderFields,
     CloseOrderFields,
     PerpPosition,
+    PositionHeader,
 )
 from deposits_withdrawals.deposits.deposit_utils import Deposit
 from deposits_withdrawals.withdrawals.withdraw_utils import Withdrawal
 
 from rollup.global_config import GlobalConfig
 
+from order_tabs.order_tab import OrderTab, TabHeader
+
 func python_define_utils() {
     %{
-        output_notes = {}
+        leaf_node_types = {}
+
+        note_outputs_len = 0
+        note_output_idxs = {}
+
         output_positions = {}
+        output_tabs = {}
+
+
         fee_tracker_dict_manager = {}
 
         accumulated_deposit_hashes = {}
@@ -39,8 +49,6 @@ func python_define_utils() {
         AMOUNT_SPENT_OFFSET = ids.Invisibl3Order.amount_spent
         AMOUNT_RECEIVED_OFFSET = ids.Invisibl3Order.amount_received
         FEE_LIMIT_OFFSET = ids.Invisibl3Order.fee_limit
-        DEST_RECEIVED_ADDR_OFFSET = ids.Invisibl3Order.dest_received_address
-        DEST_RECEIVED_BLINDING_OFFSET = ids.Invisibl3Order.dest_received_blinding
 
         # * PERPETUAL ORDER ==========================================================
         PERP_ORDER_SIZE = ids.PerpOrder.SIZE
@@ -137,6 +145,8 @@ func python_define_utils() {
 
 
 
+
+
         # // * FUNCTIONS * //
         def store_output_position(position_address, index):
             header_address = position_address + POSITION_HEADER_OFFSET
@@ -155,6 +165,24 @@ func python_define_utils() {
                 "allow_partial_liquidations": memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET],
             }
 
+        def read_output_position(position_address, index):
+            position_ = output_positions[index]
+            
+            memory[position_address + PERP_POSITION_ORDER_SIDE_OFFSET] = int(position_["order_side"])
+            memory[position_address + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position_["position_size"])
+            memory[position_address + PERP_POSITION_MARGIN_OFFSET] = int(position_["margin"])
+            memory[position_address + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(position_["entry_price"])
+            memory[position_address + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(position_["liquidation_price"])
+            memory[position_address + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(position_["bankruptcy_price"])
+            memory[position_address + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position_["last_funding_idx"])
+            memory[position_address + PERP_POSITION_INDEX_OFFSET] = int(position_["index"])
+            memory[position_address + PERP_POSITION_HASH_OFFSET] = int(position_["hash"])
+            #
+            header_address = position_address + POSITION_HEADER_OFFSET
+            memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
+            memory[header_address + HEADER_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
+            memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
+
         def store_output_order_tab(header_address, index, base_amount, quote_amount, new_updated_hash):
             output_tabs[index] = {
                 "index": index,
@@ -165,33 +193,29 @@ func python_define_utils() {
                 "base_blinding": memory[header_address + TAB_HEADER_BASE_BLINDING_OFFSET],
                 "quote_blinding": memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET],
                 "pub_key": memory[header_address + TAB_HEADER_PUB_KEY_OFFSET],
+                "header_hash": memory[header_address + TAB_HEADER_HASH_OFFSET],
                 "base_amount": base_amount,
                 "quote_amount": quote_amount,
                 "hash": new_updated_hash,
             }
 
-        def print_position(position_address):
-            print("order_side: ", memory[position_address + 0])
-            print("synthetic_token: ", memory[position_address + 1])
-            print("collateral_token: ", memory[position_address + 2])
-            print("position_size: ", memory[position_address + 3])
-            print("margin: ", memory[position_address + 4])
-            print("entry_price: ", memory[position_address + 5])
-            print("liquidation_price: ", memory[position_address + 6])
-            print("bankruptcy_price: ", memory[position_address + 7])
-            print("position_address x: ", memory[position_address + 8])
-            print("last_funding_idx: ", memory[position_address + 9])
-            print("index: ", memory[position_address + 10])
-            print("hash: ", memory[position_address + 11])
-            print("allow_partial_liquidations: ", memory[position_address + 12])
+        def read_output_order_tab(tab_address, index):
+            order_tab = output_tabs[index]
 
-        def print_note(note_address):
-            print("address: ", memory[note_address + 0])
-            print("token: ", memory[note_address + 2])
-            print("amount: ", memory[note_address + 3])
-            print("blinding_factor: ", memory[note_address + 4])
-            print("index: ", memory[note_address + 5])
-            print("hash: ", memory[note_address + 6])
+            memory[tab_address + ORDER_TAB_TAB_IDX_OFFSET] = int(order_tab["index"])
+            memory[tab_address + ORDER_TAB_BASE_AMOUNT_OFFSET] = int(order_tab["base_amount"])
+            memory[tab_address + ORDER_TAB_QUOTE_AMOUNT_OFFSET] = int(order_tab["quote_amount"])
+            memory[tab_address + ORDER_TAB_HASH_OFFSET] = int(order_tab["hash"])
+
+            header_address = tab_address + ORDER_TAB_TAB_HEADER_OFFSET
+            memory[header_address + TAB_HEADER_IS_PERP_OFFSET] = int(order_tab["is_perp"])
+            memory[header_address + TAB_HEADER_IS_SMART_CONTRACT_OFFSET] = int(order_tab["is_smart_contract"])
+            memory[header_address + TAB_HEADER_BASE_TOKEN_OFFSET] = int(order_tab["base_token"])
+            memory[header_address + TAB_HEADER_QUOTE_TOKEN_OFFSET] = int(order_tab["quote_token"])
+            memory[header_address + TAB_HEADER_BASE_BLINDING_OFFSET] = int(order_tab["base_blinding"])
+            memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET] = int(order_tab["quote_blinding"])
+            memory[header_address + TAB_HEADER_PUB_KEY_OFFSET] = int(order_tab["pub_key"])
+            memory[header_address + TAB_HEADER_HASH_OFFSET] = int(order_tab["header_hash"])
     %}
 
     return ();
