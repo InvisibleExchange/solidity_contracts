@@ -160,7 +160,7 @@ func update_tab_in_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
     let state_dict = state_dict + DictAccess.SIZE;
 
     %{ leaf_node_types[ids.prev_order_tab.tab_idx] = "order_tab" %}
-    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.prev_order_tab.tab_idx, new_base_amount, new_quote_amount, updated_tab_hash) %}
+    %{ store_output_order_tab(ids.prev_order_tab.tab_header.address_, ids.prev_order_tab.tab_idx, ids.new_base_amount, ids.new_quote_amount, ids.updated_tab_hash) %}
 
     return ();
 }

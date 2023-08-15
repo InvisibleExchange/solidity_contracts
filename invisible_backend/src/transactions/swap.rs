@@ -13,7 +13,7 @@ use error_stack::{Report, Result};
 use super::Transaction;
 //
 use super::limit_order::LimitOrder;
-use super::swap_execution::{execute_order, update_state_after_order};
+use super::swap_execution::{execute_order, reverify_existances, update_state_after_order};
 use super::transaction_helpers::db_updates::update_db_after_spot_swap;
 use super::transaction_helpers::rollbacks::RollbackInfo;
 use super::transaction_helpers::swap_helpers::{
@@ -21,7 +21,7 @@ use super::transaction_helpers::swap_helpers::{
     TxExecutionThreadOutput,
 };
 use super::transaction_helpers::transaction_output::TransactionOutptut;
-use crate::transaction_batch::transaction_batch::LeafNodeType;
+use crate::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
 use crate::utils::errors::{send_swap_error, SwapThreadExecutionError, TransactionExecutionError};
@@ -209,6 +209,15 @@ impl Swap {
 
             // * AFTER BOTH orders have been verified successfully update the state —————————————————————————————————————
 
+            // order_a_output.note_info_output
+            reverify_existances(
+                &tree_m,
+                &self.order_a,
+                &order_a_output.note_info_output,
+                &self.order_b,
+                &order_b_output.note_info_output,
+            )?;
+
             // ? Order a ----------------------------------------
             let tree = tree_m.clone();
             let updated_state_hashes = updated_state_hashes_m.clone();
@@ -227,7 +236,7 @@ impl Swap {
                     &self.order_a.spot_note_info,
                     &order_a_output_clone.note_info_output,
                     &order_a_output_clone.updated_order_tab,
-                )?;
+                );
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
 
                 finalize_updates(
@@ -259,7 +268,7 @@ impl Swap {
                     &self.order_b.spot_note_info,
                     &order_b_output_clone.note_info_output,
                     &order_b_output_clone.updated_order_tab,
-                )?;
+                );
 
                 // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
                 finalize_updates(

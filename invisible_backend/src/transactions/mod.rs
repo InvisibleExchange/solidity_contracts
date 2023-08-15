@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::{
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{errors::TransactionExecutionError, notes::Note, storage::BackupStorage},
 };

@@ -32,10 +32,10 @@ func refund_partial_fill{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, no
 
     // ? store to an array used for program outputs
     assert note_updates[0] = pfr_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.pfr_note.index] = "note" %}
-   %{
+    %{
         note_output_idxs[ids.pfr_note.index] = note_outputs_len 
         note_outputs_len += 1
     %}

@@ -465,14 +465,14 @@ pub async fn submit_liquidation_order_inner(
 
     let liquidation_response = liquidation_handle.join();
 
-    // TODO ==================================================================================
-
     match liquidation_response {
         Ok(res1) => match res1 {
             Ok(response) => {
                 store_output_json(&swap_output_json, &main_storage);
 
-                // TODO Send message to the user whose position was liquidated
+                // TODO Send message to the user whose position was liquidated ?
+
+                println!("Position liquidated successfully!!!!!!!!!\n");
 
                 let reply = LiquidationOrderResponse {
                     successful: true,
@@ -486,6 +486,8 @@ pub async fn submit_liquidation_order_inner(
                 println!("\n{:?}", err);
 
                 let error_message_response: String = err.current_context().err_msg.to_string();
+
+                println!("Position liquidation failed {:?}\n", error_message_response);
 
                 return send_liquidation_order_error_reply(error_message_response);
             }

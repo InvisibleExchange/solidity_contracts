@@ -7,18 +7,11 @@ use num_bigint::BigUint;
 use num_traits::Zero;
 use parking_lot::Mutex;
 
-use crate::transaction_batch::transaction_batch::LeafNodeType;
+use crate::transaction_batch::LeafNodeType;
 use crate::utils::crypto_utils::EcPoint;
-use crate::{
-    trees::superficial_tree::SuperficialTree,
-    utils::{
-        errors::{send_perp_swap_error, PerpSwapExecutionError},
-        notes::Note,
-    },
-};
+use crate::{trees::superficial_tree::SuperficialTree, utils::notes::Note};
 
 use super::super::{perp_position::PerpPosition, PositionEffectType};
-use error_stack::Result;
 
 // ! FIRST FILL ! // ===================== (OPEN ORDERS) =====================
 pub fn update_state_after_swap_first_fill(
@@ -28,23 +21,9 @@ pub fn update_state_after_swap_first_fill(
     notes_in: &Vec<Note>,
     refund_note: &Option<Note>,
     partial_fill_refund_note: Option<&Note>,
-    order_id: u64,
-) -> Result<(), PerpSwapExecutionError> {
+) {
     let mut tree = state_tree_m.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
-
-    //  ? verify notes exist in the tree
-    for note in notes_in.iter() {
-        let leaf_hash = tree.get_leaf_by_index(note.index);
-
-        if leaf_hash != note.hash {
-            return Err(send_perp_swap_error(
-                "note spent for swap does not exist in the state".to_string(),
-                Some(order_id),
-                None,
-            ));
-        }
-    }
 
     // ? Update the state tree
     let refund_idx = notes_in[0].index;
@@ -83,8 +62,6 @@ pub fn update_state_after_swap_first_fill(
     }
     drop(tree);
     drop(updated_state_hashes);
-
-    Ok(())
 }
 
 // ! LATER FILL ! // ===================== (OPEN ORDERS) =====================
@@ -93,7 +70,7 @@ pub fn update_state_after_swap_later_fills(
     updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
     prev_partial_fill_refund_note: Note,
     new_partial_fill_refund_note: Option<&Note>,
-) -> Result<(), PerpSwapExecutionError> {
+) {
     let mut tree = state_tree_m.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
 
@@ -112,8 +89,6 @@ pub fn update_state_after_swap_later_fills(
 
     drop(tree);
     drop(updated_state_hashes);
-
-    Ok(())
 }
 
 // ! UPDATING PERPETUAL STATE ! // ============================================
@@ -123,8 +98,7 @@ pub fn update_perpetual_state(
     position_effect_type: &PositionEffectType,
     position_idx: u32,
     position: Option<&PerpPosition>,
-    prev_position: Option<&PerpPosition>,
-) -> Result<(), PerpSwapExecutionError> {
+) {
     //
 
     // TODO: Should check that the position exists in the tree
@@ -140,24 +114,6 @@ pub fn update_perpetual_state(
             (LeafNodeType::Position, position.hash.clone()),
         );
     } else {
-        if let None = prev_position {
-            return Err(send_perp_swap_error(
-                "position to update does not exist in the state".to_string(),
-                None,
-                None,
-            ));
-        }
-
-        let leaf_hash = state_tree.get_leaf_by_index(prev_position.unwrap().index as u64);
-
-        if prev_position.as_ref().unwrap().hash != leaf_hash {
-            return Err(send_perp_swap_error(
-                "position to update does not exist in the state".to_string(),
-                None,
-                None,
-            ));
-        }
-
         let position_hash: BigUint;
         if position.is_some() {
             position_hash = position.unwrap().hash.clone();
@@ -170,8 +126,6 @@ pub fn update_perpetual_state(
     }
     drop(state_tree);
     drop(updated_state_hashes);
-
-    Ok(())
 }
 
 // ! RETURN COLLATERAL ON POSITION CLOSE ! // =======
@@ -183,7 +137,7 @@ pub fn return_collateral_on_position_close(
     collateral_token: u32,
     collateral_returned_address: &EcPoint,
     collateral_returned_blinding: &BigUint,
-) -> Result<Note, PerpSwapExecutionError> {
+) -> Note {
     let return_collateral_note = Note::new(
         idx,
         collateral_returned_address.clone(),
@@ -203,5 +157,5 @@ pub fn return_collateral_on_position_close(
     drop(tree);
     drop(updated_state_hashes);
 
-    return Ok(return_collateral_note);
+    return return_collateral_note;
 }

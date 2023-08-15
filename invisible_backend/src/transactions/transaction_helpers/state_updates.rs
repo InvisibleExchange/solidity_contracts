@@ -6,57 +6,17 @@ use num_bigint::BigUint;
 use num_traits::Zero;
 
 use crate::{
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{
-            send_swap_error, send_withdrawal_error, DepositThreadExecutionError,
-            SwapThreadExecutionError, WithdrawalThreadExecutionError,
+            send_withdrawal_error, DepositThreadExecutionError, WithdrawalThreadExecutionError,
         },
         notes::Note,
     },
 };
 
 use super::rollbacks::{OrderRollbackInfo, RollbackInfo};
-
-// * Deposit state updates ----------------------------------------------------------------------------------------------------------------------
-
-/// Adds the new notes to the state
-pub fn update_state_after_deposit(
-    tree: &mut SuperficialTree,
-    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
-    rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
-    notes: &Vec<Note>,
-) -> Result<(), DepositThreadExecutionError> {
-    //
-
-    // ? Right before the first modification is made activate the safeguard
-    // ? If anything fails from here on out the rollback function will be called
-    let mut rollback_safeguard_m = rollback_safeguard.lock();
-    rollback_safeguard_m.insert(
-        std::thread::current().id(),
-        RollbackInfo {
-            zero_idxs: Some(notes.iter().map(|n| n.index).collect()),
-            swap_rollback_info_a: None,
-            swap_rollback_info_b: None,
-        },
-    );
-    drop(rollback_safeguard_m);
-
-    // ? Upadte the state by adding the note hashes to the merkle tree
-    let mut updated_state_hashes = updated_state_hashes_m.lock();
-    for note in notes.iter() {
-        let idx = note.index;
-        // let (proof, proof_pos) = tree.get_proof(idx);
-        // tree.update_node(&note.hash, idx, &proof);
-
-        tree.update_leaf_node(&note.hash, idx);
-        updated_state_hashes.insert(idx, (LeafNodeType::Note, note.hash.clone()));
-    }
-    drop(updated_state_hashes);
-
-    Ok(())
-}
 
 // * ================================================================================================================================================
 // * Swap state updates -----------------------------------------------------------------------------------------------------------------------------
@@ -73,7 +33,7 @@ pub fn update_state_after_swap_first_fill(
     refund_note: &Option<Note>,
     swap_note: &Note,
     partial_fill_refund_note: &Option<&Note>,
-) -> Result<(), SwapThreadExecutionError> {
+) {
     //
 
     // ? Right before the first modification is made activate the safeguard
@@ -117,21 +77,6 @@ pub fn update_state_after_swap_first_fill(
     let mut tree = tree_m.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
 
-    // ? verify notes exist in the tree -———————————————————————————————————
-    for note in notes_in.iter() {
-        let leaf_hash = tree.get_leaf_by_index(note.index);
-        if leaf_hash != note.hash {
-            return Err(send_swap_error(
-                "Note spent for swap does not exist in the state".to_string(),
-                Some(order_id),
-                Some(format!(
-                    "note spent for swap does not exist in the state: hash={:?}",
-                    note.hash,
-                )),
-            ));
-        }
-    }
-
     // ? Update the state tree -———————————————————————————————————
     let refund_idx = notes_in[0].index;
     let refund_hash = if refund_note.is_some() {
@@ -174,8 +119,6 @@ pub fn update_state_after_swap_first_fill(
 
     drop(updated_state_hashes);
     drop(tree);
-
-    Ok(())
 }
 
 // ! LATER FILLS ! // =================
@@ -189,7 +132,7 @@ pub fn update_state_after_swap_later_fills(
     prev_partial_fill_refund_note: &Note,
     swap_note: &Note,
     new_partial_fill_refund_note: &Option<&Note>,
-) -> Result<(), SwapThreadExecutionError> {
+) {
     //
 
     // ? Right before the first modification is made activate the safeguard
@@ -233,19 +176,6 @@ pub fn update_state_after_swap_later_fills(
     let mut tree = tree_m.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
 
-    // ? verify note exist in the tree
-    let leaf_hash = tree.get_leaf_by_index(prev_partial_fill_refund_note.index);
-    if leaf_hash != prev_partial_fill_refund_note.hash {
-        return Err(send_swap_error(
-            "prev partial refund note used in swap does not exist in the state".to_string(),
-            Some(order_id),
-            Some(format!(
-                "prev partial refund note used in swap does not exist in the state: hash={:?}",
-                prev_partial_fill_refund_note.hash,
-            )),
-        ));
-    }
-
     // ? Update the state tree
     let swap_idx = swap_note.index;
 
@@ -262,6 +192,43 @@ pub fn update_state_after_swap_later_fills(
 
     drop(updated_state_hashes);
     drop(tree);
+}
+
+// * Deposit state updates ----------------------------------------------------------------------------------------------------------------------
+
+/// Adds the new notes to the state
+pub fn update_state_after_deposit(
+    tree: &mut SuperficialTree,
+    updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
+    rollback_safeguard: &Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
+    notes: &Vec<Note>,
+) -> Result<(), DepositThreadExecutionError> {
+    //
+
+    // ? Right before the first modification is made activate the safeguard
+    // ? If anything fails from here on out the rollback function will be called
+    let mut rollback_safeguard_m = rollback_safeguard.lock();
+    rollback_safeguard_m.insert(
+        std::thread::current().id(),
+        RollbackInfo {
+            zero_idxs: Some(notes.iter().map(|n| n.index).collect()),
+            swap_rollback_info_a: None,
+            swap_rollback_info_b: None,
+        },
+    );
+    drop(rollback_safeguard_m);
+
+    // ? Upadte the state by adding the note hashes to the merkle tree
+    let mut updated_state_hashes = updated_state_hashes_m.lock();
+    for note in notes.iter() {
+        let idx = note.index;
+        // let (proof, proof_pos) = tree.get_proof(idx);
+        // tree.update_node(&note.hash, idx, &proof);
+
+        tree.update_leaf_node(&note.hash, idx);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, note.hash.clone()));
+    }
+    drop(updated_state_hashes);
 
     Ok(())
 }

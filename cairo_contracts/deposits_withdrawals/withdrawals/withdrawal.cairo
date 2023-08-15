@@ -36,7 +36,6 @@ func verify_withdrawal{
     range_check_ptr,
     ecdsa_ptr: SignatureBuiltin*,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
-    accumulated_withdrawal_hashes: DictAccess*,
     state_dict: DictAccess*,
     note_updates: Note*,
 }() {

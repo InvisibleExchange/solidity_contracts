@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
-use crate::transaction_batch::transaction_batch::LeafNodeType;
+use crate::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{
     send_deposit_error, DepositThreadExecutionError, TransactionExecutionError,
@@ -84,6 +84,8 @@ impl Deposit {
                     None,
                 ));
             }
+
+            // TODO: Verify the deposit_id (64 bit) is of the format | chain_id (32 bit) | identifier (32 bit) |
 
             // ? verify Signature
             self.verify_deposit_signature()?;

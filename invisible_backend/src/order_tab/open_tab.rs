@@ -10,7 +10,7 @@ use firestore_db_and_auth::ServiceSession;
 
 use crate::{
     server::grpc::engine_proto::OpenOrderTabReq,
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{crypto_utils::pedersen_on_vec, notes::Note, storage::BackupStorage},
 };

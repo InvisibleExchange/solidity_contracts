@@ -152,10 +152,7 @@ fn modify_position(
         let applicable_funding_prices = &swap_funding_info.swap_funding_prices[idx_diff as usize..];
 
         if spent_synthetic
-            >= position
-                .position_size
-                .checked_sub(DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()])
-                .unwrap_or(0)
+            >= position.position_size + DUST_AMOUNT_PER_ASSET[&order.synthetic_token.to_string()]
         {
             // & Flipping the position side
             position.flip_position_side(

@@ -41,7 +41,25 @@ func update_state_dict{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note
 func update_one{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*}(
     note_in: Note, refund_note: Note, swap_note: Note
 ) {
-    // * Update the note dict
+    // *
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = swap_note.index;
+    assert state_dict_ptr.prev_value = 0;
+    assert state_dict_ptr.new_value = swap_note.hash;
+
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    // ? store to an array used for program outputs
+    assert note_updates[0] = swap_note;
+    let note_updates = &note_updates[1];
+
+    %{ leaf_node_types[ids.swap_note.index] = "note" %}
+    %{
+        note_output_idxs[ids.swap_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
+
+    // *
     let state_dict_ptr = state_dict;
     assert state_dict_ptr.key = note_in.index;
     assert state_dict_ptr.prev_value = note_in.hash;
@@ -58,26 +76,10 @@ func update_one{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_update
         %}
 
         assert note_updates[0] = refund_note;
-        note_updates = &note_updates[1];
+        let note_updates = &note_updates[1];
+
+        return ();
     }
-
-    // * Write the note dict
-    let state_dict_ptr = state_dict;
-    assert state_dict_ptr.key = swap_note.index;
-    assert state_dict_ptr.prev_value = 0;
-    assert state_dict_ptr.new_value = swap_note.hash;
-
-    let state_dict = state_dict + DictAccess.SIZE;
-
-    // ? store to an array used for program outputs
-    assert note_updates[0] = swap_note;
-    note_updates = &note_updates[1];
-
-    %{ leaf_node_types[ids.swap_note.index] = "note" %}
-    %{
-        note_output_idxs[ids.swap_note.index] = note_outputs_len 
-        note_outputs_len += 1
-    %}
 
     return ();
 }
@@ -85,7 +87,25 @@ func update_one{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_update
 func update_two{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*}(
     note_in1: Note, note_in2: Note, refund_note: Note, swap_note: Note
 ) {
-    // * Update the note dict
+    // *
+    let state_dict_ptr = state_dict;
+    state_dict_ptr.key = swap_note.index;
+    state_dict_ptr.prev_value = note_in2.hash;
+    state_dict_ptr.new_value = swap_note.hash;
+
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    // ? store to an array used for program outputs
+    assert note_updates[0] = swap_note;
+    let note_updates = &note_updates[1];
+
+    %{ leaf_node_types[ids.swap_note.index] = "note" %}
+    %{
+        note_output_idxs[ids.swap_note.index] = note_outputs_len 
+        note_outputs_len += 1
+    %}
+
+    // *
     let state_dict_ptr = state_dict;
     state_dict_ptr.key = note_in1.index;
     state_dict_ptr.prev_value = note_in1.hash;
@@ -102,26 +122,10 @@ func update_two{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_update
         %}
 
         assert note_updates[0] = refund_note;
-        note_updates = &note_updates[1];
+        let note_updates = &note_updates[1];
+
+        return ();
     }
-
-    // * Update the note dict
-    let state_dict_ptr = state_dict;
-    state_dict_ptr.key = swap_note.index;
-    state_dict_ptr.prev_value = note_in2.hash;
-    state_dict_ptr.new_value = swap_note.hash;
-
-    let state_dict = state_dict + DictAccess.SIZE;
-
-    // ? store to an array used for program outputs
-    assert note_updates[0] = swap_note;
-    note_updates = &note_updates[1];
-
-    %{ leaf_node_types[ids.swap_note.index] = "note" %}
-    %{
-        note_output_idxs[ids.swap_note.index] = note_outputs_len 
-        note_outputs_len += 1
-    %}
 
     return ();
 }
@@ -222,7 +226,9 @@ func _update_one_withdraw{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, n
 
         // ? store to an array used for program outputs
         assert note_updates[0] = refund_note;
-        note_updates = &note_updates[1];
+        let note_updates = &note_updates[1];
+
+        return ();
     }
 
     return ();

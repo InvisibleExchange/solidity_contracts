@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::DUST_AMOUNT_PER_ASSET,
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     transactions::{
         limit_order::LimitOrder,
         transaction_helpers::{
@@ -37,10 +37,12 @@ pub fn check_non_tab_order_validity(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
     order: &LimitOrder,
-    is_first_fill: bool,
     spent_amount: u64,
 ) -> Result<(), SwapThreadExecutionError> {
     let note_info = order.spot_note_info.as_ref().unwrap();
+
+    let is_first_fill =
+        partial_fill_info.is_none() || partial_fill_info.as_ref().unwrap().0.is_none();
 
     // ? Check the sum of notes in matches refund and output amounts
     if is_first_fill {
@@ -101,12 +103,13 @@ pub fn check_non_tab_order_validity(
 pub fn execute_non_tab_order_modifications(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
-    is_first_fill: bool,
     order: &LimitOrder,
     spent_amount_x: u64,
     spent_amount_y: u64,
     fee_taken_x: u64,
 ) -> (bool, Note, Option<(Option<Note>, u64)>, Option<Note>, u64) {
+    let is_first_fill =
+        partial_fill_info.is_none() || partial_fill_info.as_ref().unwrap().0.is_none();
     let note_info = order.spot_note_info.as_ref().unwrap();
 
     // ? Generate new swap notes ============================
@@ -224,7 +227,7 @@ pub fn update_state_after_non_tab_order(
     swap_note: &Note,
     new_partial_fill_info: &Option<(Option<Note>, u64)>,
     prev_partial_refund_note: &Option<Note>,
-) -> Result<(), SwapThreadExecutionError> {
+) {
     let mut new_partial_refund_note: Option<Note> = None;
     if let Some(new_pfr_note) = new_partial_fill_info.as_ref() {
         new_partial_refund_note = Some(new_pfr_note.0.as_ref().unwrap().clone());
@@ -242,7 +245,7 @@ pub fn update_state_after_non_tab_order(
             refund_note,
             &swap_note,
             &new_partial_refund_note.as_ref(),
-        )?;
+        );
     } else {
         update_state_after_swap_later_fills(
             tree,
@@ -253,8 +256,6 @@ pub fn update_state_after_non_tab_order(
             prev_partial_refund_note.as_ref().unwrap(),
             swap_note,
             &new_partial_refund_note.as_ref(),
-        )?;
+        );
     }
-
-    Ok(())
 }

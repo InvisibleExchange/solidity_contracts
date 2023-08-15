@@ -20,6 +20,7 @@ from perpetuals.order.order_structs import (
 )
 from perpetuals.order.order_hash import _hash_close_order_fields
 from perpetuals.order.perp_position import modify_margin
+from perpetuals.transaction.perp_transaction import get_perp_position, get_init_margin
 from helpers.signatures.signatures import verify_margin_change_signature
 
 from rollup.global_config import GlobalConfig
@@ -39,13 +40,12 @@ func execute_margin_change{
     local notes_in: Note*;
     local refund_note: Note;
     local close_order_fields: CloseOrderFields;
-    local position: PerpPosition;
-    // local signature: SignatureBuiltin;
 
     let (__fp__, _) = get_fp_and_pc();
-    handle_inputs(
-        &margin_change, &notes_in_len, &notes_in, &refund_note, &close_order_fields, &position
-    );
+    handle_inputs(&margin_change, &notes_in_len, &notes_in, &refund_note, &close_order_fields);
+
+    %{ prev_position = current_margin_change_info["position"] %}
+    let position: PerpPosition = get_perp_position();
 
     let (msg_hash: felt) = hash_margin_change_message(
         margin_change, notes_in_len, notes_in, refund_note, close_order_fields, position
@@ -99,25 +99,6 @@ func update_state_after_increase{
     position: PerpPosition,
     prev_position_hash: felt,
 ) {
-    let state_dict_ptr = state_dict;
-    assert state_dict_ptr.key = notes_in[0].index;
-    assert state_dict_ptr.prev_value = notes_in[0].hash;
-    assert state_dict_ptr.new_value = refund_note.hash;
-
-    // ? store to an array used for program outputs
-    if (refund_note.hash != 0) {
-        %{ leaf_node_types[ids.refund_note.index] = "note" %}
-        %{
-            note_output_idxs[ids.refund_note.index] = note_outputs_len 
-            note_outputs_len += 1
-        %}
-
-        assert note_updates[0] = refund_note;
-        note_updates = &note_updates[1];
-    }
-
-    let state_dict = state_dict + DictAccess.SIZE;
-
     // * Update the position dict
     let state_dict_ptr = state_dict;
     assert state_dict_ptr.key = position.index;
@@ -128,6 +109,27 @@ func update_state_after_increase{
 
     %{ leaf_node_types[ids.position.index] = "position" %}
     %{ store_output_position(ids.position.address_, ids.position.index) %}
+
+    let state_dict_ptr = state_dict;
+    assert state_dict_ptr.key = notes_in[0].index;
+    assert state_dict_ptr.prev_value = notes_in[0].hash;
+    assert state_dict_ptr.new_value = refund_note.hash;
+
+    let state_dict = state_dict + DictAccess.SIZE;
+
+    // ? store to an array used for program outputs
+    if (refund_note.hash != 0) {
+        %{ leaf_node_types[ids.refund_note.index] = "note" %}
+        %{
+            note_output_idxs[ids.refund_note.index] = note_outputs_len 
+            note_outputs_len += 1
+        %}
+
+        assert note_updates[0] = refund_note;
+        let note_updates = &note_updates[1];
+
+        return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
+    }
 
     return update_state_after_increase_inner(notes_in_len - 1, &notes_in[1]);
 }
@@ -163,7 +165,7 @@ func update_state_after_decrease{
 
     // ? store to an array used for program outputs
     assert note_updates[0] = return_collateral_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.return_collateral_note.index] = "note" %}
     %{
@@ -242,7 +244,6 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
     notes_in: Note**,
     refund_note: Note*,
     close_order_fields: CloseOrderFields*,
-    position: PerpPosition*,
 ) {
     %{
         P = 2**251 + 17*2**192 + 1
@@ -296,39 +297,8 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(close_order_field_inputs["dest_received_blinding"]) if close_order_field_inputs else 0
 
 
-        position = current_margin_change_info["position"]
-
-        memory[ids.position.address_ + PERP_POSITION_ORDER_SIDE_OFFSET] = 1 if position["order_side"] == "Long" else 0
-        memory[ids.position.address_ + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(position["synthetic_token"])
-        memory[ids.position.address_ + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(position["collateral_token"])
-        memory[ids.position.address_ + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position["position_size"])
-        memory[ids.position.address_ + PERP_POSITION_MARGIN_OFFSET] = int(position["margin"])
-        memory[ids.position.address_ + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(position["entry_price"])
-        memory[ids.position.address_ + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(position["liquidation_price"])
-        memory[ids.position.address_ + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(position["bankruptcy_price"])
-        memory[ids.position.address_ + PERP_POSITION_ADDRESS_OFFSET] = int(position["position_address"])
-        memory[ids.position.address_ + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position["last_funding_idx"])
-        memory[ids.position.address_ + PERP_POSITION_INDEX_OFFSET] = int(position["index"])
-        memory[ids.position.address_ + PERP_POSITION_HASH_OFFSET] = int(position["hash"])
-        memory[ids.position.address_ + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = 1 if position["allow_partial_liquidations"] else 0
-
-
         signature = current_margin_change_info["signature"]
     %}
 
     return ();
-}
-
-// ? GET INIT MARGIN
-func get_init_margin{range_check_ptr}(
-    order: PerpOrder, open_order_fields: OpenOrderFields, spent_synthetic: felt
-) -> felt {
-    alloc_locals;
-
-    let quotient = open_order_fields.initial_margin * spent_synthetic;
-    let divisor = order.synthetic_amount;
-
-    let (margin, _) = unsigned_div_rem(quotient, divisor);
-
-    return margin;
 }

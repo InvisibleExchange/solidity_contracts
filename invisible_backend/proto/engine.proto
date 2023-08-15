@@ -176,22 +176,45 @@ message PerpOrderMessage {
     uint64 user_id = 14; // used to send a response thorugh a ws
 }
 
+// position: {
+//     last_funding_idx: 0,
+//     liquidation_price: 0,
+//     bankruptcy_price: 0,
+//     margin: 299999999819,
+//     entry_price: 24000000000,
+//     position_header: {
+//       synthetic_token: 12345,
+//       allow_partial_liquidations: true,
+//       position_address: '2394334439046214873258482670113829106248669314014031210199769756358657682652',
+//       hash: '3265799306824681338483488955232095445773353303161780681479677966959847903378'
+//     },
+//     index: 10,
+//     position_size: 12500,
+//     order_side: 1,
+//     hash: '346676534881157352781487263435083492980076717229904082837435259177945616518'
+//   },
+
+
 message GrpcPerpPosition {
     uint32 order_side = 1;
-    uint32 synthetic_token = 2;
-    uint32 collateral_token = 3;
-    uint64 position_size = 4;
-    uint64 margin = 5;
-    uint64 entry_price = 6;
-    uint64 liquidation_price = 7;
-    uint64 bankruptcy_price = 8;
-    bool allow_partial_liquidations = 9;
-    string position_address = 10;
-    uint32 last_funding_idx = 11;
-    string hash = 12;
-    uint32 index = 13;
+    GrcpPositionHeader position_header = 2;
+    uint64 position_size = 3;
+    uint64 margin = 4;
+    uint64 entry_price = 5;
+    uint64 liquidation_price = 6;
+    uint64 bankruptcy_price = 7;
+    uint32 last_funding_idx = 8;
+    string hash = 9;
+    uint32 index = 10;
 }
 
+
+message GrcpPositionHeader {
+    uint32 synthetic_token = 1;
+    // uint32 collateral_token = 3;
+    string position_address = 2;
+    bool allow_partial_liquidations = 3;
+}
 
 
 // ------ LIQUIDATION ORDER --------------

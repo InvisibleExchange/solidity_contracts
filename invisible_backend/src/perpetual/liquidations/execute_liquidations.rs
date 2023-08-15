@@ -134,7 +134,7 @@ pub fn liquidation_consistency_checks(
 
     // ? Check that the orders are the opposite sides
     // ? for simplicity, we require order_a to be the "buyer" and order_b to be the "seller"
-    if liquidation_order.position.order_side == liquidation_order.order_side {
+    if liquidation_order.position.order_side != liquidation_order.order_side {
         return Err(send_perp_swap_error(
             "order and position order side mismatch".to_string(),
             None,
@@ -148,6 +148,7 @@ pub fn liquidation_consistency_checks(
         liquidation_order.synthetic_amount,
     );
 
+    // ? Check that the market price is at least as good as the order price
     if liquidation_order.order_side == OrderSide::Long {
         if market_price > price {
             return Err(send_perp_swap_error(
@@ -231,7 +232,7 @@ pub fn is_position_liquidatable(
         ));
     }
 
-    if liquidation_order.synthetic_amount <= liquidatable_amount {
+    if liquidation_order.synthetic_amount < liquidatable_amount {
         return Err(send_perp_swap_error(
             "overspending in liquidation".to_string(),
             None,

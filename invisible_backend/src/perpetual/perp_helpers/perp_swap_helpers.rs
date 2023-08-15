@@ -494,8 +494,6 @@ pub fn consistency_checks(
         }
     }
 
-    
-
     // ? Check that the fees taken don't exceed the order fees
     if ((fee_taken_a as u128 * order_a.collateral_amount as u128)
         > (order_a.fee_limit as u128 * spent_collateral as u128))
@@ -518,20 +516,21 @@ pub fn consistency_checks(
         ));
     }
 
-    let address_a = &order_a
-        .position
-        .as_ref()
-        .unwrap()
-        .position_header
-        .position_address;
-    let address_b = &order_b
-        .position
-        .as_ref()
-        .unwrap()
-        .position_header
-        .position_address;
     // ? Check that the positions being modified are different (different addresses)
     if order_a.position.is_some() && order_b.position.is_some() {
+        let address_a = &order_a
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .position_address;
+        let address_b = &order_b
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .position_address;
+
         if *address_a == *address_b {
             return Err(send_perp_swap_error(
                 "Positions are the same".to_string(),
@@ -547,6 +546,18 @@ pub fn consistency_checks(
     let mut valid_b = true;
 
     if order_a.position.is_some() && order_b.position.is_some() {
+        let address_a = &order_a
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .position_address;
+        let address_b = &order_b
+            .position
+            .as_ref()
+            .unwrap()
+            .position_header
+            .position_address;
         if *address_a == *address_b {
             return Err(send_perp_swap_error(
                 "Positions are the same".to_string(),
@@ -616,3 +627,93 @@ pub fn consistency_checks(
 }
 
 // * ========================================================================================
+
+pub fn reverify_existances(
+    state_tree: &Arc<Mutex<SuperficialTree>>,
+    order_a: &PerpOrder,
+    prev_pfr_note_a: &Option<Note>,
+    order_b: &PerpOrder,
+    prev_pfr_note_b: &Option<Note>,
+) -> Result<(), PerpSwapExecutionError> {
+    let state_tree = state_tree.lock();
+
+    if order_a.position_effect_type == PositionEffectType::Open {
+        if let Some(pfr_note) = prev_pfr_note_a {
+            let leaf_hash = state_tree.get_leaf_by_index(pfr_note.index);
+
+            if leaf_hash != pfr_note.hash {
+                return Err(send_perp_swap_error(
+                    "prev partial refund note used in swap does not exist in the state".to_string(),
+                    Some(order_a.order_id),
+                    None,
+                ));
+            }
+        } else {
+            let notes_in = &order_a.open_order_fields.as_ref().unwrap().notes_in;
+            for note in notes_in.iter() {
+                let leaf_hash = state_tree.get_leaf_by_index(note.index);
+
+                if leaf_hash != note.hash {
+                    return Err(send_perp_swap_error(
+                        "note spent for swap does not exist in the state".to_string(),
+                        Some(order_a.order_id),
+                        None,
+                    ));
+                }
+            }
+        }
+    } else {
+        let position = order_a.position.as_ref().unwrap();
+
+        let leaf_hash = state_tree.get_leaf_by_index(position.index as u64);
+
+        if position.hash != leaf_hash {
+            return Err(send_perp_swap_error(
+                "position to update does not exist in the state".to_string(),
+                Some(order_a.order_id),
+                None,
+            ));
+        }
+    }
+
+    if order_b.position_effect_type == PositionEffectType::Open {
+        if let Some(pfr_note) = prev_pfr_note_b {
+            let leaf_hash = state_tree.get_leaf_by_index(pfr_note.index);
+
+            if leaf_hash != pfr_note.hash {
+                return Err(send_perp_swap_error(
+                    "prev partial refund note used in swap does not exist in the state".to_string(),
+                    Some(order_b.order_id),
+                    None,
+                ));
+            }
+        } else {
+            let notes_in = &order_b.open_order_fields.as_ref().unwrap().notes_in;
+            for note in notes_in.iter() {
+                let leaf_hash = state_tree.get_leaf_by_index(note.index);
+
+                if leaf_hash != note.hash {
+                    return Err(send_perp_swap_error(
+                        "note spent for swap does not exist in the state".to_string(),
+                        Some(order_b.order_id),
+                        None,
+                    ));
+                }
+            }
+        }
+    } else {
+        let position = order_b.position.as_ref().unwrap();
+
+        let leaf_hash = state_tree.get_leaf_by_index(position.index as u64);
+
+        if position.hash != leaf_hash {
+            return Err(send_perp_swap_error(
+                "position to update does not exist in the state".to_string(),
+                Some(order_b.order_id),
+                None,
+            ));
+        }
+    }
+
+    return Ok(());
+}

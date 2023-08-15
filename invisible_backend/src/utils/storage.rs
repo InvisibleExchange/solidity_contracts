@@ -274,6 +274,23 @@ impl MainStorage {
             .path("./storage/transaction_data/".to_string() + &new_batch_index.to_string());
         let tx_db = config.open().unwrap();
 
+        // ? Store all the the values at the end of the batch
+        let price_data = self.read_price_data();
+        self.price_db
+            .insert(
+                self.latest_batch.to_string(),
+                serde_json::to_vec(&price_data).unwrap(),
+            )
+            .unwrap();
+
+        let funding_info = self.read_funding_info().ok();
+        self.funding_db
+            .insert(
+                self.latest_batch.to_string(),
+                serde_json::to_vec(&funding_info).unwrap(),
+            )
+            .unwrap();
+
         self.tx_db = tx_db;
         self.latest_batch = new_batch_index;
     }
@@ -285,10 +302,10 @@ pub struct BackupStorage {
     removable_notes_db: sled::Db,     // For failed removable notes updates
     position_db: sled::Db,            // For failed position updates
     removable_positions_db: sled::Db, // For failed removable positions updates
+    order_tab_db: sled::Db,           // For failed order tab updates
+    removable_order_tab_db: sled::Db, // For failed removable order tab updates
     fills_db: sled::Db,               // For failed spot fills updates
     perp_fills_db: sled::Db,          // For failed perp fills updates
-    order_tabs_db: sled::Db,          // For failed order tab updates
-    removable_order_tabs_db: sled::Db, // For failed removable order tab updates
                                       // rollback_db: sled::Db,            // For rollback transactions
 }
 
@@ -306,6 +323,12 @@ impl BackupStorage {
         let config = Config::new().path("./storage/backups/removable_positions");
         let removable_positions_db = config.open().unwrap();
 
+        let config = Config::new().path("./storage/backups/order_tab");
+        let order_tab_db = config.open().unwrap();
+
+        let config = Config::new().path("./storage/backups/removable_order_tab");
+        let removable_order_tab_db = config.open().unwrap();
+
         let config = Config::new().path("./storage/backups/fills");
         let fills_db = config.open().unwrap();
 
@@ -315,12 +338,6 @@ impl BackupStorage {
         // let config = Config::new().path("./storage/rollback_info");
         // let rollback_db = config.open().unwrap();
 
-        let config = Config::new().path("./storage/order_tabs_info");
-        let order_tabs_db = config.open().unwrap();
-
-        let config = Config::new().path("./storage/removable_order_tabs_info");
-        let removable_order_tabs_db = config.open().unwrap();
-
         BackupStorage {
             note_db,
             removable_notes_db,
@@ -329,8 +346,8 @@ impl BackupStorage {
             fills_db,
             perp_fills_db,
             // rollback_db,
-            order_tabs_db,
-            removable_order_tabs_db,
+            order_tab_db,
+            removable_order_tab_db,
         }
     }
 
@@ -468,7 +485,7 @@ impl BackupStorage {
         let idx = order_tab.tab_idx;
         let tab = serde_json::to_vec(order_tab).unwrap();
 
-        self.order_tabs_db.insert(idx.to_string(), tab)?;
+        self.order_tab_db.insert(idx.to_string(), tab)?;
 
         Ok(())
     }
@@ -476,14 +493,27 @@ impl BackupStorage {
     pub fn store_order_tab_removal(&self, idx: u64, pub_key: &str) -> Result<()> {
         let info = serde_json::to_vec(&(idx, pub_key)).unwrap();
 
-        self.removable_order_tabs_db.insert(idx.to_string(), info)?;
+        self.removable_order_tab_db.insert(idx.to_string(), info)?;
 
         Ok(())
     }
 
-    // TODO: Read order tabs
+    pub fn read_order_tabs(&self) -> (Vec<OrderTab>, Vec<(u64, String)>) {
+        let mut order_tabs = Vec::new();
+        for x in self.order_tab_db.iter() {
+            let position: OrderTab = serde_json::from_slice(&x.unwrap().1.to_vec()).unwrap();
+            order_tabs.push(position);
+        }
 
-    // TODO: Read removable order tabs
+        let mut removable_info = Vec::new();
+        for x in self.removable_order_tab_db.iter() {
+            let info: (u64, String) = serde_json::from_slice(&x.unwrap().1.to_vec()).unwrap();
+
+            removable_info.push(info);
+        }
+
+        (order_tabs, removable_info)
+    }
 
     pub fn clear_db(&self) -> Result<()> {
         self.note_db.clear()?;
@@ -494,43 +524,3 @@ impl BackupStorage {
         Ok(())
     }
 }
-
-// pub struct LiquidityStorage {
-//     liquidity_db: sled::Db,
-// }
-
-// impl LiquidityStorage {
-//     pub fn new() -> Self {
-//         let config = Config::new().path("./storage/backups/liquidity");
-//         let liquidity_db = config.open().unwrap();
-
-//         LiquidityStorage { liquidity_db }
-//     }
-
-//     pub fn store_liquidity(
-//         &self,
-//         spot_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
-//         perp_liquidity: &HashMap<u64, Vec<&LimitOrder>>,
-//     ) -> Result<()> {
-//         self.liquidity_db.insert(
-//             "spot_liquidity",
-//             serde_json::to_vec(&spot_liquidity).unwrap(),
-//         )?;
-//         self.liquidity_db.insert(
-//             "perp_liquidity",
-//             serde_json::to_vec(&perp_liquidity).unwrap(),
-//         )?;
-
-//         Ok(())
-//     }
-
-//     pub fn read_liquidity(&self) {
-//         let val = self.liquidity_db.get("spot_liquidity").unwrap();
-//         let spot_liquidity: HashMap<u64, Vec<LimitOrder>> =
-//             serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
-
-//         let val = self.liquidity_db.get("perp_liquidity").unwrap();
-//         let perp_liquidity: HashMap<u64, Vec<LimitOrder>> =
-//             serde_json::from_slice(&val.unwrap().to_vec()).unwrap();
-//     }
-// }

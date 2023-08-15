@@ -9,7 +9,7 @@ use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
 
 use super::super::perp_position::PerpPosition;
 use crate::perpetual::OrderSide;
-use crate::utils::crypto_utils::{pedersen, pedersen_on_vec, verify, EcPoint, Signature};
+use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 
 #[derive(Debug, Clone)]
 pub struct LiquidationOrder {
@@ -94,10 +94,7 @@ impl Serialize for LiquidationOrder {
     {
         let mut note = serializer.serialize_struct("PerpOrder", 13)?;
 
-        note.serialize_field(
-            "pos_addr",
-            &self.position.position_header.position_address.to_string(),
-        )?;
+        note.serialize_field("position", &self.position)?;
         note.serialize_field("order_side", &self.order_side)?;
         note.serialize_field("synthetic_token", &self.synthetic_token)?;
         note.serialize_field("synthetic_amount", &self.synthetic_amount)?;
@@ -143,9 +140,10 @@ fn hash_order(
     let collateral_amount = BigUint::from_u64(collateral_amount).unwrap();
     hash_inputs.push(&collateral_amount);
 
-    println!("hash_inputs: {:?}", hash_inputs);
+    let fields_hash = open_order_fields.hash();
+    hash_inputs.push(&fields_hash);
 
     let order_hash = pedersen_on_vec(&hash_inputs);
 
-    return pedersen(&order_hash, &open_order_fields.hash());
+    return order_hash;
 }

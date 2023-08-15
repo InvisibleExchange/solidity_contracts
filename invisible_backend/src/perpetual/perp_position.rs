@@ -543,7 +543,7 @@ impl PerpPosition {
             let s2 = self.position_size as u128 * price_delta as u128;
 
             let new_size =
-                (s1 - s2) / (market_price as u128 * (im_rate + liquidator_fee_rate) as u128) / 1000;
+                (s1 - s2) * 1000 / (market_price as u128 * (im_rate + liquidator_fee_rate) as u128);
 
             let liquidatable_size = self.position_size - new_size as u64;
 
@@ -582,7 +582,7 @@ impl PerpPosition {
 
         if self.position_header.allow_partial_liquidations
             && self.position_size
-                > MIN_PARTIAL_LIQUIDATION_SIZE
+                >= MIN_PARTIAL_LIQUIDATION_SIZE
                     [self.position_header.synthetic_token.to_string().as_str()]
         {
             let (liquidator_fee, liquidated_size) =
@@ -641,8 +641,7 @@ impl PerpPosition {
         //& Leftover value: (market_price - bankruptcy_price) * position_size   (denominated in collateral - USD)
 
         let liquidator_fee = (liquidated_size as u128 * market_price as u128 * liquidator_fee_rate
-            / multiplier1 as u128
-            / 1000) as u64;
+            / (multiplier1 as u128 * 1000)) as u64;
 
         let new_bankruptcy_price: u64 = _get_bankruptcy_price(
             self.entry_price,
@@ -702,8 +701,7 @@ impl PerpPosition {
         let liquidator_fee_rate = 5; // 0.5 %
         let liquidator_fee =
             (self.position_size as u128 * market_price as u128 * liquidator_fee_rate as u128
-                / multiplier as u128
-                * 1000) as u64;
+                / (multiplier as u128 * 1000)) as u64;
 
         //& Leftover value: (market_price - bankruptcy_price) * position_size   (denominated in collateral - USD)
         let leftover_value: i128;

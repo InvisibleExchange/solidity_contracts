@@ -1,7 +1,7 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.math import unsigned_div_rem, signed_div_rem, assert_le
+from starkware.cairo.common.math import unsigned_div_rem, assert_le
 from starkware.cairo.common.math_cmp import is_not_zero, is_le
 from starkware.cairo.common.pow import pow
 from starkware.cairo.common.hash_state import (
@@ -13,7 +13,12 @@ from starkware.cairo.common.hash_state import (
 from starkware.cairo.common.ec_point import EcPoint
 
 from helpers.utils import Note, get_price
-from rollup.global_config import token_decimals, price_decimals, GlobalConfig
+from rollup.global_config import (
+    token_decimals,
+    price_decimals,
+    GlobalConfig,
+    get_min_partial_liquidation_size,
+)
 
 from perpetuals.order.order_structs import PerpPosition, PositionHeader
 
@@ -26,6 +31,8 @@ from perpetuals.order.order_helpers import (
     _get_entry_price,
     _get_liquidation_price,
     _get_bankruptcy_price,
+    _get_pnl,
+    _get_leftover_value,
 )
 
 // * ====================================================================================
@@ -265,21 +272,15 @@ func reduce_position_size_internal{
 ) -> (position: PerpPosition) {
     alloc_locals;
 
-    let (collateral_decimals) = token_decimals(global_config.collateral_token);
-
-    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
-
     let new_size = position.position_size - reduction_size;
 
-    tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
-        collateral_decimals;
-    let (multiplier: felt) = pow(10, decimal_conversion);
-
-    // ? Get realized pnl
-    let (p1: felt, _) = unsigned_div_rem(reduction_size * price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(reduction_size * position.entry_price, multiplier);
-    let realized_pnl = p2 - p1 - 2 * position.order_side * (p2 - p1);
+    let realized_pnl = _get_pnl(
+        position.order_side,
+        reduction_size,
+        position.entry_price,
+        price,
+        position.position_header.synthetic_token,
+    );
 
     // & apply funding
     let (margin_after_funding) = apply_funding(position, funding_idx);
@@ -337,21 +338,15 @@ func flip_position_side_internal{
 ) -> (position: PerpPosition) {
     alloc_locals;
 
-    let (collateral_decimals) = token_decimals(global_config.collateral_token);
-
-    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
-
     let new_size = reduction_size - position.position_size;
 
-    tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
-        collateral_decimals;
-    let (multiplier: felt) = pow(10, decimal_conversion);
-
-    // ? Get realized pnl
-    let (p1: felt, _) = unsigned_div_rem(position.position_size * price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(position.position_size * position.entry_price, multiplier);
-    let realized_pnl = p2 - p1 - 2 * position.order_side * (p2 - p1);
+    let realized_pnl = _get_pnl(
+        position.order_side,
+        position.position_size,
+        position.entry_price,
+        price,
+        position.position_header.synthetic_token,
+    );
 
     // & apply funding
     let (margin_after_funding) = apply_funding(position, funding_idx);
@@ -411,11 +406,6 @@ func close_position_partialy_internal{
 ) -> (position: PerpPosition, return_collateral: felt) {
     alloc_locals;
 
-    let (collateral_decimals) = token_decimals(global_config.collateral_token);
-
-    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
-
     let updated_size = position.position_size - reduction_size;
 
     // & apply funding
@@ -425,14 +415,13 @@ func close_position_partialy_internal{
         reduction_size * margin_after_funding, position.position_size
     );
 
-    tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
-        collateral_decimals;
-    let (multiplier: felt) = pow(10, decimal_conversion);
-
-    // ? Get realized pnl
-    let (p1: felt, _) = unsigned_div_rem(reduction_size * close_price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(reduction_size * position.entry_price, multiplier);
-    let realized_pnl = p2 - p1 - 2 * position.order_side * (p2 - p1);
+    let realized_pnl = _get_pnl(
+        position.order_side,
+        reduction_size,
+        position.entry_price,
+        close_price,
+        position.position_header.synthetic_token,
+    );
 
     let return_collateral = reduction_margin + realized_pnl - fee_taken;
 
@@ -472,23 +461,30 @@ func close_position_internal{
 ) {
     alloc_locals;
 
-    let (collateral_decimals) = token_decimals(global_config.collateral_token);
-
-    let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
-    let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
-
-    tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
-        collateral_decimals;
-    let (multiplier: felt) = pow(10, decimal_conversion);
-
     // & apply funding
     let (margin_after_funding) = apply_funding(position, funding_idx);
 
-    let (p1: felt, _) = unsigned_div_rem(position.position_size * close_price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(position.position_size * position.entry_price, multiplier);
-    let realized_pnl = p2 - p1 - 2 * position.order_side * (p2 - p1) - fee_taken;
+    // let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
-    return (margin_after_funding + realized_pnl,);
+    // let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
+    // let (synthetic_price_decimals: felt) = price_decimals(position.position_header.synthetic_token);
+
+    // tempvar decimal_conversion = synthetic_decimals + synthetic_price_decimals -
+    //     collateral_decimals;
+    // let (multiplier: felt) = pow(10, decimal_conversion);
+    // let (p1: felt, _) = unsigned_div_rem(position.position_size * close_price, multiplier);
+    // let (p2: felt, _) = unsigned_div_rem(position.position_size * position.entry_price, multiplier);
+    // let realized_pnl = p2 - p1 - 2 * position.order_side * (p2 - p1) - fee_taken;
+
+    let realized_pnl = _get_pnl(
+        position.order_side,
+        position.position_size,
+        position.entry_price,
+        close_price,
+        position.position_header.synthetic_token,
+    );
+
+    return (margin_after_funding + realized_pnl - fee_taken,);
 }
 
 // * ====================================================================================
@@ -498,32 +494,21 @@ func is_position_liquidatable{
     range_check_ptr,
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
-}(position: PerpPosition, market_price: felt, index_price: felt) -> (
-    position: PerpPosition, leftover_value: felt
-) {
+}(position: PerpPosition, market_price: felt, index_price: felt) -> (leftover_value: felt) {
     alloc_locals;
 
     // & if market_price is greater than the bankruptcy price, the leftover collateral goes to the insurance fund
-    let (index_above_liq_price) = is_le(position.liquidation_price, index_price + 1);
-    let (index_below_liq_price) = is_le(index_price, position.liquidation_price + 1);
     if (position.order_side == 1) {
-        if (index_above_liq_price == 1) {
-            return (position, 0);
-        }
-    }
-    if (position.order_side == 0) {
-        if (index_below_liq_price == 1) {
-            return (position, 0);
-        }
+        assert_le(index_price + 1, position.liquidation_price);
+    } else {
+        assert_le(position.liquidation_price + 1, index_price);
     }
 
-    let min_liq_size = 1;  // TODO
-    let (liq_cond) = is_le(position.position_size, min_liq_size + 1);
-    if (position.is_position_liquidatable == 1) {
-        if (liq_cond == 0) {
-            return (position.position_size);
-        }
-
+    let (min_partial_liq_size) = get_min_partial_liquidation_size(
+        position.position_header.synthetic_token
+    );
+    let cond1 = is_le(min_partial_liq_size, position.position_size);
+    if (position.position_header.allow_partial_liquidations * cond1 == 1) {
         let (collateral_decimals) = token_decimals(global_config.collateral_token);
 
         let (synthetic_decimals: felt) = token_decimals(position.position_header.synthetic_token);
@@ -535,17 +520,18 @@ func is_position_liquidatable{
             collateral_decimals;
         let (multiplier: felt) = pow(10, decimal_conversion);
 
-        let price_delta = market_price - position.entry_price + 2 * position.order_side *
-            position.entry_price - 2 * position.order_side * market_price;
-
         let im_rate = 67;  // 6.7 %
         let liquidator_fee_rate = 5;  // 0.5 %
+
+        let price_delta = market_price - position.entry_price + 2 * position.order_side *
+            position.entry_price - 2 * position.order_side * market_price;
 
         let s1 = position.margin * multiplier;
         let s2 = position.position_size * price_delta;
 
-        let new_size = unsigned_div_rem(s1 - s2, market_price * (im_rate + liquidator_fee_rate)) /
-            1000;
+        let (new_size, _) = unsigned_div_rem(
+            (s1 - s2) * 1000, market_price * (im_rate + liquidator_fee_rate)
+        );
 
         let liquidatable_size = position.position_size - new_size;
 
@@ -555,7 +541,7 @@ func is_position_liquidatable{
     }
 }
 
-// -----------------------------------------------------------------------
+// =======================================================================================================
 
 // Todo: Liquidate position  (use validate_price_in_range)
 func liquidate_position_partialy_internal{
@@ -564,7 +550,7 @@ func liquidate_position_partialy_internal{
     funding_info: FundingInfo*,
     global_config: GlobalConfig*,
 }(position: PerpPosition, liquidation_size: felt, close_price: felt, funding_idx: felt) -> (
-    position: PerpPosition, leftover_value: felt
+    position: PerpPosition, liquidator_fee: felt
 ) {
     alloc_locals;
 
@@ -577,51 +563,64 @@ func liquidate_position_partialy_internal{
         collateral_decimals;
     let (multiplier: felt) = pow(10, decimal_conversion);
 
-    let updated_size = position.position_size - liquidation_size;
-
     // & apply funding
     let (margin_after_funding) = apply_funding(position, funding_idx);
 
-    let (reduction_margin: felt, _) = unsigned_div_rem(
-        liquidation_size * margin_after_funding, position.position_size
+    let liquidator_fee_rate = 5;  // 0.5 %
+    let (liquidator_fee, _) = unsigned_div_rem(
+        liquidation_size * close_price * liquidator_fee_rate, multiplier * 1000
     );
 
-    let (p1: felt, _) = unsigned_div_rem(liquidation_size * close_price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(liquidation_size * position.bankruptcy_price, multiplier);
-    let leftover_value = p2 - p1 - 2 * position.order_side * (p2 - p1);
+    let new_size = position.position_size - liquidation_size;
 
-    // ? if this is less than zero it should come out of the insurance fund else add it to insurance fund
+    let margin = margin_after_funding - liquidator_fee;
 
-    let margin = margin_after_funding - reduction_margin;
+    let (bankruptcy_price: felt) = _get_bankruptcy_price(
+        position.entry_price,
+        margin,
+        new_size,
+        position.order_side,
+        position.position_header.synthetic_token,
+    );
+    let (liquidation_price: felt) = _get_liquidation_price(
+        position.entry_price,
+        new_size,
+        margin,
+        position.order_side,
+        position.position_header.synthetic_token,
+        position.position_header.allow_partial_liquidations,
+    );
 
     let (new_position_hash: felt) = _hash_position_internal(
         position.position_header.hash,
         position.order_side,
-        updated_size,
+        new_size,
         position.entry_price,
-        position.liquidation_price,
+        liquidation_price,
         funding_idx,
     );
 
-    let updated_position = PerpPosition(
+    let new_position = PerpPosition(
         position.position_header,
         position.order_side,
-        updated_size,
+        new_size,
         margin,
         position.entry_price,
-        position.liquidation_price,
-        position.bankruptcy_price,
+        liquidation_price,
+        bankruptcy_price,
         funding_idx,
         position.index,
         new_position_hash,
     );
 
-    return (updated_position, leftover_value);
+    return (new_position, liquidator_fee);
 }
 
-func liquidate_position_internal{
+func liquidate_position_fully_internal{
     range_check_ptr, funding_info: FundingInfo*, global_config: GlobalConfig*
-}(position: PerpPosition, close_price: felt, funding_idx: felt) -> (leftover_value: felt) {
+}(position: PerpPosition, close_price: felt, funding_idx: felt) -> (
+    leftover_value: felt, liquidator_fee: felt
+) {
     alloc_locals;
 
     let (collateral_decimals) = token_decimals(global_config.collateral_token);
@@ -633,15 +632,25 @@ func liquidate_position_internal{
         collateral_decimals;
     let (multiplier: felt) = pow(10, decimal_conversion);
 
-    let (p1: felt, _) = unsigned_div_rem(position.position_size * close_price, multiplier);
-    let (p2: felt, _) = unsigned_div_rem(
-        position.position_size * position.bankruptcy_price, multiplier
+    // & apply funding
+    let (margin_after_funding) = apply_funding(position, funding_idx);
+
+    let liquidator_fee_rate = 5;  // 0.5 %
+    let (liquidator_fee, _) = unsigned_div_rem(
+        position.position_size * close_price * liquidator_fee_rate, multiplier * 1000
     );
-    let leftover_value = p2 - p1 - 2 * position.order_side * (p2 - p1);
+
+    let leftover_value = _get_leftover_value(
+        position.order_side,
+        position.position_size,
+        position.bankruptcy_price,
+        close_price,
+        multiplier,
+    );
 
     // ? if this is less than zero it should come out of the insurance fund else add it to insurance fund
 
-    return (leftover_value,);
+    return (leftover_value, liquidator_fee);
 }
 
 // -----------------------------------------------------------------------

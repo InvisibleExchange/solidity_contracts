@@ -224,6 +224,7 @@ impl OrderQueue {
         self.orders.get(&id)
     }
 
+    // *-----------------------------------------------------------------------------
     pub fn get_tab_mutex(&self, tab_hash: &BigUint) -> Option<Arc<Mutex<OrderTab>>> {
         for (_, ord_) in self.orders.iter() {
             if let Order::Spot(ord) = &ord_.order {
@@ -238,6 +239,8 @@ impl OrderQueue {
 
         None
     }
+
+    // *-----------------------------------------------------------------------------
 
     /// Increases the quantity of the order with id by increase_qty
     fn increase_qty(&mut self, id: u64, increase_qty: u64) {
@@ -404,7 +407,12 @@ impl OrderQueue {
 
         let mut price: f64 = 0.0;
         for i in idx_queue.into_sorted_vec() {
-            let order = self.orders.get(&i.id).unwrap();
+            let order_ = self.orders.get(&i.id);
+            if order_.is_none() {
+                continue;
+            }
+
+            let order = order_.unwrap();
             sum += order.qty_left;
             price = i.price;
             if sum >= impact_notional {

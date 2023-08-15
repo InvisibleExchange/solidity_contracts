@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use crate::{
     order_tab::OrderTab,
     perpetual::DUST_AMOUNT_PER_ASSET,
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     transactions::limit_order::LimitOrder,
     trees::superficial_tree::SuperficialTree,
     utils::errors::{send_swap_error, SwapThreadExecutionError},
@@ -137,24 +137,10 @@ pub fn execute_tab_order_modifications(
 pub fn update_state_after_tab_order(
     state_tree: &Arc<Mutex<SuperficialTree>>,
     updated_state_hashes_m: &Arc<Mutex<HashMap<u64, (LeafNodeType, BigUint)>>>,
-    order: &LimitOrder,
     updated_order_tab: &OrderTab,
-) -> Result<(), SwapThreadExecutionError> {
+) {
     let mut state_tree_ = state_tree.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
-
-    let prev_tab_hash = order.order_tab.as_ref().unwrap().lock().hash.clone();
-
-    // ? Check that the order tab hash exists in the state --------------------------------------------
-    let leaf_hash = state_tree_.get_leaf_by_index(updated_order_tab.tab_idx as u64);
-
-    if leaf_hash != prev_tab_hash {
-        return Err(send_swap_error(
-            "order_tab hash does not exist in the state".to_string(),
-            Some(order.order_id),
-            None,
-        ));
-    }
 
     state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
     updated_state_hashes.insert(
@@ -164,6 +150,4 @@ pub fn update_state_after_tab_order(
 
     drop(state_tree_);
     drop(updated_state_hashes);
-
-    Ok(())
 }

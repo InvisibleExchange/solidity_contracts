@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::{
     perpetual::{perp_order::CloseOrderFields, DUST_AMOUNT_PER_ASSET},
     server::grpc::engine_proto::CloseOrderTabReq,
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{crypto_utils::pedersen_on_vec, notes::Note, storage::BackupStorage},
 };

@@ -146,10 +146,24 @@ impl Tree {
 
     // I/O Operations --------------------------------------------------
 
-    pub fn store_to_disk(&self, tree_index: u32) -> Result<(), Box<dyn Error>> {
-        let str = "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string();
+    pub fn store_to_disk(&self, tree_index: u32, is_backup: bool) -> Result<(), Box<dyn Error>> {
+        let str: String;
+        if is_backup {
+            str = "./storage/merkle_trees/state_tree_backup/".to_string() + &tree_index.to_string();
+        } else {
+            str = "./storage/merkle_trees/state_tree/".to_string() + &tree_index.to_string();
+        }
 
         let path = Path::new(&str);
+        if is_backup {
+            if !Path::new("./storage/merkle_trees/state_tree_backup/").exists() {
+                fs::create_dir("./storage/merkle_trees/state_tree_backup/")?;
+            }
+        } else {
+            if !Path::new("./storage/merkle_trees/state_tree/").exists() {
+                fs::create_dir("./storage/merkle_trees/state_tree/")?;
+            }
+        }
 
         let mut file: File = File::create(path)?;
 

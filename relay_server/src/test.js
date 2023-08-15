@@ -1,6 +1,6 @@
 const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
-const { getLastDayTrades } = require("./helpers/firebaseConnection");
+const { getLastDayTrades } = require("./helpers/firebase/firebaseConnection");
 
 const packageDefinition = protoLoader.loadSync(
   "../../invisible_backend/proto/engine.proto",
@@ -47,3 +47,5 @@ async function getFundingInfo() {
 }
 
 // ===========================
+
+finalizeBatch();

@@ -4,7 +4,7 @@ const {
   compileLiqUpdateMessage,
 } = require("./helpers");
 
-const { getLastDayTrades } = require("./firebaseConnection");
+const { getLastDayTrades } = require("./firebase/firebaseConnection");
 const { priceUpdate } = require("../helpers/mmPriceFeeds");
 
 const CONFIG_CODE = "1234567890";

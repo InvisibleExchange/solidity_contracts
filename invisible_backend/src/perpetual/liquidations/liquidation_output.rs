@@ -1,19 +1,22 @@
 use num_bigint::BigUint;
 use serde_json::{json, Value};
 
+use crate::utils::crypto_utils::Signature;
+
 use super::{super::perp_position::PerpPosition, liquidation_order::LiquidationOrder};
 
 pub fn wrap_liquidation_output(
     liquidation_order: &LiquidationOrder,
-    prev_liquidated_position: &PerpPosition,
+    signature: &Signature,
     new_liquidated_position_hash: &Option<String>,
     new_position_hash: &String,
     new_position_index: u32,
     prev_funding_idx: u32,
     new_funding_idx: u32,
+    market_price: u64,
+    index_price: u64,
 ) -> serde_json::map::Map<String, Value> {
     let order_json1 = serde_json::to_value(&liquidation_order).unwrap();
-    let prev_liquidated_position_json = serde_json::to_value(&prev_liquidated_position).unwrap();
     let new_liquidated_position_hash_json =
         serde_json::to_value(&new_liquidated_position_hash).unwrap();
     let new_position_hash_json = serde_json::to_value(&new_position_hash).unwrap();
@@ -29,18 +32,27 @@ pub fn wrap_liquidation_output(
 
     json_map.insert(
         String::from("transaction_type"),
-        serde_json::to_value(&"liquidation_swap").unwrap(),
+        serde_json::to_value(&"liquidation_order").unwrap(),
     );
     json_map.insert(String::from("liquidation_order"), order_json1);
     json_map.insert(
-        String::from("prev_liquidated_position"),
-        prev_liquidated_position_json,
+        String::from("signature"),
+        serde_json::to_value(&signature).unwrap(),
     );
     json_map.insert(
         String::from("new_liquidated_position_hash"),
         new_liquidated_position_hash_json,
     );
     json_map.insert(String::from("new_position_hash"), new_position_hash_json);
+
+    json_map.insert(
+        String::from("market_price"),
+        serde_json::to_value(&market_price).unwrap(),
+    );
+    json_map.insert(
+        String::from("index_price"),
+        serde_json::to_value(&index_price).unwrap(),
+    );
 
     json_map.insert(String::from("indexes"), indexes_json);
 

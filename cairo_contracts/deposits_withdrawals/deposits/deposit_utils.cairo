@@ -1,12 +1,9 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin, SignatureBuiltin
-from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.signature import verify_ecdsa_signature
-from starkware.cairo.common.dict import dict_new, dict_write, dict_update, dict_squash, dict_read
+from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.dict_access import DictAccess
-from starkware.cairo.common.math import unsigned_div_rem, assert_le
-from starkware.cairo.common.math_cmp import is_le
+from starkware.cairo.common.math import unsigned_div_rem
 from starkware.cairo.common.hash_state import (
     hash_init,
     hash_finalize,
@@ -16,9 +13,11 @@ from starkware.cairo.common.hash_state import (
 
 from helpers.utils import Note, hash_note, sum_notes, hash_notes_array
 
+from rollup.global_config import GlobalConfig, verify_valid_chain_id
+
 // & This is the public input retrieved from on-chain
 struct Deposit {
-    deposit_id: felt,  // todo: Should probably get rid of this since it serves no purpose
+    deposit_id: felt,  // | chain_id (32 bit) | identifier (32 bit) |
     token: felt,
     amount: felt,
     deposit_address: felt,
@@ -40,7 +39,10 @@ func get_deposit_notes() -> (deposit_notes_len: felt, deposit_notes: Note*) {
 }
 
 func verify_deposit_notes{
-    pedersen_ptr: HashBuiltin*, range_check_ptr, ecdsa_ptr: SignatureBuiltin*
+    pedersen_ptr: HashBuiltin*,
+    range_check_ptr,
+    ecdsa_ptr: SignatureBuiltin*,
+    global_config: GlobalConfig*,
 }(deposit_notes_len: felt, deposit_notes: Note*, deposit: Deposit) {
     alloc_locals;
 
@@ -55,6 +57,10 @@ func verify_deposit_notes{
     );
 
     let (deposit_hash: felt) = deposit_tx_hash(note_hashes_len, note_hashes, deposit.deposit_id);
+
+    // ? Verify the deposit chain_id is valid
+    let (chain_id, identifier) = unsigned_div_rem(deposit.deposit_id, 2 ** 32);
+    verify_valid_chain_id(chain_id);
 
     local signature_r: felt;
     local signature_s: felt;

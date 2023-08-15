@@ -65,11 +65,13 @@ func execute_swap{
     // * ORDER A =============================================================
 
     %{
-        is_tab_order = order_A_input["spot_note_info"] != None
+        is_tab_order = order_A_input["order_tab"] != None
         order_indexes = index_data["order_a"]
         current_order = swap_data["order_a"]
         signature = swap_data["signature_a"]
-        prev_pfr_note = current_swap["prev_pfr_note_a"]
+        prev_pfr_note = None 
+        if not is_tab_order:
+            prev_pfr_note = current_swap["prev_pfr_note_a"]
     %}
 
     execute_transaction(invisibl3_order_A, spend_amountA, spend_amountB, fee_takenA);
@@ -77,11 +79,13 @@ func execute_swap{
     // * ORDER B =============================================================
 
     %{
-        is_tab_order = order_B_input["spot_note_info"] != None
+        is_tab_order = order_B_input["order_tab"] != None
         order_indexes = index_data["order_b"]
         current_order = swap_data["order_b"]
         signature = swap_data["signature_b"]
-        prev_pfr_note = current_swap["prev_pfr_note_b"]
+        prev_pfr_note = None 
+        if not is_tab_order:
+            prev_pfr_note = current_swap["prev_pfr_note_b"]
     %}
 
     execute_transaction(invisibl3_order_B, spend_amountB, spend_amountA, fee_takenB);
@@ -122,8 +126,8 @@ func execute_transaction{
         local order_tab: OrderTab;
         handle_order_tab_input(&order_tab);
 
-        let order_tab_hash = hash_order_tab(order_tab);
-        let (tx_hash) = hash_transaction(invisibl3_order, order_tab_hash);
+        let order_tab_pub_key = order_tab.tab_header.pub_key;
+        let (tx_hash) = hash_transaction(invisibl3_order, order_tab_pub_key);
 
         execute_tab_orders(
             tx_hash, order_tab, invisibl3_order, spend_amount_x, spend_amount_y, fee_taken_x
@@ -149,8 +153,6 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         memory[order_A_addr + TOKEN_RECEIVED_OFFSET] = int(order_A_input["token_received"])
         memory[order_A_addr + AMOUNT_SPENT_OFFSET] = int(order_A_input["amount_spent"])
         memory[order_A_addr + AMOUNT_RECEIVED_OFFSET] = int(order_A_input["amount_received"]) 
-        memory[order_A_addr + DEST_RECEIVED_ADDR_OFFSET] = int(order_A_input["dest_received_address"]["x"])# Need just the x coordinate
-        memory[order_A_addr + DEST_RECEIVED_BLINDING_OFFSET] = int(order_A_input["dest_received_blinding"])
         memory[order_A_addr + FEE_LIMIT_OFFSET] = int(order_A_input["fee_limit"])
 
 
@@ -215,8 +217,8 @@ func handle_spot_note_info_inputs{pedersen_ptr: HashBuiltin*}(spot_note_info: Sp
             memory[refund_note_addr + HASH_OFFSET] = 0
 
 
-        memory[dest_received_address_addr] = int(order_B_input["dest_received_address"]["x"]) # Need just the x coordinate
-        memory[dest_received_blinding_addr] = int(order_B_input["dest_received_blinding"])
+        memory[dest_received_address_addr] = int(current_order["spot_note_info"]["dest_received_address"]["x"]) # Need just the x coordinate
+        memory[dest_received_blinding_addr] = int(current_order["spot_note_info"]["dest_received_blinding"])
     %}
 
     return ();

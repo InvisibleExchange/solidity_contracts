@@ -146,7 +146,9 @@ func _verify_price_signatures{
 
 // * VALIDATE PRICE IS IN RANGE * #
 
-func validate_price_in_range{range_check_ptr, price_ranges: PriceRange*}(price: felt, token: felt) {
+func validate_price_in_range{
+    range_check_ptr, price_ranges: PriceRange*, global_config: GlobalConfig*
+}(price: felt, token: felt) {
     let (token_arr_idx: felt) = get_array_index_for_token(token);
 
     let price_range: PriceRange = price_ranges[token_arr_idx];

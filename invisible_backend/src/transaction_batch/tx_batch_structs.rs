@@ -143,6 +143,8 @@ impl Serialize for OracleUpdate {
 // * DESERIALIZE * //
 use serde::de::{Deserialize, Deserializer};
 
+use super::CHAIN_IDS;
+
 impl<'de> Deserialize<'de> for OracleUpdate {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -382,7 +384,6 @@ pub struct GlobalDexState {
     pub state_tree_depth: u32,
     pub global_expiration_timestamp: u32,
     pub program_input_counts: ProgramInputCounts,
-    pub chain_ids: Vec<u32>,
 }
 
 impl GlobalDexState {
@@ -400,7 +401,6 @@ impl GlobalDexState {
         n_empty_tabs: u32,
         n_deposits: u32,
         n_withdrawals: u32,
-        chain_ids: Vec<u32>,
     ) -> GlobalDexState {
         let init_state_root = init_state_root.to_string();
         let final_state_root = final_state_root.to_string();
@@ -423,7 +423,6 @@ impl GlobalDexState {
             state_tree_depth,
             global_expiration_timestamp,
             program_input_counts,
-            chain_ids,
         }
     }
 }
@@ -450,6 +449,7 @@ pub struct ProgramInputCounts {
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalConfig {
     pub assets: Vec<u32>,
+    pub chain_ids: Vec<u32>,
     pub collateral_token: u32,
     pub decimals_per_asset: Vec<u64>,
     pub price_decimals_per_asset: Vec<u64>,
@@ -463,6 +463,7 @@ pub struct GlobalConfig {
 impl GlobalConfig {
     pub fn new() -> GlobalConfig {
         let assets = TOKENS.to_vec();
+        let chain_ids = CHAIN_IDS.to_vec();
         let collateral_token = VALID_COLLATERAL_TOKENS[0];
         let decimals_per_asset = flatten_map(&DECIMALS_PER_ASSET);
         let price_decimals_per_asset = flatten_map(&PRICE_DECIMALS_PER_ASSET);
@@ -475,6 +476,7 @@ impl GlobalConfig {
 
         GlobalConfig {
             assets,
+            chain_ids,
             collateral_token,
             decimals_per_asset,
             price_decimals_per_asset,

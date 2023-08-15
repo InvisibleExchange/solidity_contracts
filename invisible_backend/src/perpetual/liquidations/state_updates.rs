@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 
 use crate::{
     perpetual::perp_position::PerpPosition,
-    transaction_batch::transaction_batch::LeafNodeType,
+    transaction_batch::LeafNodeType,
     trees::superficial_tree::SuperficialTree,
     utils::{
         errors::{send_perp_swap_error, PerpSwapExecutionError},

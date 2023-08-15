@@ -16,6 +16,7 @@ use crate::{
     order_tab::OrderTab,
     perpetual::perp_position::PerpPosition,
     transactions::transaction_helpers::transaction_output::{FillInfo, PerpFillInfo},
+    trees::superficial_tree::SuperficialTree,
     utils::notes::Note,
 };
 
@@ -134,69 +135,75 @@ pub fn create_session() -> ServiceSession {
     session
 }
 
-// TODO: FIX THIS
-// pub fn retry_failed_updates(
-//     state_tree: &Arc<Mutex<SuperficialTree>>,
-//     session: &Arc<Mutex<ServiceSession>>,
-//     backup_storage: &Arc<Mutex<BackupStorage>>,
-// ) -> Result<(), Box<dyn std::error::Error>> {
-//     let s: parking_lot::lock_api::MutexGuard<parking_lot::RawMutex, BackupStorage> =
-//         backup_storage.lock();
-//     let notes_info = s.read_notes();
-//     let positions_info = s.read_positions();
-//     let spot_fills = s.read_spot_fills();
-//     let perp_fills = s.read_perp_fills();
+pub fn retry_failed_updates(
+    state_tree: &Arc<Mutex<SuperficialTree>>,
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let s: parking_lot::lock_api::MutexGuard<parking_lot::RawMutex, BackupStorage> =
+        backup_storage.lock();
+    let notes_info = s.read_notes();
+    let positions_info = s.read_positions();
+    let order_tabs_info = s.read_order_tabs();
+    let spot_fills = s.read_spot_fills();
+    let perp_fills = s.read_perp_fills();
 
-//     s.clear_db().unwrap();
-//     drop(s);
+    s.clear_db().unwrap();
+    drop(s);
 
-//     let sess = session.lock();
+    let sess = session.lock();
 
-//     let state_tree_m = state_tree.lock();
-//     let notes = notes_info.0;
-//     for note in notes {
-//         if note.hash == state_tree_m.get_leaf_by_index(note.index) {
-//             store_new_note(&sess, backup_storage, &note);
-//         }
-//     }
-//     // TODO: What to do with this if it happens?
-//     // let removable_info = notes_info.1;
-//     // for (idx, address) in removable_info {
-//     //     delete_note_at_address(&sess, backup_storage, &address, &idx.to_string());
-//     // }
-//     drop(state_tree_m);
+    // ? ADD AND REMOVE NOTES TO/FROM THE DATABASE
+    let state_tree_m = state_tree.lock();
+    let notes = notes_info.0;
+    for note in notes {
+        if note.hash == state_tree_m.get_leaf_by_index(note.index) {
+            store_new_note(&sess, backup_storage, &note);
+        }
+    }
+    let removable_info = notes_info.1;
+    for (idx, address) in removable_info {
+        delete_note_at_address(&sess, backup_storage, &address, &idx.to_string());
+    }
 
-//     // ? ADD AND REMOVED POSITIONS TO/FROM THE DATABASE
-//     let positions = positions_info.0;
-//     for position in positions {
-//         if position.hash == perp_state_tree_m.get_leaf_by_index(position.index as u64) {
-//             if position.hash == position.hash_position() {
-//                 store_new_position(&sess, backup_storage, &position);
-//             }
-//         }
-//     }
-//     drop(perp_state_tree_m);
-//     // TODO: What to do with this if it happens?
-//     // let removable_info = positions_info.1;
-//     // for info in removable_info {
-//     // delete_position_at_address(
-//     //     &sess,
-//     //     backup_storage,
-//     //     &info.1.to_string(),
-//     //     &info.0.to_string(),
-//     // );
-//     // }
+    // ? ADD AND REMOVE POSITIONS TO/FROM THE DATABASE
+    let positions = positions_info.0;
+    for position in positions {
+        if position.hash == state_tree_m.get_leaf_by_index(position.index as u64) {
+            if position.hash == position.hash_position() {
+                store_new_position(&sess, backup_storage, &position);
+            }
+        }
+    }
+    let removable_info = positions_info.1;
+    for (idx, address) in removable_info {
+        delete_position_at_address(&sess, backup_storage, &address, &idx.to_string());
+    }
 
-//     for fill in spot_fills {
-//         store_new_spot_fill(&sess, backup_storage, &fill);
-//     }
+    // ? ADD AND REMOVE ORDER TABS TO/FROM THE DATABASE
+    let order_tabs = order_tabs_info.0;
+    for tab in order_tabs {
+        if tab.hash == state_tree_m.get_leaf_by_index(tab.tab_idx as u64) {
+            store_order_tab(&sess, backup_storage, &tab);
+        }
+    }
+    let removable_info = order_tabs_info.1;
+    for (idx, address) in removable_info {
+        delete_order_tab(&sess, backup_storage, &address, &idx.to_string());
+    }
 
-//     for fill in perp_fills {
-//         store_new_perp_fill(&sess, backup_storage, &fill);
-//     }
+    drop(state_tree_m);
 
-//     Ok(())
-// }
+    for fill in spot_fills {
+        store_new_spot_fill(&sess, backup_storage, &fill);
+    }
+
+    for fill in perp_fills {
+        store_new_perp_fill(&sess, backup_storage, &fill);
+    }
+
+    Ok(())
+}
 
 // NOTES ------------- -------------- ---------------- ----------------- ----------------
 

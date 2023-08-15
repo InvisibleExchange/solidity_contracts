@@ -57,7 +57,7 @@ func execute_tab_orders{
         // ? Is buy
         assert order_tab.tab_header.quote_token = invisibl3_order.token_spent;
 
-        assert_le(order_tab.quote_amount, spent_amount);
+        assert_le(spent_amount, order_tab.quote_amount);
 
         let updated_quote_amount = order_tab.quote_amount - spent_amount;
         let updated_base_amount = order_tab.base_amount + received_amount - fee_taken;
@@ -73,7 +73,7 @@ func execute_tab_orders{
         assert order_tab.tab_header.base_token = invisibl3_order.token_spent;
         assert order_tab.tab_header.quote_token = invisibl3_order.token_received;
 
-        assert_le(order_tab.base_amount, spent_amount);
+        assert_le(spent_amount, order_tab.base_amount);
 
         let updated_quote_amount = order_tab.quote_amount + received_amount - fee_taken;
         let updated_base_amount = order_tab.base_amount - spent_amount;

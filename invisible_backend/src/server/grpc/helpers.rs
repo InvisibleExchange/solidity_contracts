@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     engine_proto::{
-        Address, GrpcNote, GrpcOracleUpdate, GrpcPerpPosition, MarginChangeReq,
+        Address, GrcpPositionHeader, GrpcNote, GrpcOracleUpdate, GrpcPerpPosition, MarginChangeReq,
         Signature as GrpcSignature,
     },
     ChangeMarginMessage,
@@ -25,6 +25,12 @@ use super::{
 // POSITIONS
 impl From<PerpPosition> for GrpcPerpPosition {
     fn from(req: PerpPosition) -> Self {
+        let pos_header = GrcpPositionHeader {
+            synthetic_token: req.position_header.synthetic_token,
+            allow_partial_liquidations: req.position_header.allow_partial_liquidations,
+            position_address: req.position_header.position_address.to_string(),
+        };
+
         GrpcPerpPosition {
             order_side: if req.order_side == OrderSide::Long {
                 1
@@ -32,16 +38,11 @@ impl From<PerpPosition> for GrpcPerpPosition {
                 0
             },
             position_size: req.position_size,
-            synthetic_token: req.position_header.synthetic_token,
-            collateral_token: VALID_COLLATERAL_TOKENS[0],
+            position_header: Some(pos_header),
             margin: req.margin,
             entry_price: req.entry_price,
             liquidation_price: req.liquidation_price,
             bankruptcy_price: req.bankruptcy_price,
-            allow_partial_liquidations: req.position_header.allow_partial_liquidations,
-            position_address: BigUint::from_str(&req.position_header.position_address.to_string())
-                .unwrap_or_default()
-                .to_string(),
             last_funding_idx: req.last_funding_idx,
             index: req.index,
             hash: req.hash.to_string(),
@@ -58,22 +59,15 @@ impl TryFrom<GrpcPerpPosition> for PerpPosition {
         } else {
             OrderSide::Short
         };
-        let position_address =
-            BigUint::from_str(&req.position_address).map_err(|_| GrpcMessageError {})?;
 
-        // let hash = _hash_position(
-        //     &order_side,
-        //     req.synthetic_token,
-        //     req.position_size,
-        //     req.entry_price,
-        //     req.liquidation_price,
-        //     &position_address,
-        //     req.last_funding_idx,
-        // );
+        let pos_header = req.position_header.ok_or(GrpcMessageError {})?;
+
+        let position_address =
+            BigUint::from_str(&pos_header.position_address).map_err(|_| GrpcMessageError {})?;
 
         let position_header = PositionHeader::new(
-            req.synthetic_token,
-            req.allow_partial_liquidations,
+            pos_header.synthetic_token,
+            pos_header.allow_partial_liquidations,
             position_address,
         );
 

@@ -34,8 +34,6 @@ from perpetuals.order.perp_position import (
     flip_position_side_internal,
     close_position_partialy_internal,
     close_position_internal,
-    liquidate_position_internal,
-    liquidate_position_partialy_internal,
 )
 from perpetuals.order.order_structs import (
     PerpOrder,
@@ -55,7 +53,6 @@ from helpers.perp_helpers.checks import (
     validate_fee_taken,
     checks_prev_fill_consistencies,
 )
-from perpetuals.transaction.change_margin import get_init_margin
 
 from rollup.global_config import get_dust_amount
 
@@ -136,18 +133,9 @@ func execute_perpetual_transaction{
         );
 
         return ();
-    } else {
-        %{ assert current_order["position_effect_type"] == "Liquidation" %}
-
-        let position: PerpPosition = get_perp_position();
-        verify_position_hash(position);
-
-        verify_order_hash(order);
-
-        execute_liquidation_order(order, position, spent_collateral, spent_synthetic);
-
-        return ();
     }
+
+    return ();
 }
 
 // * ============================================================
@@ -350,28 +338,7 @@ func execute_close_order{
     return ();
 }
 
-func execute_liquidation_order{
-    pedersen_ptr: HashBuiltin*,
-    range_check_ptr,
-    ecdsa_ptr: SignatureBuiltin*,
-    state_dict: DictAccess*,
-    note_updates: Note*,
-    fee_tracker_dict: DictAccess*,
-    funding_info: FundingInfo*,
-    global_config: GlobalConfig*,
-}(order: PerpOrder, position: PerpPosition, spent_collateral: felt, spent_synthetic: felt) {
-    alloc_locals;
 
-    assert_not_equal(order.order_side, position.order_side);
-
-    let (close_price: felt) = get_price(order.synthetic_token, spent_collateral, spent_synthetic);
-
-    let (leftover_value: felt) = liquidate_position(order, position, spent_synthetic, close_price);
-
-    // Todo: increase/decrease insurance fund
-
-    return ();
-}
 
 // * ============================================================
 
@@ -488,12 +455,14 @@ func reduce_position_size{
     local funding_idx: felt;
     %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
 
-    let cond = is_le(spent_synthetic, position.position_size);
+    let (dust_amount: felt) = get_dust_amount(order.synthetic_token);
+    let cond = is_le(position.position_size + dust_amount, spent_synthetic);
 
-    if (cond == 1) {
+    if (cond == 0) {
         let (position: PerpPosition) = reduce_position_size_internal(
             position, spent_synthetic, price, fee_taken, funding_idx
         );
+
         return (prev_position_hash, position);
     } else {
         let (position: PerpPosition) = flip_position_side_internal(
@@ -556,52 +525,6 @@ func close_position{
     }
 }
 
-func liquidate_position{
-    pedersen_ptr: HashBuiltin*,
-    range_check_ptr,
-    state_dict: DictAccess*,
-    note_updates: Note*,
-    funding_info: FundingInfo*,
-    global_config: GlobalConfig*,
-}(order: PerpOrder, position: PerpPosition, spent_synthetic: felt, close_price: felt) -> (
-    leftover_value: felt
-) {
-    alloc_locals;
-
-    let position_idx = position.index;
-    let prev_position_hash = position.hash;
-
-    let (dust_amount) = get_dust_amount(order.synthetic_token);
-    let is_partial_close: felt = is_le(spent_synthetic, position.position_size - dust_amount - 1);
-    if (is_partial_close == 0) {
-        // ! liquidate position fully
-
-        local funding_idx: felt;
-        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
-
-        let (leftover_value: felt) = liquidate_position_internal(
-            position, close_price, funding_idx
-        );
-
-        update_position_state_on_close(prev_position_hash, position_idx);
-
-        return (leftover_value,);
-    } else {
-        //
-
-        local funding_idx: felt;
-        %{ ids.funding_idx = order_indexes["new_funding_idx"] %}
-
-        let (position: PerpPosition, leftover_value: felt) = liquidate_position_partialy_internal(
-            position, spent_synthetic, close_price, funding_idx
-        );
-
-        // ? Removes the position to the position dict and program output
-        update_position_state(prev_position_hash, position);
-
-        return (leftover_value,);
-    }
-}
 
 // * ============================================================
 
@@ -699,20 +622,22 @@ func get_perp_position() -> PerpPosition {
 
     %{
         position_addr = ids.position.address_
+        position_header_addr = ids.position.position_header.address_
 
         memory[position_addr + PERP_POSITION_ORDER_SIDE_OFFSET] = 1 if prev_position["order_side"] == "Long" else 0
-        memory[position_addr + PERP_POSITION_SYNTHETIC_TOKEN_OFFSET] = int(prev_position["synthetic_token"])
-        memory[position_addr + PERP_POSITION_COLLATERAL_TOKEN_OFFSET] = int(prev_position["collateral_token"])
         memory[position_addr + PERP_POSITION_POSITION_SIZE_OFFSET] = int(prev_position["position_size"])
         memory[position_addr + PERP_POSITION_MARGIN_OFFSET] = int(prev_position["margin"])
         memory[position_addr + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(prev_position["entry_price"])
         memory[position_addr + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(prev_position["liquidation_price"])
         memory[position_addr + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(prev_position["bankruptcy_price"])
-        memory[position_addr + PERP_POSITION_ADDRESS_OFFSET] = int(prev_position["position_address"])
         memory[position_addr + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(prev_position["last_funding_idx"])
         memory[position_addr + PERP_POSITION_INDEX_OFFSET] = int(prev_position["index"])
         memory[position_addr + PERP_POSITION_HASH_OFFSET] = int(prev_position["hash"])
-        memory[position_addr + PERP_POSITION_PARTIAL_LIQUIDATIONS_OFFSET] = int(prev_position["allow_partial_liquidations"])
+
+        memory[position_header_addr + HEADER_SYNTHETIC_TOKEN_OFFSET] = int(prev_position["position_header"]["synthetic_token"])
+        memory[position_header_addr + HEADER_POSITION_ADDRESS_OFFSET] = int(prev_position["position_header"]["position_address"])
+        memory[position_header_addr + HEADER_PARTIAL_LIQUIDATIONS_OFFSET] = int(prev_position["position_header"]["allow_partial_liquidations"])
+        memory[position_header_addr + HEADER_HASH_OFFSET] = int(prev_position["position_header"]["hash"])
     %}
 
     return (position);
@@ -773,4 +698,18 @@ func get_close_order_fields{pedersen_ptr: HashBuiltin*}(close_order_fields: Clos
     %}
 
     return ();
+}
+
+// ? GET INIT MARGIN
+func get_init_margin{range_check_ptr}(
+    order: PerpOrder, open_order_fields: OpenOrderFields, spent_synthetic: felt
+) -> felt {
+    alloc_locals;
+
+    let quotient = open_order_fields.initial_margin * spent_synthetic;
+    let divisor = order.synthetic_amount;
+
+    let (margin, _) = unsigned_div_rem(quotient, divisor);
+
+    return margin;
 }

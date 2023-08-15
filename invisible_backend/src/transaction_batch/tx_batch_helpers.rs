@@ -20,8 +20,8 @@ use crate::{
 };
 
 use super::{
-    transaction_batch::LeafNodeType,
     tx_batch_structs::{FundingInfo, GlobalConfig, GlobalDexState},
+    LeafNodeType,
 };
 
 // * HELPERS * //

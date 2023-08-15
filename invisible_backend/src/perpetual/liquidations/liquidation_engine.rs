@@ -17,8 +17,8 @@ use super::state_updates::{
     update_perpetual_state_after_liquidation, update_state_after_liquidation,
 };
 use crate::perpetual::perp_position::PerpPosition;
-use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
+use crate::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
@@ -72,7 +72,7 @@ impl LiquidationSwap {
         //
 
         // TODO: This is only for testing purposes -- remove after
-        // let index_price = self.market_price;
+        let index_price = self.market_price;
 
         // ? Execute orders in parallel ===========================================================
 
@@ -97,11 +97,27 @@ impl LiquidationSwap {
                     &mut liquidated_position,
                 )?;
 
-            let new_idx = if is_partial_liquidation {
-                state_tree.lock().first_zero_idx() as u32
-            } else {
-                liquidated_position.index
-            };
+            println!("liquidated_size: {}", liquidated_size);
+            println!("liquidator_fee: {}", liquidator_fee);
+            println!("leftover_collateral: {}", leftover_collateral);
+            println!("is_partial_liquidation: {}", is_partial_liquidation);
+
+            let new_idx = state_tree.lock().first_zero_idx() as u32;
+
+    //         liquidation_order: &LiquidationOrder,
+    // liquidated_size: u64,
+    // liquidator_fee: u64,
+    // market_price: u64,
+    // current_funding_index: u32,
+    // new_idx: u32,
+
+    // liquidated_size: 48920440
+// liquidator_fee: 7.674.637 404 000
+// leftover_collateral: -7674592164155
+// is_partial_liquidation: false
+// liquidation swap executed successfully
+// Position liquidated successfully!!!!!!!!!
+
 
             let new_position = open_new_position_after_liquidation(
                 &self.liquidation_order,
@@ -176,12 +192,14 @@ impl LiquidationSwap {
 
         let json_output = wrap_liquidation_output(
             &self.liquidation_order,
-            &self.liquidation_order.position,
+            &self.signature,
             &new_liquidated_position_hash,
             &new_position_hash,
             new_position.index,
             self.liquidation_order.position.last_funding_idx,
             current_funding_idx,
+            self.market_price,
+            index_price,
         );
 
         let mut swap_output_json_m = swap_output_json.lock();
@@ -196,6 +214,8 @@ impl LiquidationSwap {
             &liquidated_position,
             &new_position,
         );
+
+        println!("liquidation swap executed successfully");
 
         return Ok(LiquidationResponse {
             liquidated_position_index: self.liquidation_order.position.index,

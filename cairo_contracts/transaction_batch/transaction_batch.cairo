@@ -15,6 +15,8 @@ from perpetuals.prices.prices import PriceRange, get_price_ranges
 from perpetuals.perp_swap.perpetual_swap import execute_perpetual_swap
 from perpetuals.transaction.change_margin import execute_margin_change
 
+from perpetuals.liquidations.liquidation_transaction import execute_liquidation_order
+
 from order_tabs.open_order_tab import open_order_tab
 from order_tabs.close_order_tab import close_order_tab
 
@@ -23,7 +25,6 @@ from helpers.utils import Note
 
 from rollup.python_definitions import python_define_utils
 from rollup.output_structs import (
-    GlobalDexState,
     NoteDiffOutput,
     PerpPositionOutput,
     OrderTabOutput,
@@ -31,14 +32,17 @@ from rollup.output_structs import (
     WithdrawalTransactionOutput,
     DepositTransactionOutput,
     write_state_updates_to_output,
-    init_output_structs,
     AccumulatedHashesOutput,
+    write_accumulated_hashes_to_output,
 )
-from rollup.global_config import GlobalConfig, init_global_config
+from rollup.global_config import (
+    GlobalConfig,
+    init_global_config,
+    init_output_structs,
+    GlobalDexState,
+)
 
 const TREE_DEPTH = 5;
-
-// TODO: Change output_positions and output_notes to point to a value in the program input instead of saving it memory until the write_dict_to_output functions
 
 func main{
     output_ptr,
@@ -60,17 +64,14 @@ func main{
     local state_dict: DictAccess*;  // Dictionary of updated notes (idx -> note hash)
     local fee_tracker_dict: DictAccess*;  // Dictionary of fees collected (token -> fees collected)
     local order_tab_dict: DictAccess*;  // Dictionary of updated order tabs (idx -> tab hash)
-    local accumulated_withdrawal_hashes: DictAccess*;  // Dictionary of the accumulated withdrawal hashes (chain id -> hash)
     %{
         ids.state_dict = segments.add()
         ids.fee_tracker_dict = segments.add()
         ids.order_tab_dict = segments.add()
-        ids.accumulated_withdrawal_hashes = segments.add()
     %}
     let state_dict_start = state_dict;
     let fee_tracker_dict_start = fee_tracker_dict;
     let order_tab_dict_start = order_tab_dict;
-    let accumulated_withdrawal_hashes_start = accumulated_withdrawal_hashes;
 
     // ? Initialize state update arrays
     let (local note_updates: Note*) = alloc();
@@ -82,7 +83,6 @@ func main{
     init_global_config(global_config);
 
     // * SPLIT OUTPUT SECTIONS ******************************************************
-    local n_chains: felt;
     local n_deposits: felt;
     local n_withdrawals: felt;
     //
@@ -93,11 +93,8 @@ func main{
     local n_empty_notes: felt;
     local n_empty_positions: felt;
     local n_empty_tabs: felt;
-    //
-    local global_config_len: felt;
     %{
         program_input_counts = program_input["global_dex_state"]["program_input_counts"]
-        ids.n_chains = len(program_input["global_dex_state"]["chain_ids"]) * ids.AccumulatedHashesOutput.SIZE
         ids.n_deposits = int(program_input_counts["n_deposits"]) *  ids.DepositTransactionOutput.SIZE
         ids.n_withdrawals = int(program_input_counts["n_withdrawals"]) * ids.WithdrawalTransactionOutput.SIZE
         #
@@ -108,25 +105,24 @@ func main{
         ids.n_empty_notes = int(program_input_counts["n_empty_notes"])  * ids.ZeroOutput.SIZE
         ids.n_empty_positions = int(program_input_counts["n_empty_positions"])  * ids.ZeroOutput.SIZE
         ids.n_empty_tabs = int(program_input_counts["n_empty_tabs"])  * ids.ZeroOutput.SIZE
-
-
-        assets_len = len(program_input["global_config"]["assets"])
-        observers_len = len(program_input["global_config"]["observers"])
-
-        ids.global_config_len =  8 + 10 * assets_len + observers_len
     %}
 
-    local dex_state_ptr: GlobalDexState* = cast(output_ptr, GlobalDexState*);
-    local accumulated_hashes: AccumulatedHashesOutput* = cast(
-        output_ptr + GlobalDexState.SIZE + global_config_len, AccumulatedHashesOutput*
-    );
+    // Write global config and dex state to output
+    local config_output_ptr: felt* = cast(output_ptr, felt*);
+    let (config_output_ptr: felt*) = init_output_structs(config_output_ptr, global_config);
 
-    local deposit_output_ptr: DepositTransactionOutput* = cast(
-        accumulated_hashes + n_chains, DepositTransactionOutput*
+    local accumulated_hashes: AccumulatedHashesOutput* = cast(
+        config_output_ptr, AccumulatedHashesOutput*
     );
+    local deposit_output_ptr: DepositTransactionOutput* = cast(
+        accumulated_hashes + global_config.chain_ids_len * AccumulatedHashesOutput.SIZE,
+        DepositTransactionOutput*,
+    );
+    let deposit_output_ptr_start = deposit_output_ptr;
     local withdraw_output_ptr: WithdrawalTransactionOutput* = cast(
         deposit_output_ptr + n_deposits, WithdrawalTransactionOutput*
     );
+    let withdraw_output_ptr_start = withdraw_output_ptr;
 
     // new ouput state leaves
     local note_output_ptr: NoteDiffOutput* = cast(
@@ -147,9 +143,6 @@ func main{
         empty_position_output_ptr + n_empty_positions, ZeroOutput*
     );
 
-    // Initialize output sections
-    init_output_structs(dex_state_ptr);
-
     // * SET FUNDING INFO AND PRICE RANGES * #
 
     local funding_info: FundingInfo*;
@@ -157,7 +150,7 @@ func main{
     set_funding_info(funding_info);
 
     // todo: Use this to verify liquidation prices
-    // let (price_ranges: PriceRange*) = get_price_ranges{global_config: global_config}();
+    // let (price_ranges: PriceRange*) = get_price_ranges{global_config=global_config}();
 
     // * EXECUTE TRANSACTION BATCH ================================================
 
@@ -165,15 +158,15 @@ func main{
         import time
         t1_start = time.time()
     %}
-    let accumulated_deposit_hash = 0;
+
+    %{ countsMap = {} %}
+    // price_ranges=price_ranges,
     execute_transactions{
         state_dict=state_dict,
         note_updates=note_updates,
         fee_tracker_dict=fee_tracker_dict,
         deposit_output_ptr=deposit_output_ptr,
-        accumulated_deposit_hash=accumulated_deposit_hash,
         withdraw_output_ptr=withdraw_output_ptr,
-        accumulated_withdrawal_hashes=accumulated_withdrawal_hashes,
         empty_position_output_ptr=empty_position_output_ptr,
         empty_note_output_ptr=empty_note_output_ptr,
         funding_info=funding_info,
@@ -182,21 +175,19 @@ func main{
     %{
         t2_end = time.time()
         print("batch execution time total: ", t2_end-t1_start)
+
+        print("countsMap: ", countsMap)
     %}
 
     // * Squash dictionaries =============================================================================
 
-    // ------------------------------------------------------------------------------
-
-    local squashed_withdrawal_hashes_dict: DictAccess*;
-    %{ ids.squashed_withdrawal_hashes_dict = segments.add() %}
-    let (squashed_withdrawal_hashes_dict_end) = squash_dict(
-        dict_accesses=accumulated_withdrawal_hashes_start,
-        dict_accesses_end=accumulated_withdrawal_hashes,
-        squashed_dict=squashed_withdrawal_hashes_dict,
-    );
-
-    // ------------------------------------------------------------------------------
+    // let dict_len = (state_dict - state_dict_start) / DictAccess.SIZE;
+    // %{
+    //     for i in range(ids.dict_len):
+    //             print(memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +0])
+    //             print(memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +1])
+    //             print(memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +2])
+    // %}
 
     local squashed_state_dict: DictAccess*;
     %{ ids.squashed_state_dict = segments.add() %}
@@ -208,23 +199,14 @@ func main{
     local squashed_state_dict_len = (squashed_state_dict_end - squashed_state_dict) /
         DictAccess.SIZE;
 
-    %{
-        print("len: ", ids.squashed_state_dict_len)
-        for i in range(ids.squashed_state_dict_len):
-            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +0])
-            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +1])
-            print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +2])
-            print("======")
-    %}
-
     // * VERIFY MERKLE TREE UPDATES ******************************************************
 
     verify_merkle_tree_updates(
-        dex_state_ptr.init_state_root,
-        dex_state_ptr.final_state_root,
+        global_config.dex_state.init_state_root,
+        global_config.dex_state.final_state_root,
         squashed_state_dict,
         squashed_state_dict_len,
-        dex_state_ptr.state_tree_depth,
+        global_config.dex_state.state_tree_depth,
     );
 
     // * WRITE NEW NOTES AND POSITIONS TO THE PROGRAM OUTPUT ******************************
@@ -241,12 +223,15 @@ func main{
         empty_tab_output_ptr=empty_tab_output_ptr,
     }(squashed_state_dict, squashed_state_dict_len, note_updates_start);
 
-    // write_accumulated_hashes_to_output{accumulated_hashes_ptr=accumulated_hashes}(
-    //     squashed_deposit_hashes_dict,
-    //     squashed_deposit_hashes_dict_len,
-    //     squashed_deposit_withdrawal_dict,
-    //     squashed_deposit_withdrawal_dict_len,
-    // );
+    // * WRITE DEPOSIT AND WITHDRAWAL ACCUMULATED OUTPUTS TO THE PROGRAM OUTPUT ***********
+
+    let deposit_output_len = (deposit_output_ptr - deposit_output_ptr_start) /
+        DepositTransactionOutput.SIZE;
+    let withdraw_output_len = (withdraw_output_ptr - withdraw_output_ptr_start) /
+        WithdrawalTransactionOutput.SIZE;
+    write_accumulated_hashes_to_output{
+        accumulated_hashes=accumulated_hashes, global_config=global_config
+    }(deposit_output_len, deposit_output_ptr_start, withdraw_output_len, withdraw_output_ptr_start);
 
     // update the output ptr to point to the end of the program output
     local output_ptr: felt = cast(empty_tab_output_ptr + n_empty_tabs, felt);
@@ -264,9 +249,7 @@ func execute_transactions{
     note_updates: Note*,
     fee_tracker_dict: DictAccess*,
     deposit_output_ptr: DepositTransactionOutput*,
-    accumulated_deposit_hash: felt,
     withdraw_output_ptr: WithdrawalTransactionOutput*,
-    accumulated_withdrawal_hashes: DictAccess*,
     empty_position_output_ptr: ZeroOutput*,
     empty_note_output_ptr: ZeroOutput*,
     funding_info: FundingInfo*,
@@ -281,17 +264,17 @@ func execute_transactions{
     %{
         current_transaction = transaction_input_data.pop(0) 
         tx_type = current_transaction["transaction_type"]
+
+        if tx_type in countsMap:
+            countsMap[tx_type] += 1
+        else:
+            countsMap[tx_type] = 1
     %}
 
     if (nondet %{ tx_type == "swap" %} != 0) {
         %{ current_swap = current_transaction %}
 
-        %{ t1_note_split = time.time() %}
         execute_swap();
-        %{
-            t2_note_split = time.time()
-            print("spot swap time: ", t2_note_split - t1_note_split)
-        %}
 
         return execute_transactions();
     }
@@ -320,15 +303,21 @@ func execute_transactions{
         return execute_transactions();
     }
 
+    if (nondet %{ tx_type == "liquidation_order" %} != 0) {
+        %{
+            current_liquidation = current_transaction
+            current_order = current_liquidation["liquidation_order"]
+        %}
+
+        execute_liquidation_order();
+
+        return execute_transactions();
+    }
+
     if (nondet %{ tx_type == "note_split" %} != 0) {
         %{ current_split_info = current_transaction["note_split"] %}
 
-        %{ t1_note_split = time.time() %}
         execute_note_split();
-        %{
-            t2_note_split = time.time()
-            print("note split time: ", t2_note_split - t1_note_split)
-        %}
 
         return execute_transactions();
     }
@@ -368,7 +357,7 @@ func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     squashed_state_dict_len: felt,
     state_tree_depth: felt,
 ) {
-    %{ t1_merkle = time.time() %}
+    // %{ t1_merkle = time.time() %}
     %{
         preimage = program_input["preimage"]
         preimage = {int(k):[int(x) for x in v] for k,v in preimage.items()}
@@ -376,10 +365,10 @@ func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     merkle_multi_update{hash_ptr=pedersen_ptr}(
         squashed_state_dict, squashed_state_dict_len, state_tree_depth, prev_root, new_root
     );
-    %{
-        t2_merkle = time.time()
-        print("merkle update time: ", t2_merkle - t1_merkle)
-    %}
+    // %{
+    //     t2_merkle = time.time()
+    //     print("merkle update time: ", t2_merkle - t1_merkle)
+    // %}
 
     return ();
 }

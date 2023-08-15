@@ -9,7 +9,7 @@ use crate::{
     utils::crypto_utils::EcPoint, utils::notes::Note,
 };
 
-use super::transaction_batch::LeafNodeType;
+use super::LeafNodeType;
 
 pub fn restore_spot_order_execution(
     tree_m: &Arc<Mutex<SuperficialTree>>,

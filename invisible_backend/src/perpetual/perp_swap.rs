@@ -23,14 +23,16 @@ use super::perp_helpers::perp_state_updates::{
     update_state_after_swap_first_fill, update_state_after_swap_later_fills,
 };
 //
-use super::perp_helpers::perp_swap_helpers::{consistency_checks, finalize_updates};
+use super::perp_helpers::perp_swap_helpers::{
+    consistency_checks, finalize_updates, reverify_existances,
+};
 use super::perp_helpers::perp_swap_outptut::{
     PerpSwapOutput, PerpSwapResponse, TxExecutionThreadOutput,
 };
 use super::{perp_order::PerpOrder, perp_position::PerpPosition, OrderSide};
 use super::{PositionEffectType, VALID_COLLATERAL_TOKENS};
-use crate::transaction_batch::transaction_batch::LeafNodeType;
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
+use crate::transaction_batch::LeafNodeType;
 use crate::transactions::transaction_helpers::swap_helpers::unblock_order;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::Signature;
@@ -468,8 +470,15 @@ impl PerpSwap {
                 })?;
 
             // * UPDATE STATE AFTER SWAP ——————————————————————————————————————————----------------------------------------------
-
             // ? After verification and execution of both orders, we can now update the state trees
+
+            reverify_existances(
+                &state_tree,
+                &self.order_a,
+                &execution_output_a.prev_pfr_note,
+                &self.order_b,
+                &execution_output_b.prev_pfr_note,
+            )?;
 
             // ! State updates after order a
             let state_tree__ = state_tree.clone();
@@ -505,15 +514,14 @@ impl PerpSwap {
                             &self.order_a.open_order_fields.as_ref().unwrap().notes_in,
                             &self.order_a.open_order_fields.as_ref().unwrap().refund_note,
                             new_pfr_note.as_ref(),
-                            self.order_a.order_id,
-                        )?;
+                        );
                     } else {
                         update_state_after_swap_later_fills(
                             &state_tree__,
                             &updated_state_hashes__,
                             execution_output_a_clone.prev_pfr_note.unwrap(),
                             new_pfr_note.as_ref(),
-                        )?;
+                        );
                     }
                 } else if self.order_a.position_effect_type == PositionEffectType::Close {
                     let mut tree = state_tree__.lock();
@@ -548,7 +556,7 @@ impl PerpSwap {
                             .as_ref()
                             .unwrap()
                             .dest_received_blinding,
-                    )?;
+                    );
 
                     execution_output_a.return_collateral_note = Some(return_collateral_note);
                 }
@@ -560,8 +568,7 @@ impl PerpSwap {
                     &self.order_a.position_effect_type,
                     execution_output_a.position_index,
                     execution_output_a.position.as_ref(),
-                    execution_output_a.prev_position.as_ref(),
-                )?;
+                );
 
                 finalize_updates(
                     &self.order_a,
@@ -611,15 +618,14 @@ impl PerpSwap {
                             &self.order_b.open_order_fields.as_ref().unwrap().notes_in,
                             &self.order_b.open_order_fields.as_ref().unwrap().refund_note,
                             new_pfr_note.as_ref(),
-                            self.order_b.order_id,
-                        )?;
+                        );
                     } else {
                         update_state_after_swap_later_fills(
                             &state_tree__,
                             &updated_state_hashes__,
                             execution_output_b_clone.prev_pfr_note.unwrap(),
                             new_pfr_note.as_ref(),
-                        )?;
+                        );
                     }
                 } else if self.order_b.position_effect_type == PositionEffectType::Close {
                     let mut tree = state_tree__.lock();
@@ -654,7 +660,7 @@ impl PerpSwap {
                             .as_ref()
                             .unwrap()
                             .dest_received_blinding,
-                    )?;
+                    );
 
                     execution_output_b.return_collateral_note = Some(return_collateral_note_);
                 }
@@ -666,8 +672,7 @@ impl PerpSwap {
                     &self.order_b.position_effect_type,
                     execution_output_b.position_index,
                     execution_output_b.position.as_ref(),
-                    execution_output_b.prev_position.as_ref(),
-                )?;
+                );
 
                 finalize_updates(
                     &self.order_b,

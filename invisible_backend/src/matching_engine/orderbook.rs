@@ -14,7 +14,7 @@ use crate::utils::crypto_utils::Signature;
 
 use super::domain::{Order, OrderSide, OrderType, OrderWrapper};
 use super::order_queues::OrderQueue;
-use super::orders::OrderRequest;
+use super::orders::{link_order_tab, OrderRequest};
 use super::validation::OrderRequestValidator;
 use super::{get_quote_qty, sequence};
 
@@ -144,23 +144,7 @@ impl OrderBook {
 
                 // ? If the order tab already exists as part of a different order link this order to that Mutex
                 if let Order::Spot(limit_order) = &mut order.order {
-                    if limit_order.order_tab.is_some() {
-                        let tab = limit_order.order_tab.as_ref().unwrap().lock();
-                        let order_tab_mutex = self.bid_queue.get_tab_mutex(&tab.hash);
-                        drop(tab);
-
-                        if order_tab_mutex.is_some() {
-                            limit_order.order_tab = order_tab_mutex;
-                        } else {
-                            let tab = limit_order.order_tab.as_ref().unwrap().lock();
-                            let order_tab_mutex = self.ask_queue.get_tab_mutex(&tab.hash);
-                            drop(tab);
-
-                            if order_tab_mutex.is_some() {
-                                limit_order.order_tab = order_tab_mutex;
-                            }
-                        }
-                    }
+                    link_order_tab(limit_order, &self.bid_queue, &self.ask_queue);
                 }
 
                 self.process_order_internal(
@@ -1253,23 +1237,7 @@ impl OrderBook {
             let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(order.timestamp);
 
             // ? If the order tab already exists as part of a different order link this order to that Mutex
-            if limit_order.order_tab.is_some() {
-                let tab = limit_order.order_tab.as_ref().unwrap().lock();
-                let order_tab_mutex = self.bid_queue.get_tab_mutex(&tab.hash);
-                drop(tab);
-
-                if order_tab_mutex.is_some() {
-                    limit_order.order_tab = order_tab_mutex;
-                } else {
-                    let tab = limit_order.order_tab.as_ref().unwrap().lock();
-                    let order_tab_mutex = self.ask_queue.get_tab_mutex(&tab.hash);
-                    drop(tab);
-
-                    if order_tab_mutex.is_some() {
-                        limit_order.order_tab = order_tab_mutex;
-                    }
-                }
-            }
+            link_order_tab(&mut limit_order, &self.bid_queue, &self.ask_queue);
 
             let order = Order::Spot(limit_order);
 

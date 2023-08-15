@@ -46,7 +46,9 @@ func update_one{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_update
         %}
 
         assert note_updates[0] = refund_note;
-        note_updates = &note_updates[1];
+        let note_updates = &note_updates[1];
+
+        return ();
     }
 
     return ();
@@ -87,7 +89,7 @@ func update_rc_state_dict{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, n
 
     // ? store to an array used for program outputs
     assert note_updates[0] = rc_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.rc_note.index] = "note" %}
     %{

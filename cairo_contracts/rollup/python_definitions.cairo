@@ -94,6 +94,7 @@ func python_define_utils() {
         HEADER_SYNTHETIC_TOKEN_OFFSET = ids.PositionHeader.synthetic_token
         HEADER_POSITION_ADDRESS_OFFSET = ids.PositionHeader.position_address
         HEADER_PARTIAL_LIQUIDATIONS_OFFSET = ids.PositionHeader.allow_partial_liquidations
+        HEADER_HASH_OFFSET = ids.PositionHeader.hash
 
         # * ORDER TAB ================================================================
         ORDER_TAB_SIZE = ids.OrderTab.SIZE
@@ -133,6 +134,8 @@ func python_define_utils() {
         # * GLOBAL STATE ==============================================================
         ASSETS_LEN_OFFSET = ids.GlobalConfig.assets_len
         ASSETS_OFFSET = ids.GlobalConfig.assets
+        CHAIN_IDS_LEN_OFFSET = ids.GlobalConfig.chain_ids_len
+        CHAIN_IDS_OFFSET = ids.GlobalConfig.chain_ids
         COLLATERAL_TOKEN_OFFSET = ids.GlobalConfig.collateral_token
         DECIMALS_PER_ASSET_OFFSET = ids.GlobalConfig.decimals_per_asset
         PRICE_DECIMALS_PER_ASSET_OFFSET = ids.GlobalConfig.price_decimals_per_asset
@@ -163,6 +166,7 @@ func python_define_utils() {
                 "synthetic_token": memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET],
                 "position_address": memory[header_address + HEADER_POSITION_ADDRESS_OFFSET],
                 "allow_partial_liquidations": memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET],
+                "header_hash": memory[header_address + HEADER_HASH_OFFSET],
             }
 
         def read_output_position(position_address, index):
@@ -182,6 +186,8 @@ func python_define_utils() {
             memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
             memory[header_address + HEADER_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
             memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
+            memory[header_address + HEADER_HASH_OFFSET] = int(position_["header_hash"])
+
 
         def store_output_order_tab(header_address, index, base_amount, quote_amount, new_updated_hash):
             output_tabs[index] = {
@@ -216,6 +222,27 @@ func python_define_utils() {
             memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET] = int(order_tab["quote_blinding"])
             memory[header_address + TAB_HEADER_PUB_KEY_OFFSET] = int(order_tab["pub_key"])
             memory[header_address + TAB_HEADER_HASH_OFFSET] = int(order_tab["header_hash"])
+
+
+        def print_position(position_address):
+            header_address = position_address + POSITION_HEADER_OFFSET
+            pos = {
+                "order_side": memory[position_address + PERP_POSITION_ORDER_SIDE_OFFSET],
+                "position_size": memory[position_address + PERP_POSITION_POSITION_SIZE_OFFSET],
+                "margin": memory[position_address + PERP_POSITION_MARGIN_OFFSET],
+                "entry_price": memory[position_address + PERP_POSITION_ENTRY_PRICE_OFFSET],
+                "liquidation_price": memory[position_address + PERP_POSITION_LIQUIDATION_PRICE_OFFSET],
+                "bankruptcy_price": memory[position_address + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET],
+                "last_funding_idx": memory[position_address + PERP_POSITION_LAST_FUNDING_IDX_OFFSET],
+                "index": memory[position_address + PERP_POSITION_INDEX_OFFSET],
+                "hash": memory[position_address + PERP_POSITION_HASH_OFFSET],
+                "synthetic_token": memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET],
+                "position_address": memory[header_address + HEADER_POSITION_ADDRESS_OFFSET],
+                "allow_partial_liquidations": memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET],
+                "header_hash": memory[header_address + HEADER_HASH_OFFSET],
+            }
+
+            print(pos)
     %}
 
     return ();

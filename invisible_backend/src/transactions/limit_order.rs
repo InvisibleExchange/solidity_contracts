@@ -154,28 +154,23 @@ fn hash_order(
     let fee_limit = BigUint::from_u64(fee_limit).unwrap();
     hash_inputs.push(&fee_limit);
 
-    let note_info_hash = if spot_note_info.is_some() {
-        spot_note_info.as_ref().unwrap().hash()
-    } else {
-        BigUint::zero()
-    };
-    let order_tab_pub_key = if order_tab.is_some() {
-        order_tab
-            .as_ref()
-            .unwrap()
-            .lock()
-            .tab_header
-            .pub_key
-            .clone()
-    } else {
-        BigUint::zero()
-    };
-    hash_inputs.push(&note_info_hash);
-    hash_inputs.push(&order_tab_pub_key);
+    if spot_note_info.is_some() {
+        let note_info_hash = spot_note_info.as_ref().unwrap().hash();
+        hash_inputs.push(&note_info_hash);
 
-    let order_hash = pedersen_on_vec(&hash_inputs);
+        let order_hash = pedersen_on_vec(&hash_inputs);
 
-    return order_hash;
+        return order_hash;
+    } else {
+        let tab = order_tab.as_ref().unwrap().lock();
+        let tab_pub_key = tab.tab_header.pub_key.clone();
+
+        hash_inputs.push(&tab_pub_key);
+
+        let order_hash = pedersen_on_vec(&hash_inputs);
+
+        return order_hash;
+    }
 }
 
 #[derive(Debug, Clone)]

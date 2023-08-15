@@ -1,6 +1,6 @@
 use invisible_backend::server::grpc::MarginChangeResponse;
 use invisible_backend::server::server_helpers::periodic_updates::start_periodic_updates;
-use invisible_backend::transaction_batch::transaction_batch::{TransactionBatch, TREE_DEPTH};
+use invisible_backend::transaction_batch::{TransactionBatch, TREE_DEPTH};
 use invisible_backend::trees::build_tree;
 use parking_lot::Mutex;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, thread::ThreadId};
@@ -48,8 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // println!("zero indexes: {:?}", tx_batch.state_tree.lock().zero_idxs);
 
-    let state_root = build_tree(TREE_DEPTH, &tx_batch.state_tree.lock().leaf_nodes, 0);
-    println!("state root: {:?}", state_root);
+    // let state_root = build_tree(TREE_DEPTH, &tx_batch.state_tree.lock().leaf_nodes, 0);
+    // println!("state root: {:?}", state_root);
 
     // TODO: TESTING ==========================================================
 

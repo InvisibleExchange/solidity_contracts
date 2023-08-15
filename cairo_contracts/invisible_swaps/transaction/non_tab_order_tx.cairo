@@ -204,7 +204,7 @@ func later_fills{
 
     // ? store to an array used for program outputs
     assert note_updates[0] = swap_note;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.prev_fill_refund_note.index] = "note" %}
     %{

@@ -53,7 +53,7 @@ func execute_note_split{
 }
 
 func write_notes_out_over_notes_in{
-    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*,
+    pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
 }(notes_in_len: felt, notes_in: Note*, notes_out_len: felt, notes_out: Note*, len: felt) {
     if (len == 0) {
         return ();
@@ -74,7 +74,7 @@ func write_notes_out_over_notes_in{
 
     // ? store to an array used for program outputs
     assert note_updates[0] = note_out;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.note_in.index] = "note" %}
     %{
@@ -109,7 +109,7 @@ func write_notes_out_over_empty{
 
     // ? store to an array used for program outputs
     assert note_updates[0] = note_out;
-    note_updates = &note_updates[1];
+    let note_updates = &note_updates[1];
 
     %{ leaf_node_types[ids.zero_idx] = "note" %}
     %{

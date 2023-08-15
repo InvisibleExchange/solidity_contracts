@@ -5,8 +5,7 @@ use num_traits::Zero;
 use parking_lot::Mutex;
 
 use crate::{
-    transaction_batch::transaction_batch::LeafNodeType, trees::superficial_tree::SuperficialTree,
-    utils::notes::Note,
+    transaction_batch::LeafNodeType, trees::superficial_tree::SuperficialTree, utils::notes::Note,
 };
 
 use super::OrderTab;

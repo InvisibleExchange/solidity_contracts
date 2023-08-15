@@ -6,7 +6,7 @@ use starknet::curve::AffinePoint;
 use std::sync::Arc;
 use std::thread::ThreadId;
 
-use crate::transaction_batch::transaction_batch::LeafNodeType;
+use crate::transaction_batch::LeafNodeType;
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::crypto_utils::{pedersen_on_vec, verify, EcPoint, Signature};
 use crate::utils::errors::{

@@ -1,11 +1,15 @@
 use std::fmt::Debug;
 use std::time::SystemTime;
 
-use crate::{perpetual::VALID_COLLATERAL_TOKENS, utils::crypto_utils::Signature};
+use crate::{
+    perpetual::VALID_COLLATERAL_TOKENS, transactions::limit_order::LimitOrder,
+    utils::crypto_utils::Signature,
+};
 
 use super::{
     domain::{Order, OrderSide, OrderWrapper},
     get_qty_from_quote, get_quote_qty,
+    order_queues::OrderQueue,
 };
 
 #[derive(Debug, Clone)]
@@ -166,3 +170,61 @@ pub fn amend_inner(
 
     wrapper.signature = signature;
 }
+
+// * =======================================================================================
+
+/// If multiple orders are using the same order tab link them with a mutex object
+pub fn link_order_tab(
+    limit_order: &mut LimitOrder,
+    bid_queue: &OrderQueue,
+    ask_queue: &OrderQueue,
+) {
+    // ? If the order tab already exists as part of a different order link this order to that Mutex
+
+    if limit_order.order_tab.is_some() {
+        let tab = limit_order.order_tab.as_ref().unwrap().lock();
+        let order_tab_mutex = bid_queue.get_tab_mutex(&tab.hash);
+        drop(tab);
+
+        if order_tab_mutex.is_some() {
+            limit_order.order_tab = order_tab_mutex;
+        } else {
+            let tab = limit_order.order_tab.as_ref().unwrap().lock();
+            let order_tab_mutex = ask_queue.get_tab_mutex(&tab.hash);
+            drop(tab);
+
+            if order_tab_mutex.is_some() {
+                limit_order.order_tab = order_tab_mutex;
+            }
+        }
+    }
+}
+
+// * -------------------------------------------------------------------------------------
+
+// /// If multiple orders are using the same position link them with a mutex object
+// pub fn link_position(order: &mut OrderWrapper, bid_queue: &OrderQueue, ask_queue: &OrderQueue) {
+//     // ? If the order tab already exists as part of a different order link this order to that Mutex
+
+//     if let Order::Perp(perp_order) = &mut order.order {
+
+//         if perp_order.position.is_some() {
+//             let position = perp_order.position.as_ref().unwrap().lock();
+//             let position_mutex = bid_queue.get_position_mutex(&position.hash);
+//             drop(position);
+
+//             if position_mutex.is_some() {
+//                 perp_order.position = position_mutex;
+//             } else {
+//                 let position = perp_order.position.as_ref().unwrap().lock();
+//                 let position_mutex = ask_queue.get_position_mutex(&position.hash);
+//                 drop(position);
+
+//                 if position_mutex.is_some() {
+//                     perp_order.position = position_mutex;
+//                 }
+//             }
+//         }
+
+//     }
+// }
