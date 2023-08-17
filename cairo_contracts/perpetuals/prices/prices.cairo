@@ -3,6 +3,7 @@ from starkware.cairo.common.signature import verify_ecdsa_signature
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.math import unsigned_div_rem, assert_le
+from starkware.cairo.common.bool import TRUE, FALSE
 
 from rollup.global_config import get_array_index_for_token, get_observer_by_index, GlobalConfig
 from helpers.utils import Note
@@ -81,7 +82,7 @@ func get_prices_internal{
     %{ price_bound_data = max_price_data %}
     let (max_prices_median: felt) = _verify_and_get_median(max_prices_len, max_prices, token);
 
-    let (token_price_array_index: felt) = get_array_index_for_token(token);
+    let (token_price_array_index: felt) = get_array_index_for_token(token, TRUE);
 
     let price_range: PriceRange = PriceRange(min_prices_median, max_prices_median);
 
@@ -149,7 +150,7 @@ func _verify_price_signatures{
 func validate_price_in_range{
     range_check_ptr, price_ranges: PriceRange*, global_config: GlobalConfig*
 }(price: felt, token: felt) {
-    let (token_arr_idx: felt) = get_array_index_for_token(token);
+    let (token_arr_idx: felt) = get_array_index_for_token(token, TRUE);
 
     let price_range: PriceRange = price_ranges[token_arr_idx];
 

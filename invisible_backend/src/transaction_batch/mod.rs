@@ -26,7 +26,7 @@ use crate::{
         },
         perp_position::PerpPosition,
         perp_swap::PerpSwap,
-        DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
+        COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET, SYNTHETIC_ASSETS,
     },
     server::grpc::{OrderTabActionMessage, OrderTabActionResponse},
     transactions::{
@@ -237,7 +237,7 @@ impl TransactionBatch {
                 storage.read_funding_info()
             {
                 let mut funding_idx_shift = HashMap::new();
-                for t in TOKENS {
+                for t in SYNTHETIC_ASSETS {
                     let rates_arr_len = funding_rates.get(&t).unwrap_or(&vec![]).len();
 
                     let shift = funding_idx - rates_arr_len as u32;
@@ -688,7 +688,7 @@ impl TransactionBatch {
                 .unwrap()
                 .iter()
                 .fold(0, |acc, n| {
-                    if n.token != VALID_COLLATERAL_TOKENS[0] {
+                    if n.token != COLLATERAL_TOKEN {
                         valid = true;
                     }
                     return acc + n.amount;
@@ -755,7 +755,7 @@ impl TransactionBatch {
                     .unwrap()
                     .dest_received_address
                     .clone(),
-                VALID_COLLATERAL_TOKENS[0],
+                COLLATERAL_TOKEN,
                 margin_change.margin_change.abs() as u64,
                 margin_change
                     .close_order_fields
@@ -907,7 +907,7 @@ impl TransactionBatch {
         let price_info_json = get_price_info(min_index_price_data, max_index_price_data);
 
         // ? Get the final updated counts for the cairo program input
-        let [num_output_notes, num_zero_notes, num_output_positions, num_empty_positions, num_output_tabs, num_empty_tabs] =
+        let [num_output_notes, num_output_positions, num_output_tabs, num_zero_indexes] =
             get_final_updated_counts(&updated_state_hashes);
         let (n_deposits, n_withdrawals) = (self.n_deposits, self.n_withdrawals);
 
@@ -937,11 +937,9 @@ impl TransactionBatch {
             TREE_DEPTH,
             global_expiration_timestamp,
             num_output_notes,
-            num_zero_notes,
             num_output_positions,
-            num_empty_positions,
             num_output_tabs,
-            num_empty_tabs,
+            num_zero_indexes,
             n_deposits,
             n_withdrawals,
         );

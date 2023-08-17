@@ -20,9 +20,7 @@ use crate::matching_engine::{
 use crate::perpetual::perp_helpers::db_updates::store_perp_fill;
 use crate::perpetual::perp_helpers::perp_swap_outptut::PerpOrderFillResponse;
 use crate::perpetual::perp_position::PerpPosition;
-use crate::perpetual::{
-    get_cross_price, scale_up_price, PositionEffectType, VALID_COLLATERAL_TOKENS,
-};
+use crate::perpetual::{get_cross_price, scale_up_price, PositionEffectType, COLLATERAL_TOKEN};
 use crate::perpetual::{
     perp_helpers::{perp_rollback::PerpRollbackInfo, perp_swap_outptut::PerpSwapResponse},
     perp_order::PerpOrder,
@@ -96,7 +94,7 @@ pub async fn execute_perp_swap(
     let qty = perp_swap.spent_synthetic;
     let p: f64 = get_cross_price(
         perp_swap.order_a.synthetic_token,
-        VALID_COLLATERAL_TOKENS[0],
+        COLLATERAL_TOKEN,
         perp_swap.spent_synthetic,
         perp_swap.spent_collateral,
         None,

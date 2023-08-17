@@ -13,7 +13,7 @@ use crate::{
         },
         perp_order::PerpOrder,
         perp_position::PerpPosition,
-        DUST_AMOUNT_PER_ASSET, LEVERAGE_DECIMALS, VALID_COLLATERAL_TOKENS,
+        COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET, LEVERAGE_DECIMALS,
     },
     trees::superficial_tree::SuperficialTree,
     utils::{
@@ -335,9 +335,7 @@ fn add_margin_to_position(
 
 pub fn check_valid_collateral_token(order: &PerpOrder) -> Result<(), PerpSwapExecutionError> {
     // ? Collateral token is invalid
-    if !VALID_COLLATERAL_TOKENS
-        .contains(&order.open_order_fields.as_ref().unwrap().collateral_token)
-    {
+    if COLLATERAL_TOKEN != order.open_order_fields.as_ref().unwrap().collateral_token {
         return Err(send_perp_swap_error(
             "collateral token not valid".to_string(),
             Some(order.order_id),

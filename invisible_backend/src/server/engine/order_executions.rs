@@ -483,8 +483,6 @@ pub async fn submit_liquidation_order_inner(
                 return Ok(Response::new(reply));
             }
             Err(err) => {
-                println!("\n{:?}", err);
-
                 let error_message_response: String = err.current_context().err_msg.to_string();
 
                 println!("Position liquidation failed {:?}\n", error_message_response);

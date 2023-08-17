@@ -1,5 +1,5 @@
 use crate::perpetual::{
-    PositionEffectType, DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
+    PositionEffectType, ASSETS, COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET, SYNTHETIC_ASSETS,
 };
 use crate::utils::crypto_utils::Signature;
 
@@ -90,10 +90,9 @@ impl OrderRequestValidator {
         match order {
             Order::Spot(limit_order) => {
                 // ? Chack that the tokens are valid
-                if (!TOKENS.contains(&limit_order.token_spent)
-                    && !VALID_COLLATERAL_TOKENS.contains(&limit_order.token_spent))
-                    || (!TOKENS.contains(&limit_order.token_received)
-                        && !VALID_COLLATERAL_TOKENS.contains(&limit_order.token_received))
+                
+                if !ASSETS.contains(&limit_order.token_spent)
+                    || !ASSETS.contains(&limit_order.token_received)
                 {
                     return Err("Tokens swapped are not valid");
                 }
@@ -159,7 +158,7 @@ impl OrderRequestValidator {
                 }
             }
             Order::Perp(perp_order) => {
-                if !TOKENS.contains(&perp_order.synthetic_token) {
+                if !SYNTHETIC_ASSETS.contains(&perp_order.synthetic_token) {
                     return Err("Synthetic token is invalid");
                 };
 
@@ -171,13 +170,13 @@ impl OrderRequestValidator {
 
                 match perp_order.position_effect_type {
                     PositionEffectType::Open => {
-                        if !VALID_COLLATERAL_TOKENS.contains(
-                            &perp_order
+                        if COLLATERAL_TOKEN
+                            != perp_order
                                 .open_order_fields
                                 .as_ref()
                                 .unwrap()
-                                .collateral_token,
-                        ) {
+                                .collateral_token
+                        {
                             return Err("collateral token not valid");
                         }
 

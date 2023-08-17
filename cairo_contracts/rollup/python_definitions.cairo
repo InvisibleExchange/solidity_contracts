@@ -134,6 +134,8 @@ func python_define_utils() {
         # * GLOBAL STATE ==============================================================
         ASSETS_LEN_OFFSET = ids.GlobalConfig.assets_len
         ASSETS_OFFSET = ids.GlobalConfig.assets
+        SYNTHETIC_ASSETS_LEN_OFFSET = ids.GlobalConfig.synthetic_assets_len
+        SYNTHETIC_ASSETS_OFFSET = ids.GlobalConfig.synthetic_assets
         CHAIN_IDS_LEN_OFFSET = ids.GlobalConfig.chain_ids_len
         CHAIN_IDS_OFFSET = ids.GlobalConfig.chain_ids
         COLLATERAL_TOKEN_OFFSET = ids.GlobalConfig.collateral_token

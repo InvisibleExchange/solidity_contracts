@@ -8,9 +8,9 @@ use num_bigint::BigUint;
 
 use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{
-    OrderSide, PositionEffectType, COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET,
-    DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MAX_LEVERAGE, TOKENS,
-    VALID_COLLATERAL_TOKENS,
+    OrderSide, PositionEffectType, COLLATERAL_TOKEN, COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET,
+    DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MAX_LEVERAGE,
+    SYNTHETIC_ASSETS,
 };
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
@@ -330,7 +330,7 @@ pub fn consistency_checks(
     }
 
     // ? Check that synthetic tokens are valid
-    if !TOKENS.contains(&order_a.synthetic_token) {
+    if !SYNTHETIC_ASSETS.contains(&order_a.synthetic_token) {
         return Err(send_perp_swap_error(
             "synthetic token not valid".to_string(),
             Some(order_a.order_id),
@@ -339,7 +339,7 @@ pub fn consistency_checks(
                 order_a.synthetic_token
             )),
         ));
-    } else if !TOKENS.contains(&order_b.synthetic_token) {
+    } else if !SYNTHETIC_ASSETS.contains(&order_b.synthetic_token) {
         return Err(send_perp_swap_error(
             "synthetic token not valid".to_string(),
             Some(order_b.order_id),
@@ -417,8 +417,7 @@ pub fn consistency_checks(
 
     // ? Check that the amounts swapped don't exceed the order amounts
     let synthetic_dust_amount: u64 = DUST_AMOUNT_PER_ASSET[&order_a.synthetic_token.to_string()];
-    let collateral_dust_amount: u64 =
-        DUST_AMOUNT_PER_ASSET[&VALID_COLLATERAL_TOKENS[0].to_string()];
+    let collateral_dust_amount: u64 = DUST_AMOUNT_PER_ASSET[&COLLATERAL_TOKEN.to_string()];
     if order_a.order_side == OrderSide::Long {
         if order_a.collateral_amount < spent_collateral - collateral_dust_amount
             || order_b.synthetic_amount < spent_synthetic - synthetic_dust_amount

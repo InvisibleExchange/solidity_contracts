@@ -30,7 +30,7 @@ use super::perp_helpers::perp_swap_outptut::{
     PerpSwapOutput, PerpSwapResponse, TxExecutionThreadOutput,
 };
 use super::{perp_order::PerpOrder, perp_position::PerpPosition, OrderSide};
-use super::{PositionEffectType, VALID_COLLATERAL_TOKENS};
+use super::{PositionEffectType, COLLATERAL_TOKEN};
 use crate::transaction_batch::tx_batch_structs::SwapFundingInfo;
 use crate::transaction_batch::LeafNodeType;
 use crate::transactions::transaction_helpers::swap_helpers::unblock_order;
@@ -543,7 +543,7 @@ impl PerpSwap {
                         &updated_state_hashes__,
                         idx,
                         execution_output_a.collateral_returned,
-                        VALID_COLLATERAL_TOKENS[0],
+                        COLLATERAL_TOKEN,
                         &self
                             .order_a
                             .close_order_fields
@@ -647,7 +647,7 @@ impl PerpSwap {
                         &updated_state_hashes__,
                         idx,
                         execution_output_b.collateral_returned,
-                        VALID_COLLATERAL_TOKENS[0],
+                        COLLATERAL_TOKEN,
                         &self
                             .order_b
                             .close_order_fields

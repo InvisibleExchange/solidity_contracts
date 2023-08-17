@@ -45,7 +45,9 @@ func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
     fee_takenB: felt,
 ) {
     alloc_locals;
-    // TODO: Check the tokens are valid
+
+    // ? Check the tokens are valid
+    // Note: This is already done in the token_decimals function!
 
     // ? Check that the tokens swapped match
     assert invisibl3_order_A.token_spent = invisibl3_order_B.token_received;

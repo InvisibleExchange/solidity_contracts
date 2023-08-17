@@ -14,7 +14,7 @@ use std::{
 };
 
 use crate::{
-    perpetual::{perp_position::PerpPosition, TOKENS},
+    perpetual::{perp_position::PerpPosition, SYNTHETIC_ASSETS},
     trees::superficial_tree::SuperficialTree,
     utils::notes::Note,
 };
@@ -31,7 +31,7 @@ pub fn _init_empty_tokens_map<T>(map: &mut HashMap<u32, T>)
 where
     T: Default,
 {
-    for token in TOKENS {
+    for token in SYNTHETIC_ASSETS {
         map.insert(token, T::default());
     }
 }
@@ -43,27 +43,15 @@ where
 ///
 pub fn get_final_updated_counts(
     updated_state_hashes: &HashMap<u64, (LeafNodeType, BigUint)>,
-) -> [u32; 6] {
+) -> [u32; 4] {
     let mut num_output_notes: u32 = 0; //= self.updated_state_hashes.len() as u32;
-    let mut num_zero_notes: u32 = 0;
     let mut num_output_positions: u32 = 0; // = self.perpetual_updated_position_hashes.len() as u32;
-    let mut num_empty_positions: u32 = 0;
     let mut num_output_tabs: u32 = 0;
-    let mut num_empty_tabs: u32 = 0;
+    let mut num_zero_indexes: u32 = 0;
 
     for (_, (leaf_type, leaf_hash)) in updated_state_hashes.iter() {
         if leaf_hash == &BigUint::zero() {
-            match leaf_type {
-                LeafNodeType::Note => {
-                    num_zero_notes += 1;
-                }
-                LeafNodeType::Position => {
-                    num_empty_positions += 1;
-                }
-                LeafNodeType::OrderTab => {
-                    num_empty_tabs += 1;
-                }
-            }
+            num_zero_indexes += 1;
         } else {
             match leaf_type {
                 LeafNodeType::Note => {
@@ -81,11 +69,9 @@ pub fn get_final_updated_counts(
 
     return [
         num_output_notes,
-        num_zero_notes,
         num_output_positions,
-        num_empty_positions,
         num_output_tabs,
-        num_empty_tabs,
+        num_zero_indexes,
     ];
 }
 //
@@ -350,7 +336,7 @@ pub fn _calculate_funding_rates(
 
     let mut funding_rates: HashMap<u32, i64> = HashMap::new();
 
-    for t in TOKENS {
+    for t in SYNTHETIC_ASSETS {
         let twap_sum = running_funding_tick_sums.remove(&t).unwrap_or(0);
         funding_rates.insert(t, twap_sum / 480);
     }

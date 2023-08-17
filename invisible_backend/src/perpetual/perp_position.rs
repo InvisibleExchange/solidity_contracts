@@ -730,7 +730,7 @@ impl PerpPosition {
         // ? Verify the margin_change is valid
         if margin_change == 0
             || self.margin as i64 + margin_change
-                <= DUST_AMOUNT_PER_ASSET[&VALID_COLLATERAL_TOKENS[0].to_string()] as i64
+                <= DUST_AMOUNT_PER_ASSET[&COLLATERAL_TOKEN.to_string()] as i64
         {
             return Err("Invalid margin change".to_string());
         }
@@ -988,7 +988,7 @@ impl Serialize for PositionHeader {
 
 use serde::de::{Deserialize, Deserializer};
 
-use super::{DUST_AMOUNT_PER_ASSET, VALID_COLLATERAL_TOKENS};
+use super::{COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET};
 
 impl<'de> Deserialize<'de> for PerpPosition {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>

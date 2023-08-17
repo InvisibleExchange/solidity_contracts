@@ -21,7 +21,7 @@ from unshielded_swaps.constants import MAX_AMOUNT, MAX_ORDER_ID, MAX_NONCE, MAX_
 
 from perpetuals.order.order_structs import PerpOrder, OpenOrderFields
 
-from rollup.global_config import get_dust_amount, GlobalConfig, token_decimals
+from rollup.global_config import get_dust_amount, GlobalConfig, token_decimals, verify_valid_token
 
 func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
     order_a: PerpOrder,
@@ -33,7 +33,8 @@ func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
 ) {
     alloc_locals;
 
-    // TODO: Check that collateral and synthetic tokens are valid
+    // ? Check that collateral and synthetic tokens are valid
+    // Note: This is already done in the token_decimals function!
 
     // ? Check that the synthetic and collateral tokens are the same for both orders
     assert order_a.synthetic_token = order_b.synthetic_token;

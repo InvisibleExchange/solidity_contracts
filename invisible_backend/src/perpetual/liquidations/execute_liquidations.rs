@@ -4,7 +4,7 @@ use crate::{
     matching_engine::get_quote_qty,
     perpetual::{
         get_price, perp_helpers::perp_swap_helpers::get_max_leverage, perp_position::PerpPosition,
-        scale_down_price, OrderSide, LEVERAGE_DECIMALS, TOKENS, VALID_COLLATERAL_TOKENS,
+        scale_down_price, OrderSide, COLLATERAL_TOKEN, LEVERAGE_DECIMALS, SYNTHETIC_ASSETS,
     },
     transaction_batch::tx_batch_structs::SwapFundingInfo,
     trees::superficial_tree::SuperficialTree,
@@ -67,7 +67,7 @@ pub fn open_new_position_after_liquidation(
         liquidated_size,
         price,
         liquidation_order.synthetic_token,
-        VALID_COLLATERAL_TOKENS[0],
+        COLLATERAL_TOKEN,
         None,
     );
 
@@ -111,7 +111,7 @@ pub fn liquidation_consistency_checks(
     market_price: u64,
 ) -> Result<(), PerpSwapExecutionError> {
     // ? Check that synthetic tokens are valid
-    if !TOKENS.contains(&liquidation_order.synthetic_token) {
+    if !SYNTHETIC_ASSETS.contains(&liquidation_order.synthetic_token) {
         return Err(send_perp_swap_error(
             "synthetic token not valid".to_string(),
             None,

@@ -13,9 +13,9 @@ use serde_json::Value;
 
 use crate::{
     perpetual::{
-        perp_position::PerpPosition, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET,
-        LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MIN_PARTIAL_LIQUIDATION_SIZE,
-        PRICE_DECIMALS_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS,
+        perp_position::PerpPosition, ASSETS, COLLATERAL_TOKEN, DECIMALS_PER_ASSET,
+        DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS,
+        MIN_PARTIAL_LIQUIDATION_SIZE, PRICE_DECIMALS_PER_ASSET, SYNTHETIC_ASSETS,
     },
     utils::crypto_utils::verify,
     utils::errors::{send_oracle_update_error, OracleUpdateError},
@@ -51,7 +51,7 @@ impl OracleUpdate {
     pub fn verify_update(&mut self) -> Result<(), OracleUpdateError> {
         // Todo: Verify timestamp is valid
 
-        if !TOKENS.contains(&self.token) {
+        if !SYNTHETIC_ASSETS.contains(&self.token) {
             return Err(send_oracle_update_error("token is invalid".to_string()));
         }
 
@@ -378,7 +378,7 @@ impl Serialize for PriceInfo<'_> {
 /// It is all the relevant information needed for the cairo program.
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalDexState {
-    pub config_code: u64,
+    pub config_code: u128,
     pub init_state_root: String,
     pub final_state_root: String,
     pub state_tree_depth: u32,
@@ -388,17 +388,15 @@ pub struct GlobalDexState {
 
 impl GlobalDexState {
     pub fn new(
-        config_code: u64,
+        config_code: u128,
         init_state_root: &BigUint,
         final_state_root: &BigUint,
         state_tree_depth: u32,
         global_expiration_timestamp: u32,
         n_output_notes: u32,
-        n_empty_notes: u32,
         n_output_positions: u32,
-        n_empty_positions: u32,
         n_output_tabs: u32,
-        n_empty_tabs: u32,
+        n_zero_indexes: u32,
         n_deposits: u32,
         n_withdrawals: u32,
     ) -> GlobalDexState {
@@ -407,11 +405,9 @@ impl GlobalDexState {
 
         let program_input_counts = ProgramInputCounts {
             n_output_notes,
-            n_empty_notes,
             n_output_positions,
-            n_empty_positions,
             n_output_tabs,
-            n_empty_tabs,
+            n_zero_indexes,
             n_deposits,
             n_withdrawals,
         };
@@ -432,9 +428,7 @@ pub struct ProgramInputCounts {
     pub n_output_notes: u32,
     pub n_output_positions: u32,
     pub n_output_tabs: u32,
-    pub n_empty_notes: u32,
-    pub n_empty_positions: u32,
-    pub n_empty_tabs: u32,
+    pub n_zero_indexes: u32,
     pub n_deposits: u32,
     pub n_withdrawals: u32,
 }
@@ -449,71 +443,75 @@ pub struct ProgramInputCounts {
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalConfig {
     pub assets: Vec<u32>,
-    pub chain_ids: Vec<u32>,
+    pub synthetic_assets: Vec<u32>,
     pub collateral_token: u32,
-    pub decimals_per_asset: Vec<u64>,
-    pub price_decimals_per_asset: Vec<u64>,
+    //
+    pub chain_ids: Vec<u32>,
     pub leverage_decimals: u8,
-    pub leverage_bounds_per_asset: Vec<f64>,
+    //
+    pub decimals_per_asset: Vec<u64>,
     pub dust_amount_per_asset: Vec<u64>,
-    pub observers: Vec<String>,
+    //
+    pub price_decimals_per_asset: Vec<u64>,
+    pub leverage_bounds_per_asset: Vec<f64>,
     pub min_partial_liquidation_sizes: Vec<u64>,
+    //
+    pub observers: Vec<String>,
 }
 
 impl GlobalConfig {
     pub fn new() -> GlobalConfig {
-        let assets = TOKENS.to_vec();
+        let assets = ASSETS.to_vec();
+        let synthetic_assets = SYNTHETIC_ASSETS.to_vec();
+        let collateral_token = COLLATERAL_TOKEN;
+
         let chain_ids = CHAIN_IDS.to_vec();
-        let collateral_token = VALID_COLLATERAL_TOKENS[0];
-        let decimals_per_asset = flatten_map(&DECIMALS_PER_ASSET);
-        let price_decimals_per_asset = flatten_map(&PRICE_DECIMALS_PER_ASSET);
         let leverage_decimals = LEVERAGE_DECIMALS;
-        let leverage_bounds_per_asset = flatten_leverage_bounds(&LEVERAGE_BOUNDS_PER_ASSET);
-        let dust_amount_per_asset = flatten_map(&DUST_AMOUNT_PER_ASSET);
-        let min_partial_liquidation_sizes = flatten_map(&MIN_PARTIAL_LIQUIDATION_SIZE);
+
+        let decimals_per_asset = flatten_map(&DECIMALS_PER_ASSET, &assets);
+        let dust_amount_per_asset = flatten_map(&DUST_AMOUNT_PER_ASSET, &assets);
+
+        let price_decimals_per_asset = flatten_map(&PRICE_DECIMALS_PER_ASSET, &synthetic_assets);
+        let leverage_bounds_per_asset =
+            flatten_leverage_bounds(&LEVERAGE_BOUNDS_PER_ASSET, &synthetic_assets);
+        let min_partial_liquidation_sizes =
+            flatten_map(&MIN_PARTIAL_LIQUIDATION_SIZE, &synthetic_assets);
 
         let observers = OBSERVERS.iter().map(|x| x.to_string()).collect();
 
         GlobalConfig {
             assets,
-            chain_ids,
+            synthetic_assets,
             collateral_token,
-            decimals_per_asset,
-            price_decimals_per_asset,
+            chain_ids,
             leverage_decimals,
-            leverage_bounds_per_asset,
+            decimals_per_asset,
             dust_amount_per_asset,
-            observers,
+            price_decimals_per_asset,
+            leverage_bounds_per_asset,
             min_partial_liquidation_sizes,
+            observers,
         }
     }
 }
 
-fn flatten_map<T>(x: &phf::Map<&'static str, T>) -> Vec<u64>
+fn flatten_map<T>(x: &phf::Map<&'static str, T>, assets: &Vec<u32>) -> Vec<u64>
 where
     T: Into<u64> + Copy,
 {
-    let mut sorted_keys = x.keys().collect::<Vec<&&str>>();
-    sorted_keys.sort();
-
     let mut v: Vec<u64> = Vec::new();
-    for k in sorted_keys {
-        let val = x.get(k).unwrap();
-        v.push(u64::from_str(k).unwrap());
+    for k in assets {
+        let val = x.get(&k.to_string()).unwrap();
         v.push((*val).into());
     }
     return v;
 }
 
-fn flatten_leverage_bounds(x: &phf::Map<&'static str, [f32; 2]>) -> Vec<f64> {
-    let mut sorted_keys = x.keys().collect::<Vec<&&str>>();
-    sorted_keys.sort();
-
+fn flatten_leverage_bounds(x: &phf::Map<&'static str, [f32; 2]>, assets: &Vec<u32>) -> Vec<f64> {
     let mut v: Vec<f64> = Vec::new();
 
-    for k in sorted_keys {
-        let val = x.get(k).unwrap();
-        v.push(f64::from_str(k).unwrap());
+    for k in assets {
+        let val = x.get(&k.to_string()).unwrap();
         v.push(val[0] as f64);
         v.push(val[1] as f64);
     }

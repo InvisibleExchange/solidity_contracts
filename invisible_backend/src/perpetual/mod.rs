@@ -34,8 +34,9 @@ pub const MAX_LEVERAGE: f64 = 15.0;
 // BTC - 12345
 // ETH - 54321
 // USDC - 55555
-pub static TOKENS: [u32; 2] = [12345, 54321];
-pub static VALID_COLLATERAL_TOKENS: [u32; 1] = [55555];
+pub static ASSETS: [u32; 3] = [12345, 54321, 55555];
+pub static SYNTHETIC_ASSETS: [u32; 2] = [12345, 54321];
+pub const COLLATERAL_TOKEN: u32 = 55555;
 
 pub static DECIMALS_PER_ASSET: phf::Map<&'static str, u8> = phf_map! {
 "12345" => 9, // BTC
@@ -127,7 +128,7 @@ pub fn get_cross_price(
 ) -> f64 {
     // Price of two tokens in terms of each other (possible to get ETH/BTC price)
 
-    if VALID_COLLATERAL_TOKENS.contains(&quote_token) {
+    if COLLATERAL_TOKEN == quote_token {
         let base_decimals = DECIMALS_PER_ASSET[&base_token.to_string()];
         let quote_decimals = DECIMALS_PER_ASSET[&quote_token.to_string()];
 

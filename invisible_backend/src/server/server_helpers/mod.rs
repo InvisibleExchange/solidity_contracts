@@ -15,7 +15,7 @@ use tokio_tungstenite::WebSocketStream;
 use crate::matching_engine::get_quote_qty;
 use crate::perpetual::perp_order::PerpOrder;
 use crate::perpetual::perp_swap::PerpSwap;
-use crate::perpetual::{COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET, VALID_COLLATERAL_TOKENS};
+use crate::perpetual::{COLLATERAL_TOKEN, COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET};
 use crate::utils::crypto_utils::Signature;
 use crate::{
     matching_engine::{
@@ -431,7 +431,7 @@ pub fn proccess_perp_matching_result(
                                         qty,
                                         price,
                                         perp_order.synthetic_token,
-                                        VALID_COLLATERAL_TOKENS[0],
+                                        COLLATERAL_TOKEN,
                                         None,
                                     )
                                 };
@@ -459,8 +459,6 @@ pub fn proccess_perp_matching_result(
                         }
                     }
                     _ => {
-                        println!("res: {:?}", res);
-
                         return Err(send_matching_error("SOMETHING WENT WRONG".to_string()));
                     }
                 };

@@ -36,7 +36,7 @@ use std::{fmt::Debug, time::SystemTime};
 
 use crate::{
     perpetual::{
-        get_cross_price, perp_order::PerpOrder, OrderSide as PerpOrderSide, VALID_COLLATERAL_TOKENS,
+        get_cross_price, perp_order::PerpOrder, OrderSide as PerpOrderSide, COLLATERAL_TOKEN,
     },
     transactions::limit_order::LimitOrder,
 };
@@ -106,7 +106,7 @@ impl Order {
             },
             Order::Perp(ord) => {
                 let order_asset = ord.synthetic_token;
-                let price_asset = VALID_COLLATERAL_TOKENS[0];
+                let price_asset = COLLATERAL_TOKEN;
                 return (order_asset, price_asset);
             }
         }
@@ -200,7 +200,7 @@ impl Order {
             Order::Perp(ord) => {
                 return get_cross_price(
                     ord.synthetic_token,
-                    VALID_COLLATERAL_TOKENS[0],
+                    COLLATERAL_TOKEN,
                     ord.synthetic_amount,
                     ord.collateral_amount,
                     round,

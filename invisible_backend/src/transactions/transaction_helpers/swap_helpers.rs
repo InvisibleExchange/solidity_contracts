@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
 use crate::{
     order_tab::OrderTab,
-    perpetual::{DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET, TOKENS, VALID_COLLATERAL_TOKENS},
+    perpetual::{ASSETS, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET},
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
         notes::Note,
@@ -143,17 +143,13 @@ pub fn consistency_checks(
     }
 
     // ? Check that the tokens are valid
-    if !TOKENS.contains(&order_a.token_spent)
-        && !VALID_COLLATERAL_TOKENS.contains(&order_a.token_spent)
-    {
+    if !ASSETS.contains(&order_a.token_spent) {
         return Err(send_swap_error(
             "tokens swapped are invalid".to_string(),
             Some(order_a.order_id),
             None,
         ));
-    } else if !TOKENS.contains(&order_a.token_received)
-        && !VALID_COLLATERAL_TOKENS.contains(&order_a.token_received)
-    {
+    } else if !ASSETS.contains(&order_a.token_received) {
         return Err(send_swap_error(
             "tokens swapped are invalid".to_string(),
             Some(order_b.order_id),
@@ -177,8 +173,6 @@ pub fn consistency_checks(
             )),
         ));
     }
-
-    
 
     // ? Check that the amounts swapped don't exceed the order amounts
     let dust_amount_a: u64 = DUST_AMOUNT_PER_ASSET[&order_a.token_spent.to_string()];

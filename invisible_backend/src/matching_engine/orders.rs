@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::time::SystemTime;
 
 use crate::{
-    perpetual::VALID_COLLATERAL_TOKENS, transactions::limit_order::LimitOrder,
+    perpetual::COLLATERAL_TOKEN, transactions::limit_order::LimitOrder,
     utils::crypto_utils::Signature,
 };
 
@@ -133,7 +133,7 @@ pub fn amend_inner(
                     ord.synthetic_amount,
                     price,
                     ord.synthetic_token,
-                    VALID_COLLATERAL_TOKENS[0],
+                    COLLATERAL_TOKEN,
                     None,
                 );
 
@@ -158,7 +158,7 @@ pub fn amend_inner(
                     ord.synthetic_amount,
                     price,
                     ord.synthetic_token,
-                    VALID_COLLATERAL_TOKENS[0],
+                    COLLATERAL_TOKEN,
                     None,
                 );
 

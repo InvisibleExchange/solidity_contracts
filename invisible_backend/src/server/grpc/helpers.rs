@@ -7,7 +7,7 @@ use crate::{
     perpetual::{
         perp_order::CloseOrderFields,
         perp_position::{PerpPosition, PositionHeader},
-        OrderSide, VALID_COLLATERAL_TOKENS,
+        OrderSide, COLLATERAL_TOKEN,
     },
     transaction_batch::tx_batch_structs::OracleUpdate,
     utils::crypto_utils::{EcPoint, Signature},
@@ -197,7 +197,7 @@ impl TryFrom<MarginChangeReq> for ChangeMarginMessage {
             for n in req.notes_in.iter() {
                 let note = Note::try_from(n.clone())?;
 
-                if VALID_COLLATERAL_TOKENS[0] != note.token {
+                if COLLATERAL_TOKEN != note.token {
                     return Err(Report::new(GrpcMessageError {}));
                 }
 
@@ -208,7 +208,7 @@ impl TryFrom<MarginChangeReq> for ChangeMarginMessage {
             } else {
                 let ref_note = Note::try_from(req.refund_note.ok_or(GrpcMessageError {})?)?;
 
-                if VALID_COLLATERAL_TOKENS[0] != ref_note.token {
+                if COLLATERAL_TOKEN != ref_note.token {
                     return Err(Report::new(GrpcMessageError {}));
                 }
 
