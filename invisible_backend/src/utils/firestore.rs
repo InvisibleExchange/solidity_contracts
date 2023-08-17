@@ -622,7 +622,7 @@ struct JsonSerdeMapWrapper(Map<String, Value>);
 
 pub async fn upload_file_to_storage(
     file_name: String,
-    value: Map<String, Value>,
+    serialized_data: Vec<u8>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     //
 
@@ -631,13 +631,14 @@ pub async fn upload_file_to_storage(
     // Create a reqwest client
     let client = Client::new();
 
-    let serialized_data = to_vec(&value).expect("Serialization failed");
+    // let serialized_data = to_vec(&value).expect("Serialization failed");
 
     // Make a POST request to upload the file
     let url = format!(
         "https://firebasestorage.googleapis.com/v0/b/{}/o?name={}",
         storage_bucket_url, file_name
     );
+
     let response = client
         .post(url)
         .header("Content-Type", "application/octet-stream")
@@ -647,7 +648,13 @@ pub async fn upload_file_to_storage(
         .await?;
 
     // Deserialize the response
-    let upload_response: UploadResponse = response.json().await?;
+    let upload_response: UploadResponse = match response.json().await {
+        Ok(r) => r,
+        Err(e) => {
+            println!("Error uploading file to storage. ERROR: {:?}", e);
+            return Ok(());
+        }
+    };
 
     println!(
         "File uploaded successfully. File name: {}",

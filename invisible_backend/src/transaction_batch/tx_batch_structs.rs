@@ -7,7 +7,7 @@ use num_bigint::BigUint;
 // * SERIALIZE * //
 use serde::{
     ser::{SerializeStruct, Serializer},
-    Serialize,
+    Deserialize, Serialize,
 };
 use serde_json::Value;
 
@@ -141,7 +141,7 @@ impl Serialize for OracleUpdate {
 }
 
 // * DESERIALIZE * //
-use serde::de::{Deserialize, Deserializer};
+use serde::de::Deserializer;
 
 use super::CHAIN_IDS;
 
@@ -376,7 +376,7 @@ impl Serialize for PriceInfo<'_> {
 
 /// This holds the global state of the dex at the end of the batch.\
 /// It is all the relevant information needed for the cairo program.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalDexState {
     pub config_code: u128,
     pub init_state_root: String,
@@ -423,7 +423,7 @@ impl GlobalDexState {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramInputCounts {
     pub n_output_notes: u32,
     pub n_output_positions: u32,
@@ -440,7 +440,7 @@ pub struct ProgramInputCounts {
 // - observers : [observer1, observer2, ...]
 // - everything else: [token1, value1, token2, value2, ...]
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalConfig {
     pub assets: Vec<u32>,
     pub synthetic_assets: Vec<u32>,

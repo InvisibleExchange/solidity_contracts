@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::{
     collections::HashMap,
+    fs,
     path::Path,
     str::FromStr,
     sync::Arc,
@@ -254,7 +255,7 @@ impl TransactionBatch {
             }
         }
 
-        if !storage.funding_db.is_empty() {
+        if !storage.price_db.is_empty() {
             if let Some((latest_index_price, min_index_price_data, max_index_price_data)) =
                 storage.read_price_data()
             {
@@ -284,10 +285,16 @@ impl TransactionBatch {
     }
 
     pub fn revert_current_tx_batch(&mut self) {
-
         // TODO: Copy the state_tree_backup file to the current state_tree file
 
-        // TODO: In MainStorage remove the latest_batch index for the {transaction_data, price_data, funding_info} files
+        // ? Attempt to delete the file
+        let latest_batch_index = self.main_storage.lock().latest_batch;
+        match fs::remove_file(
+            "./storage/transaction_data/".to_string() + latest_batch_index.to_string().as_str(),
+        ) {
+            Ok(()) => println!("File deleted successfully"),
+            Err(err) => eprintln!("Error deleting file: {}", err),
+        }
     }
 
     pub fn execute_transaction<T: Transaction + std::marker::Send + 'static>(
@@ -966,8 +973,11 @@ impl TransactionBatch {
 
         // // & Write transaction batch json to database
         // let _handle = tokio::spawn(async move {
-        //     if let Err(e) =
-        //         upload_file_to_storage(current_batch_index.to_string(), output_json).await
+        //     if let Err(e) = upload_file_to_storage(
+        //         "tx_batches/".to_string() + &current_batch_index.to_string(),
+        //         output_json,
+        //     )
+        //     .await
         //     {
         //         println!("Error uploading file to storage: {:?}", e);
         //     }

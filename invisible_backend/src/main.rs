@@ -1,4 +1,6 @@
-use invisible_backend::utils::cairo_output::parse_cairo_output;
+use invisible_backend::utils::{
+    cairo_output::parse_cairo_output, firestore::upload_file_to_storage,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,13 +70,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "9",
     ];
 
-    let program_output = parse_cairo_output(output);
+    //  let program_output = parse_cairo_output(output);
 
-    println!("{:#?}", program_output);
+    //    println!("{:#?}", program_output);
+
+    // let mut map = serde_json::Map::new();
+    // map.insert(
+    //     "hello".to_string(),
+    //     serde_json::Value::String("world".to_string()),
+    // );
+    // upload_file_to_storage("test".to_string(), map).await?;
 
     Ok(())
 }
-
-
-
-

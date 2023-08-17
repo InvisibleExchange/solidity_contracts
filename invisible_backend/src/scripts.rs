@@ -90,3 +90,5 @@ pub fn _calculate_fees() {
 
     println!("fee map: {:?}", fee_map);
 }
+
+pub fn revert_current_batch() {}

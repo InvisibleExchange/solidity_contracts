@@ -1,6 +1,6 @@
 use num_bigint::{BigInt, BigUint, Sign};
 use num_integer::Integer;
-use num_traits::{FromPrimitive, ToPrimitive, Zero};
+use num_traits::{FromPrimitive, One, ToPrimitive, Zero};
 
 use crate::{
     perpetual::OrderSide,
@@ -10,14 +10,19 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone)]
+use super::{crypto_utils::pedersen_on_vec, firestore::upload_file_to_storage};
+
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgramOutput {
     pub dex_state: GlobalDexState,
     pub global_config: GlobalConfig,
     pub accumulated_hashes: Vec<AccumulatedHashesOutput>,
     pub deposit_outputs: Vec<DepositOutput>,
     pub withdrawal_outputs: Vec<WithdrawalOutput>,
-    pub note_output: Vec<NoteOutput>,
+    pub note_outputs: Vec<NoteOutput>,
     pub position_outputs: Vec<PerpPositionOutput>,
     pub tab_outputs: Vec<OrderTabOutput>,
     pub zero_note_idxs: Vec<u64>,
@@ -54,7 +59,7 @@ pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
         parse_withdrawal_outputs(&cairo_output, dex_state.program_input_counts.n_withdrawals);
 
     // ? Parse notes
-    let (note_output, cairo_output) =
+    let (note_outputs, cairo_output) =
         parse_note_outputs(cairo_output, dex_state.program_input_counts.n_output_notes);
 
     // ? Parse positions
@@ -77,7 +82,7 @@ pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
         accumulated_hashes,
         deposit_outputs,
         withdrawal_outputs,
-        note_output,
+        note_outputs,
         position_outputs,
         tab_outputs,
         zero_note_idxs,
@@ -254,11 +259,11 @@ fn parse_global_config(output: &[BigUint]) -> (GlobalConfig, &[BigUint]) {
 
 // * =====================================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccumulatedHashesOutput {
     pub chain_id: u32,
-    pub deposit_hash: BigUint,
-    pub withdrawal_hash: BigUint,
+    pub deposit_hash: String,
+    pub withdrawal_hash: String,
 }
 
 fn parse_accumulated_hashes_outputs(
@@ -269,8 +274,8 @@ fn parse_accumulated_hashes_outputs(
 
     for i in 0..num_chain_ids {
         let chain_id = output[(i * 3) as usize].clone();
-        let deposit_hash = output[(i * 3 + 1) as usize].clone();
-        let withdrawal_hash = output[(i * 3 + 2) as usize].clone();
+        let deposit_hash = output[(i * 3 + 1) as usize].to_string();
+        let withdrawal_hash = output[(i * 3 + 2) as usize].to_string();
 
         let hash = AccumulatedHashesOutput {
             chain_id: chain_id.to_u32().unwrap(),
@@ -288,12 +293,12 @@ fn parse_accumulated_hashes_outputs(
 
 // * =====================================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepositOutput {
     pub deposit_id: u64,
     pub token: u32,
     pub amount: u64,
-    pub deposit_pub_key: BigUint,
+    pub deposit_pub_key: String,
 }
 
 // & batched_note_info format: | deposit_id (64 bits) | token (32 bits) | amount (64 bits) |
@@ -316,7 +321,7 @@ fn parse_deposit_outputs(
         let token = split_num[1].to_u32().unwrap();
         let amount = split_num[2].to_u64().unwrap();
 
-        let deposit_pub_key = output[(i * 2 + 1) as usize].clone();
+        let deposit_pub_key = output[(i * 2 + 1) as usize].to_string();
 
         let deposit = DepositOutput {
             deposit_id,
@@ -335,12 +340,12 @@ fn parse_deposit_outputs(
 
 // * =====================================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WithdrawalOutput {
     pub chain_id: u32,
     pub token: u32,
     pub amount: u64,
-    pub withdrawal_address: BigUint,
+    pub withdrawal_address: String,
 }
 
 // & batched_note_info format: | withdrawal_chain_id (32 bits) | token (32 bits) | amount (64 bits) |
@@ -362,7 +367,7 @@ fn parse_withdrawal_outputs(
         let token = split_vec[1].to_u32().unwrap();
         let amount = split_vec[2].to_u64().unwrap();
 
-        let withdrawal_address = output[(i * 2 + 1) as usize].clone();
+        let withdrawal_address = output[(i * 2 + 1) as usize].to_string();
 
         let withdrawal = WithdrawalOutput {
             chain_id,
@@ -381,13 +386,14 @@ fn parse_withdrawal_outputs(
 
 // * =====================================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NoteOutput {
     pub index: u64,
-    pub token: u64,
+    pub token: u32,
     pub hidden_amount: u64,
-    pub commitment: BigUint,
-    pub address: BigUint,
+    pub commitment: String,
+    pub address: String,
+    pub hash: String,
 }
 
 // & batched_note_info format: | token (32 bits) | hidden amount (64 bits) | idx (64 bits) |
@@ -400,20 +406,23 @@ fn parse_note_outputs(output: &[BigUint], num_notes: u32) -> (Vec<NoteOutput>, &
     for i in 0..num_notes {
         let batched_note_info = output[(i * 3) as usize].clone();
 
-        let split_vec = split_by_bytes(&batched_note_info, vec![64, 64, 64]);
-        let token = split_vec[0].to_u64().unwrap();
+        let split_vec = split_by_bytes(&batched_note_info, vec![32, 64, 64]);
+        let token = split_vec[0].to_u32().unwrap();
         let hidden_amount = split_vec[1].to_u64().unwrap();
         let index = split_vec[2].to_u64().unwrap();
 
-        let commitment = output[(i * 3 + 1) as usize].clone();
-        let address = output[(i * 3 + 2) as usize].clone();
+        let commitment = &output[(i * 3 + 1) as usize];
+        let address = &output[(i * 3 + 2) as usize];
+
+        let hash = hash_note(token, &commitment, &address).to_string();
 
         let note = NoteOutput {
             index,
             token,
             hidden_amount,
-            commitment,
-            address,
+            commitment: commitment.to_string(),
+            address: address.to_string(),
+            hash,
         };
 
         notes.push(note);
@@ -424,8 +433,17 @@ fn parse_note_outputs(output: &[BigUint], num_notes: u32) -> (Vec<NoteOutput>, &
     return (notes, shifted_output);
 }
 
+fn hash_note(token: u32, commitment: &BigUint, address_x: &BigUint) -> BigUint {
+    let token = BigUint::from_u32(token).unwrap();
+    let hash_input = vec![&address_x, &token, &commitment];
+
+    let note_hash = pedersen_on_vec(&hash_input);
+
+    return note_hash;
+}
+
 // * ==========================================================================================
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerpPositionOutput {
     pub synthetic_token: u32,
     pub position_size: u64,
@@ -435,7 +453,8 @@ pub struct PerpPositionOutput {
     pub last_funding_idx: u32,
     pub allow_partial_liquidations: bool,
     pub index: u64,
-    pub public_key: BigUint,
+    pub public_key: String,
+    pub hash: String,
 }
 
 // & format: | index (64 bits) | synthetic_token (32 bits) | position_size (64 bits) | order_side (8 bits) | allow_partial_liquidations (8 bits) |
@@ -470,7 +489,20 @@ fn parse_position_outputs(
         let liquidation_price = split_vec_slot2[1].to_u64().unwrap();
         let last_funding_idx = split_vec_slot2[2].to_u32().unwrap();
 
-        let public_key = output[(i * 3 + 2) as usize].clone();
+        let public_key = &output[(i * 3 + 2) as usize];
+
+        let hash = _hash_position(
+            synthetic_token,
+            public_key,
+            allow_partial_liquidations,
+            //
+            &order_side,
+            position_size,
+            entry_price,
+            liquidation_price,
+            last_funding_idx,
+        )
+        .to_string();
 
         let position = PerpPositionOutput {
             synthetic_token,
@@ -481,7 +513,8 @@ fn parse_position_outputs(
             last_funding_idx,
             allow_partial_liquidations,
             index,
-            public_key,
+            public_key: public_key.to_string(),
+            hash,
         };
 
         positions.push(position);
@@ -492,8 +525,51 @@ fn parse_position_outputs(
     return (positions, shifted_output);
 }
 
+fn _hash_position(
+    synthetic_token: u32,
+    position_address: &BigUint,
+    allow_partial_liquidations: bool,
+    //
+    order_side: &OrderSide,
+    position_size: u64,
+    entry_price: u64,
+    liquidation_price: u64,
+    current_funding_idx: u32,
+) -> BigUint {
+    // & header_hash = H({allow_partial_liquidations, synthetic_token, position_address })
+    let allow_partial_liquidations =
+        BigUint::from_u8(if allow_partial_liquidations { 1 } else { 0 }).unwrap();
+    let synthetic_token = BigUint::from_u32(synthetic_token).unwrap();
+    let hash_inputs = vec![
+        &allow_partial_liquidations,
+        &synthetic_token,
+        position_address,
+    ];
+    let header_hash = pedersen_on_vec(&hash_inputs);
+
+    // & hash = H({header_hash, order_side, position_size, entry_price, liquidation_price, current_funding_idx})
+
+    let order_side = BigUint::from_u8(if *order_side == OrderSide::Long { 1 } else { 0 }).unwrap();
+    let position_size = BigUint::from_u64(position_size).unwrap();
+    let entry_price = BigUint::from_u64(entry_price).unwrap();
+    let liquidation_price = BigUint::from_u64(liquidation_price).unwrap();
+    let current_funding_idx = BigUint::from_u32(current_funding_idx).unwrap();
+    let hash_inputs = vec![
+        &header_hash,
+        &order_side,
+        &position_size,
+        &entry_price,
+        &liquidation_price,
+        &current_funding_idx,
+    ];
+
+    let position_hash = pedersen_on_vec(&hash_inputs);
+
+    return position_hash;
+}
+
 // * ==========================================================================================
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderTabOutput {
     pub index: u64,
     pub base_token: u32,
@@ -502,9 +578,10 @@ pub struct OrderTabOutput {
     pub quote_hidden_amount: u64,
     pub is_smart_contract: bool,
     pub is_perp: bool,
-    pub base_commitment: BigUint,
-    pub quote_commitment: BigUint,
-    pub public_key: BigUint,
+    pub base_commitment: String,
+    pub quote_commitment: String,
+    pub public_key: String,
+    pub hash: String,
 }
 
 // & format: | index (56 bits) | base_token (32 bits) | quote_token (32 bits) | base hidden amount (64 bits)
@@ -525,9 +602,21 @@ fn parse_order_tab_outputs(output: &[BigUint], num_tabs: u32) -> (Vec<OrderTabOu
         let is_smart_contract = split_vec[5] != BigUint::zero();
         let is_perp = split_vec[6] != BigUint::zero();
 
-        let base_commitment = output[(i * 4 + 1) as usize].clone();
-        let quote_commitment = output[(i * 4 + 2) as usize].clone();
-        let public_key = output[(i * 4 + 3) as usize].clone();
+        let base_commitment = &output[(i * 4 + 1) as usize];
+        let quote_commitment = &output[(i * 4 + 2) as usize];
+        let public_key = &output[(i * 4 + 3) as usize];
+
+        let hash = hash_order_tab(
+            is_perp,
+            is_smart_contract,
+            base_token,
+            quote_token,
+            &public_key,
+            //
+            &base_commitment,
+            &quote_commitment,
+        )
+        .to_string();
 
         let order_tab = OrderTabOutput {
             index,
@@ -537,9 +626,10 @@ fn parse_order_tab_outputs(output: &[BigUint], num_tabs: u32) -> (Vec<OrderTabOu
             quote_hidden_amount,
             is_smart_contract,
             is_perp,
-            base_commitment,
-            quote_commitment,
-            public_key,
+            base_commitment: base_commitment.to_string(),
+            quote_commitment: quote_commitment.to_string(),
+            public_key: public_key.to_string(),
+            hash,
         };
 
         order_tabs.push(order_tab);
@@ -548,6 +638,47 @@ fn parse_order_tab_outputs(output: &[BigUint], num_tabs: u32) -> (Vec<OrderTabOu
     let shifted_output = &output[4 * num_tabs as usize..];
 
     return (order_tabs, shifted_output);
+}
+
+fn hash_order_tab(
+    is_perp: bool,
+    is_smart_contract: bool,
+    base_token: u32,
+    quote_token: u32,
+    pub_key: &BigUint,
+    //
+    base_commitment: &BigUint,
+    quote_commitment: &BigUint,
+) -> BigUint {
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
+
+    let is_perp = if is_perp {
+        BigUint::one()
+    } else {
+        BigUint::zero()
+    };
+    let is_smart_contract = if is_smart_contract {
+        BigUint::one()
+    } else {
+        BigUint::zero()
+    };
+    let base_token = BigUint::from_u32(base_token).unwrap();
+    let quote_token = BigUint::from_u32(quote_token).unwrap();
+
+    let hash_inputs: Vec<&BigUint> = vec![
+        &is_perp,
+        &is_smart_contract,
+        &base_token,
+        &quote_token,
+        pub_key,
+    ];
+    let header_hash = pedersen_on_vec(&hash_inputs);
+
+    // & H({header_hash, base_commitment, quote_commitment})
+    let hash_inputs: Vec<&BigUint> = vec![&header_hash, base_commitment, quote_commitment];
+    let tab_hash = pedersen_on_vec(&hash_inputs);
+
+    return tab_hash;
 }
 
 // * ==========================================================================================
@@ -621,4 +752,45 @@ fn split_vec_by_bytes(nums: &[BigUint], bit_lenghts: Vec<u8>) -> Vec<BigUint> {
     }
 
     return results;
+}
+
+// * =====================================================================================
+
+pub async fn store_program_output(
+    program_output: ProgramOutput,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // ? Store note data
+    for note in program_output.note_outputs {
+        let serialized_data = serde_json::to_vec(&note)?;
+
+        upload_file_to_storage(
+            "state/".to_string() + &note.index.to_string(),
+            serialized_data,
+        )
+        .await?
+    }
+
+    // ? Store position data
+    for position in program_output.position_outputs {
+        let serialized_data = serde_json::to_vec(&position)?;
+
+        upload_file_to_storage(
+            "state/".to_string() + &position.index.to_string(),
+            serialized_data,
+        )
+        .await?
+    }
+
+    // ? Store tab data
+    for order_tab in program_output.tab_outputs {
+        let serialized_data = serde_json::to_vec(&order_tab)?;
+
+        upload_file_to_storage(
+            "state/".to_string() + &order_tab.index.to_string(),
+            serialized_data,
+        )
+        .await?
+    }
+
+    Ok(())
 }

@@ -10,7 +10,7 @@ use crate::perpetual::IMPACT_NOTIONAL_PER_ASSET;
 use crate::server::grpc::{FundingUpdateMessage, GrpcMessage, GrpcTxResponse, MessageType};
 use crate::server::server_helpers::broadcast_message;
 use crate::trees::superficial_tree::SuperficialTree;
-use crate::utils::firestore::create_session;
+use crate::utils::firestore::{create_session, retry_failed_updates};
 use crate::utils::storage::BackupStorage;
 
 use firestore_db_and_auth::ServiceSession;
@@ -32,8 +32,8 @@ pub async fn start_periodic_updates(
     session: &Arc<Mutex<ServiceSession>>,
     ws_connections: &Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: &Arc<TokioMutex<Vec<u64>>>,
-    _backup_storage: &Arc<Mutex<BackupStorage>>,
-    _state_tree: &Arc<Mutex<SuperficialTree>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    state_tree: &Arc<Mutex<SuperficialTree>>,
 ) {
     let perp_order_books_ = perp_order_books.clone();
     let mpsc_tx = mpsc_tx.clone();
@@ -100,19 +100,19 @@ pub async fn start_periodic_updates(
         }
     });
 
-    //  *CHECK FOR FAILED DB UPDATES EVERY 5 MINUTES
-    // let mut interval = time::interval(time::Duration::from_secs(300));
-    // let session_ = session.clone();
-    // let backup_storage = backup_storage.clone();
-    // let state_tree = state_tree.clone();
-    // tokio::spawn(async move {
-    //     loop {
-    //         interval.tick().await;
-    //         if let Err(_e) = retry_failed_updates(&state_tree, &session_, &backup_storage) {
-    //             println!("Failed retrying failed database updates");
-    //         };
-    //     }
-    // });
+    //  *CHECK FOR FAILED DB UPDATES EVERY 2 MINUTES
+    let mut interval = time::interval(time::Duration::from_secs(120));
+    let session_ = session.clone();
+    let backup_storage = backup_storage.clone();
+    let state_tree = state_tree.clone();
+    tokio::spawn(async move {
+        loop {
+            interval.tick().await;
+            if let Err(_e) = retry_failed_updates(&state_tree, &session_, &backup_storage) {
+                println!("Failed retrying failed database updates");
+            };
+        }
+    });
 
     // * CLEAR EXPIRED ORDERS EVERY 3 SECONDS
     let order_books_ = order_books.clone();

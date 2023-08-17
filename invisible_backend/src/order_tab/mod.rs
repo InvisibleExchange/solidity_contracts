@@ -46,8 +46,8 @@ impl OrderTab {
 fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, base_blinding, quote_bliding, pub_key})
-    // & H({header_hash, base_amount, quote_amount, position_hash})
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
+    // & H({header_hash, base_commitment, quote_commitment})
 
     hash_inputs.push(&tab_header.hash);
 
@@ -63,9 +63,9 @@ fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigU
     );
     hash_inputs.push(&quote_commitment);
 
-    let order_hash = pedersen_on_vec(&hash_inputs);
+    let tab_hash = pedersen_on_vec(&hash_inputs);
 
-    return order_hash;
+    return tab_hash;
 }
 
 #[derive(Debug, Clone)]
@@ -96,8 +96,6 @@ impl TabHeader {
             is_smart_contract,
             base_token,
             quote_token,
-            &base_blinding,
-            &quote_blinding,
             &pub_key,
         );
 
@@ -119,13 +117,11 @@ fn hash_header(
     is_smart_contract: bool,
     base_token: u32,
     quote_token: u32,
-    base_blinding: &BigUint,
-    quote_blinding: &BigUint,
     pub_key: &BigUint,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, base_blinding, quote_bliding, pub_key})
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
 
     let is_perp = if is_perp {
         BigUint::one()
@@ -143,8 +139,6 @@ fn hash_header(
     hash_inputs.push(&base_token);
     let quote_token = BigUint::from_u32(quote_token).unwrap();
     hash_inputs.push(&quote_token);
-    hash_inputs.push(&base_blinding);
-    hash_inputs.push(&quote_blinding);
     hash_inputs.push(&pub_key);
 
     let order_hash = pedersen_on_vec(&hash_inputs);

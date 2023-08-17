@@ -100,8 +100,6 @@ func hash_tab_header{pedersen_ptr: HashBuiltin*, range_check_ptr}(tab_header: Ta
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.is_smart_contract);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.base_token);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.quote_token);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.base_blinding);
-        let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.quote_blinding);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, tab_header.pub_key);
 
         let (res) = hash_finalize(hash_state_ptr);
