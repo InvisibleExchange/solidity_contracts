@@ -133,6 +133,18 @@ async function processOrder(correlationId, message) {
     let res = await callChangeMarginRpcWithPromise(message);
 
     return res;
+  } else if (correlationId.startsWith("open_order_tab")) {
+    let res = await callOpenOrderTabRpcWithPromise(message);
+
+    return res;
+  } else if (correlationId.startsWith("close_order_tab")) {
+    let res = await callCloseOrderTabRpcWithPromise(message);
+
+    return res;
+  } else if (correlationId.startsWith("modify_order_tab")) {
+    let res = await callModifyOrderTabRpcWithPromise(message);
+
+    return res;
   } else if (correlationId.startsWith("get_orders")) {
     // gets all orders for a user in the backend engine
     let res = await callGetOrderRpcWithPromise(message);
@@ -284,6 +296,45 @@ function callChangeMarginRpcWithPromise(marginReq) {
     });
   });
 }
+//
+
+function callOpenOrderTabRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.open_order_tab(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callCloseOrderTabRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.close_order_tab(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callModifyOrderTabRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.modify_order_tab(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+//
 
 function callGetOrderRpcWithPromise(ordersReq) {
   return new Promise((resolve, reject) => {

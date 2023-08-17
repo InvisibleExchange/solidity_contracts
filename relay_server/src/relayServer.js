@@ -233,6 +233,44 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       );
     });
 
+    // ! ORDER TABS ======================================================================
+    // *  OPEN ORDER TAB -----------------------------------------------------------
+    app.post("/open_order_tab", (req, res) => {
+      delegateRequest(
+        req.body,
+        "open_order_tab",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // *  CLOSE ORDER TAB -----------------------------------------------------------
+    app.post("/close_order_tab", (req, res) => {
+      delegateRequest(
+        req.body,
+        "close_order_tab",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // *  MODIFY ORDER TAB -----------------------------------------------------------
+    app.post("/modify_order_tab", (req, res) => {
+      delegateRequest(
+        req.body,
+        "modify_order_tab",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // ! GETTERS ======================================================================
     // * GET LIQUIDITY ---------------------------------------------------------------------
     app.post("/get_liquidity", (req, res) => {
       delegateRequest(
