@@ -435,7 +435,7 @@ fn parse_note_outputs(output: &[BigUint], num_notes: u32) -> (Vec<NoteOutput>, &
 
 fn hash_note(token: u32, commitment: &BigUint, address_x: &BigUint) -> BigUint {
     let token = BigUint::from_u32(token).unwrap();
-    let hash_input = vec![&address_x, &token, &commitment];
+    let hash_input: Vec<&BigUint> = vec![&address_x, &token, &commitment];
 
     let note_hash = pedersen_on_vec(&hash_input);
 
