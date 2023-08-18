@@ -481,6 +481,8 @@ impl PerpSwap {
             )?;
 
             // ! State updates after order a
+            let session__ = session.clone();
+            let backup_storage__ = backup_storage.clone();
             let state_tree__ = state_tree.clone();
             let updated_state_hashes__ = updated_state_hashes.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
@@ -581,10 +583,23 @@ impl PerpSwap {
                     execution_output_a.is_fully_filled,
                 );
 
+                // ? Update the database
+                update_db_after_perp_swap(
+                    &session__,
+                    &backup_storage__,
+                    &self.order_a,
+                    &execution_output_a.prev_pfr_note,
+                    &execution_output_a.new_pfr_info.0,
+                    &execution_output_a.return_collateral_note,
+                    &execution_output_a.position,
+                );
+
                 Ok(execution_output_a)
             });
 
             // ! State updates after order b
+            let session__ = session.clone();
+            let backup_storage__ = backup_storage.clone();
             let state_tree__ = state_tree.clone();
             let updated_state_hashes__ = updated_state_hashes.clone();
             let perpetual_partial_fill_tracker__ = perpetual_partial_fill_tracker.clone();
@@ -683,6 +698,17 @@ impl PerpSwap {
                     &execution_output_b.position,
                     execution_output_b.synthetic_amount_filled,
                     execution_output_b.is_fully_filled,
+                );
+
+                // ? Update the database
+                update_db_after_perp_swap(
+                    &session__,
+                    &backup_storage__,
+                    &self.order_b,
+                    &execution_output_b.prev_pfr_note,
+                    &execution_output_b.new_pfr_info.0,
+                    &execution_output_b.return_collateral_note,
+                    &execution_output_b.position,
                 );
 
                 Ok(execution_output_b)
@@ -938,22 +964,6 @@ impl PerpSwap {
         let mut swap_output_json_m = swap_output_json.lock();
         swap_output_json_m.push(json_output);
         drop(swap_output_json_m);
-
-        // ? Update the database
-        update_db_after_perp_swap(
-            &session,
-            &backup_storage,
-            &self.order_a,
-            &self.order_b,
-            &execution_output_a.prev_pfr_note,
-            &execution_output_b.prev_pfr_note,
-            &execution_output_a.new_pfr_info.0,
-            &execution_output_b.new_pfr_info.0,
-            &execution_output_a.return_collateral_note,
-            &execution_output_b.return_collateral_note,
-            &execution_output_a.position,
-            &execution_output_b.position,
-        );
 
         return Ok(PerpSwapResponse {
             position_a: execution_output_a.position,

@@ -100,7 +100,6 @@ pub fn check_tab_order_validity(
 
 //
 
-// TODO: Subtract the spent amount from the tab balance and add the received amount to the tab balance
 pub fn execute_tab_order_modifications(
     prev_filled_amount: u64,
     order: &LimitOrder,

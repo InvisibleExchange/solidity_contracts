@@ -8,8 +8,8 @@ const packageDefinition = protoLoader.loadSync(
 );
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
 
-const SERVER_URL = "localhost:50052";
-// const SERVER_URL = "54.212.28.196:50052";
+// const SERVER_URL = "localhost:50052";
+const SERVER_URL = "54.212.28.196:50052";
 
 const client = new engine.Engine(SERVER_URL, grpc.credentials.createInsecure());
 
@@ -30,7 +30,12 @@ async function getStateInfo() {
     if (err) {
       console.log(err);
     } else {
-      console.log(response);
+      // console.log(response);
+
+      for (let i = 0; i < response.state_tree.length; i++) {
+        const element = response.state_tree[i];
+        console.log(i, "-", element);
+      }
     }
   });
 }
@@ -48,4 +53,6 @@ async function getFundingInfo() {
 
 // ===========================
 
-finalizeBatch();
+// finalizeBatch();
+
+getStateInfo();

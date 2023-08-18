@@ -258,31 +258,61 @@ pub fn consistency_checks(
 
     // ? Check that the notes spent are all different for both orders (different indexes)
     let mut valid = true;
+    let mut valid_a = true;
+    let mut valid_b = true;
     let mut spent_indexes: Vec<u64> = Vec::new();
 
     if let Some(note_info) = &order_a.spot_note_info {
         note_info.notes_in.iter().for_each(|note| {
             if spent_indexes.contains(&note.index) {
-                valid = false;
+                valid_a = false;
             }
             spent_indexes.push(note.index);
         });
     }
     if let Some(note_info) = &order_b.spot_note_info {
+        let mut spent_indexes_b = spent_indexes.clone();
         note_info.notes_in.iter().for_each(|note| {
+            if spent_indexes_b.contains(&note.index) {
+                valid_b = false;
+            }
+
             if spent_indexes.contains(&note.index) {
                 valid = false;
             }
             spent_indexes.push(note.index);
+            spent_indexes_b.push(note.index);
         });
     }
 
-    if !valid {
+    if !valid || !valid_a || !valid_b {
+        let invalid_order_id = if !valid_a {
+            Some(order_a.order_id)
+        } else if !valid_b {
+            Some(order_b.order_id)
+        } else {
+            None
+        };
+
         return Err(send_swap_error(
             "note indexes are not unique".to_string(),
-            None,
+            invalid_order_id,
             None,
         ));
+    }
+
+    // ? Check that the order tabs are different if they are not None
+    if order_a.order_tab.is_some() && order_b.order_tab.is_some() {
+        let order_hash_a = &order_a.order_tab.as_ref().unwrap().lock().hash;
+        let order_hash_b = &order_b.order_tab.as_ref().unwrap().lock().hash;
+
+        if order_hash_a == order_hash_b {
+            return Err(send_swap_error(
+                "order tabs are the same".to_string(),
+                None,
+                None,
+            ));
+        }
     }
 
     Ok(())

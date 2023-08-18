@@ -208,8 +208,6 @@ impl Swap {
                 })?;
 
             // * AFTER BOTH orders have been verified successfully update the state —————————————————————————————————————
-
-            // order_a_output.note_info_output
             reverify_existances(
                 &tree_m,
                 &self.order_a,
@@ -237,8 +235,16 @@ impl Swap {
                     &order_a_output_clone.note_info_output,
                     &order_a_output_clone.updated_order_tab,
                 );
-                // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
 
+                update_db_after_spot_swap(
+                    &session,
+                    &backup_storage,
+                    &self.order_a,
+                    &order_a_output_clone.note_info_output,
+                    &order_a_output_clone.updated_order_tab,
+                );
+
+                // ? update the  partial_fill_tracker map and allow other threads to continue filling the same order
                 finalize_updates(
                     &partial_fill_tracker,
                     &blocked_order_ids,
@@ -266,6 +272,14 @@ impl Swap {
                     thread_id,
                     &self.order_b,
                     &self.order_b.spot_note_info,
+                    &order_b_output_clone.note_info_output,
+                    &order_b_output_clone.updated_order_tab,
+                );
+
+                update_db_after_spot_swap(
+                    &session,
+                    &backup_storage,
+                    &self.order_b,
                     &order_b_output_clone.note_info_output,
                     &order_b_output_clone.updated_order_tab,
                 );
@@ -401,18 +415,6 @@ impl Swap {
         let mut swap_output_json = swap_output_json_m.lock();
         swap_output_json.push(json_output);
         drop(swap_output_json);
-
-        // *  Update the database =====================================
-        update_db_after_spot_swap(
-            &session,
-            &backup_storage,
-            &self.order_a,
-            &self.order_b,
-            &execution_output_a.note_info_output,
-            &execution_output_b.note_info_output,
-            &execution_output_a.updated_order_tab,
-            &execution_output_b.updated_order_tab,
-        );
 
         // * Update and release the order tab mutex
         if execution_output_a.updated_order_tab.is_some() {

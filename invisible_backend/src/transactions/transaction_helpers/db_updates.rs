@@ -25,34 +25,20 @@ use super::{swap_helpers::NoteInfoExecutionOutput, transaction_output::FillInfo}
 pub fn update_db_after_spot_swap(
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
-    order_a: &LimitOrder,
-    order_b: &LimitOrder,
-    note_info_output_a: &Option<NoteInfoExecutionOutput>,
-    note_info_output_b: &Option<NoteInfoExecutionOutput>,
-    updated_order_tab_a: &Option<OrderTab>,
-    updated_order_tab_b: &Option<OrderTab>,
+    order: &LimitOrder,
+    note_info_output: &Option<NoteInfoExecutionOutput>,
+    updated_order_tab: &Option<OrderTab>,
 ) {
     let mut delete_notes: Vec<(u64, String)> = Vec::new();
     let mut add_notes: Vec<&Note> = Vec::new();
 
-    if order_a.spot_note_info.is_some() {
+    if order.spot_note_info.is_some() {
         let (add_notes_, delete_notes_) =
-            _update_non_tab_order(add_notes, delete_notes, order_a, note_info_output_a);
+            _update_non_tab_order(add_notes, delete_notes, order, note_info_output);
         add_notes = add_notes_;
         delete_notes = delete_notes_;
     } else {
-        let order_tab = updated_order_tab_a.as_ref().unwrap().clone();
-
-        let _h = start_add_order_tab_thread(order_tab, session, backup_storage);
-    }
-
-    if order_b.spot_note_info.is_some() {
-        let (add_notes_, delete_notes_) =
-            _update_non_tab_order(add_notes, delete_notes, order_b, note_info_output_b);
-        add_notes = add_notes_;
-        delete_notes = delete_notes_;
-    } else {
-        let order_tab = updated_order_tab_b.as_ref().unwrap().clone();
+        let order_tab = updated_order_tab.as_ref().unwrap().clone();
 
         let _h = start_add_order_tab_thread(order_tab, session, backup_storage);
     }
