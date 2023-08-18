@@ -531,7 +531,6 @@ func _write_zero_indexes_to_output{pedersen_ptr: HashBuiltin*, empty_output_ptr:
     alloc_locals;
 
     // & Batch indexes by 3 to reduce calldata cost
-
     if (zero_idxs_len == 0) {
         return ();
     }
@@ -539,6 +538,8 @@ func _write_zero_indexes_to_output{pedersen_ptr: HashBuiltin*, empty_output_ptr:
     if (zero_idxs_len == 1) {
         let output: ZeroOutput* = empty_output_ptr;
         assert output.batched_idxs = zero_idxs[0];
+
+        let empty_output_ptr = empty_output_ptr + ZeroOutput.SIZE;
 
         return ();
     }
@@ -548,12 +549,18 @@ func _write_zero_indexes_to_output{pedersen_ptr: HashBuiltin*, empty_output_ptr:
         let output: ZeroOutput* = empty_output_ptr;
         assert output.batched_idxs = batched_zero_idxs;
 
+        let empty_output_ptr = empty_output_ptr + ZeroOutput.SIZE;
+
         return ();
     } else {
+        %{ print("zero_idxs: : ", memory[ids.zero_idxs], memory[ids.zero_idxs + 1], memory[ids.zero_idxs + 2]); %}
+
         let batched_zero_idxs = ((zero_idxs[0] * 2 ** 64) + zero_idxs[1]) * 2 ** 64 + zero_idxs[2];
 
         let output: ZeroOutput* = empty_output_ptr;
         assert output.batched_idxs = batched_zero_idxs;
+
+        let empty_output_ptr = empty_output_ptr + ZeroOutput.SIZE;
 
         return _write_zero_indexes_to_output(zero_idxs_len - 3, &zero_idxs[3]);
     }

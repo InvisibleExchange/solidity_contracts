@@ -690,7 +690,6 @@ fn parse_zero_indexes(output: &[BigUint], num_zero_idxs: u32) -> Vec<u64> {
 
     let zero_idxs = split_vec_by_bytes(&slice, vec![64, 64, 64])
         .into_iter()
-        .rev()
         .map(|x| x.to_u64().unwrap())
         .collect::<Vec<u64>>();
 
@@ -745,8 +744,20 @@ fn split_by_bytes(num: &BigUint, bit_lenghts: Vec<u8>) -> Vec<BigUint> {
 
 fn split_vec_by_bytes(nums: &[BigUint], bit_lenghts: Vec<u8>) -> Vec<BigUint> {
     let mut results = vec![];
-    for num in nums {
+    for i in 0..nums.len() {
+        let num = &nums[i];
+
         let peaces = split_by_bytes(num, bit_lenghts.clone());
+
+        if i == nums.len() - 1 {
+            for peace in peaces {
+                if peace != BigUint::zero() {
+                    results.push(peace);
+                }
+            }
+
+            break;
+        }
 
         results.extend(peaces);
     }

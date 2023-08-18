@@ -1,7 +1,6 @@
 use invisible_backend::server::grpc::MarginChangeResponse;
 use invisible_backend::server::server_helpers::periodic_updates::start_periodic_updates;
 use invisible_backend::transaction_batch::{TransactionBatch, TREE_DEPTH};
-use invisible_backend::trees::build_tree;
 use parking_lot::Mutex;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, thread::ThreadId};
 use tokio::net::TcpListener;
@@ -293,9 +292,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_tree,
     )
     .await;
-
-    // semaphore: Semaphore,
-    // is_paused: Arc<TokioMutex<bool>>,
 
     let transaction_service = EngineService {
         mpsc_tx,

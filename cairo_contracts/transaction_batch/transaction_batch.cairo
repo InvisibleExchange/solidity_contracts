@@ -214,30 +214,9 @@ func main{
         accumulated_hashes=accumulated_hashes, global_config=global_config
     }(deposit_output_len, deposit_output_ptr_start, withdraw_output_len, withdraw_output_ptr_start);
 
-    // ? Update the output ptr to point to the end of the program output
-    let (batched_zero_idxs, rem) = unsigned_div_rem(global_config.dex_state.n_zero_indexes, 3);
-    let round_up = is_not_zero(rem);
-    local output_ptr: felt = cast(empty_output_ptr + batched_zero_idxs + round_up, felt);
+    local output_ptr: felt = cast(empty_output_ptr, felt);
 
     %{ print("all good") %}
-
-    // tab_outputs: [
-    //     OrderTabOutput {
-    //         index: 0,
-    //         base_token: 3087,
-    //         quote_token: 13889,
-    //         base_hidden_amount: 2847868825257747770,
-    //         quote_hidden_amount: 4611686018427387904,
-    //         is_smart_contract: false,
-    //         is_perp: false,
-    //         base_commitment: 948888522792902503954517531791946303208432119048954446284171173915037404277,
-    //         quote_commitment: 683339387779852063148511713376838541206819197955846204978302997241640762799,
-    //         public_key: 3100406297065726896889087208435348940016041270776276305563224389082731382788,
-    //     },
-    // ],
-
-
-    
 
     return ();
 }

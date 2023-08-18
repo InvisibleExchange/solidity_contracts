@@ -609,7 +609,7 @@ pub fn start_add_perp_fill_thread(
 // * FIREBASE STORAGE ===============================================================
 
 use reqwest::Client;
-use serde_json::{from_slice, json, to_vec, Map, Value};
+use serde_json::{from_slice, json, Map, Value};
 
 // Define a struct to deserialize the response from the Firebase Storage API
 #[derive(Deserialize)]

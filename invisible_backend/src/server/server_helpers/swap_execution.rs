@@ -167,8 +167,6 @@ pub async fn execute_swap(
     match swap_response {
         Ok(res1) => match res1 {
             Ok(response) => {
-                println!("swap executed successfully in the backend engine\n");
-
                 let mut book = order_book.lock().await;
 
                 if maker_side == OBOrderSide::Bid {

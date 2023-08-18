@@ -128,7 +128,6 @@ pub async fn execute_perp_swap(
     match perp_swap_response {
         Ok(res1) => match res1 {
             Ok(response) => {
-                println!("Perpetual swap executed successfully in the backend engine\n");
 
                 if maker_side == OrderSide::Long {
                     book.bid_queue

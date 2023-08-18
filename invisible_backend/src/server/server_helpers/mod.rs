@@ -552,9 +552,7 @@ pub async fn handle_connection(
     ws_connections: Arc<TokioMutex<WsConnectionsMap>>,
     privileged_ws_connections: Arc<TokioMutex<Vec<u64>>>,
 ) -> WsResult<()> {
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
-        .await
-        .expect("Error during the websocket handshake occurred");
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream).await?;
 
     let (ws_sender, mut ws_receiver) = ws_stream.split();
 

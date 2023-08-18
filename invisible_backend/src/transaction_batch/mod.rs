@@ -2,7 +2,7 @@ use firestore_db_and_auth::ServiceSession;
 use num_bigint::BigUint;
 use num_traits::Zero;
 use parking_lot::Mutex;
-use serde_json::{json, Map, Value};
+use serde_json::{json, to_vec, Map, Value};
 use std::{
     collections::HashMap,
     fs,
@@ -34,7 +34,7 @@ use crate::{
         transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
         Transaction,
     },
-    utils::firestore::{start_add_note_thread, start_add_position_thread},
+    utils::firestore::{start_add_note_thread, start_add_position_thread, upload_file_to_storage},
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
 use crate::{
@@ -452,7 +452,10 @@ impl TransactionBatch {
         // let thread_id = rollback_info_message.0;
         // let rollback_message = rollback_info_message.1;
 
-        // println!("Rolling back transaction: {:?}", rollback_message.tx_type);
+        println!(
+            "Rolling back transaction: {:?}",
+            _rollback_info_message.1.tx_type
+        );
 
         // if rollback_message.tx_type == "deposit" {
         //     // ? rollback the deposit execution state updates
@@ -890,7 +893,7 @@ impl TransactionBatch {
         let latest_output_json = self.swap_output_json.clone();
         let latest_output_json = latest_output_json.lock();
 
-        let _current_batch_index = main_storage.latest_batch;
+        let current_batch_index = main_storage.latest_batch;
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
@@ -971,17 +974,18 @@ impl TransactionBatch {
         std::fs::write(path, serde_json::to_string(&output_json).unwrap()).unwrap();
         // Todo: This is for testing only ----------------------------
 
-        // // & Write transaction batch json to database
-        // let _handle = tokio::spawn(async move {
-        //     if let Err(e) = upload_file_to_storage(
-        //         "tx_batches/".to_string() + &current_batch_index.to_string(),
-        //         output_json,
-        //     )
-        //     .await
-        //     {
-        //         println!("Error uploading file to storage: {:?}", e);
-        //     }
-        // });
+        // & Write transaction batch json to database
+        let serialized_data = to_vec(&output_json).expect("Serialization failed");
+        let _handle = tokio::spawn(async move {
+            if let Err(e) = upload_file_to_storage(
+                "tx_batches/".to_string() + &current_batch_index.to_string(),
+                serialized_data,
+            )
+            .await
+            {
+                println!("Error uploading file to storage: {:?}", e);
+            }
+        });
 
         println!("Transaction batch finalized successfully!");
 
