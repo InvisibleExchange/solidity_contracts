@@ -86,12 +86,13 @@ impl LimitOrder {
     pub fn verify_order_signature(
         &self,
         signature: &Signature,
+        order_tab: &Option<OrderTab>,
     ) -> Result<(), SwapThreadExecutionError> {
         let order_hash = &self.hash;
         let pub_key: BigUint;
 
-        if self.order_tab.is_some() {
-            let order_tab = self.order_tab.as_ref().unwrap().lock();
+        if order_tab.is_some() {
+            let order_tab = order_tab.as_ref().unwrap();
             pub_key = order_tab.tab_header.pub_key.clone();
         } else if self.spot_note_info.is_some() {
             let mut pub_key_sum: AffinePoint = AffinePoint::identity();
@@ -291,11 +292,6 @@ impl Serialize for LimitOrder {
         note.serialize_field("fee_limit", &self.fee_limit)?;
         //
         note.serialize_field("spot_note_info", &self.spot_note_info)?;
-        if self.order_tab.is_some() {
-            note.serialize_field("order_tab", &*self.order_tab.as_ref().unwrap().lock())?;
-        } else {
-            note.serialize_field("order_tab", &None::<OrderTab>)?;
-        }
         //
         let hash: &BigUint = &self.hash;
         note.serialize_field("hash", &hash.to_string())?;

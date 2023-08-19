@@ -127,6 +127,8 @@ pub fn unblock_order(
 pub fn consistency_checks(
     order_a: &LimitOrder,
     order_b: &LimitOrder,
+    order_tab_a: &Option<OrderTab>,
+    order_tab_b: &Option<OrderTab>,
     spent_amount_a: u64,
     spent_amount_b: u64,
     fee_taken_a: u64,
@@ -302,9 +304,9 @@ pub fn consistency_checks(
     }
 
     // ? Check that the order tabs are different if they are not None
-    if order_a.order_tab.is_some() && order_b.order_tab.is_some() {
-        let order_hash_a = &order_a.order_tab.as_ref().unwrap().lock().hash;
-        let order_hash_b = &order_b.order_tab.as_ref().unwrap().lock().hash;
+    if order_tab_a.is_some() && order_tab_b.is_some() {
+        let order_hash_a = &order_tab_a.as_ref().unwrap().hash;
+        let order_hash_b = &order_tab_b.as_ref().unwrap().hash;
 
         if order_hash_a == order_hash_b {
             return Err(send_swap_error(

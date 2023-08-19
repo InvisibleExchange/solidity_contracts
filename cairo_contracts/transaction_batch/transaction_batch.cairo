@@ -153,14 +153,30 @@ func main{
         funding_info=funding_info,
         global_config=global_config,
     }();
-    %{
-        t2_end = time.time()
-        print("batch execution time total: ", t2_end-t1_start)
+    // %{
+    //     t2_end = time.time()
+    //     print("batch execution time total: ", t2_end-t1_start)
 
-        print("countsMap: ", countsMap)
-    %}
+    // print("countsMap: ", countsMap)
+    // %}
 
     // * Squash dictionaries =============================================================================
+
+    // let dict_len = (state_dict - state_dict_start) / DictAccess.SIZE;
+    // %{
+    //     prev_values = {}
+    //     for i in range(ids.dict_len):
+
+    // idx = memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +0]
+    //         prev_val = memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +1]
+    //         new_val = memory[ids.state_dict_start.address_ + i*ids.DictAccess.SIZE +2]
+
+    // if idx in prev_values:
+    //             if prev_values[idx] != prev_val:
+    //                 print("idx: ", idx, "prev_values[idx]: ", prev_values[idx], "prev_val: ", prev_val)
+
+    // prev_values[idx] = new_val
+    // %}
 
     local squashed_state_dict: DictAccess*;
     %{ ids.squashed_state_dict = segments.add() %}
@@ -171,14 +187,6 @@ func main{
     );
     local squashed_state_dict_len = (squashed_state_dict_end - squashed_state_dict) /
         DictAccess.SIZE;
-
-    // let dict_len = (state_dict - state_dict_start) / DictAccess.SIZE;
-    // %{
-    //     for i in range(ids.squashed_state_dict_len):
-    //         print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +0])
-    //         print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +1])
-    //         print(memory[ids.squashed_state_dict.address_ + i*ids.DictAccess.SIZE +2])
-    // %}
 
     // * VERIFY MERKLE TREE UPDATES ******************************************************
 
@@ -203,8 +211,6 @@ func main{
         empty_output_ptr=empty_output_ptr,
     }(squashed_state_dict, squashed_state_dict_len, note_updates_start);
 
-    // %{ print("positions: ", output_positions) %}
-
     // * WRITE DEPOSIT AND WITHDRAWAL ACCUMULATED OUTPUTS TO THE PROGRAM OUTPUT ***********
     let deposit_output_len = (deposit_output_ptr - deposit_output_ptr_start) /
         DepositTransactionOutput.SIZE;
@@ -216,7 +222,7 @@ func main{
 
     local output_ptr: felt = cast(empty_output_ptr, felt);
 
-    %{ print("all good") %}
+    // %{ print("all good") %}
 
     return ();
 }
@@ -335,7 +341,6 @@ func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     squashed_state_dict_len: felt,
     state_tree_depth: felt,
 ) {
-    // %{ t1_merkle = time.time() %}
     %{
         preimage = program_input["preimage"]
         preimage = {int(k):[int(x) for x in v] for k,v in preimage.items()}
@@ -343,10 +348,6 @@ func verify_merkle_tree_updates{pedersen_ptr: HashBuiltin*, range_check_ptr}(
     merkle_multi_update{hash_ptr=pedersen_ptr}(
         squashed_state_dict, squashed_state_dict_len, state_tree_depth, prev_root, new_root
     );
-    // %{
-    //     t2_merkle = time.time()
-    //     print("merkle update time: ", t2_merkle - t1_merkle)
-    // %}
 
     return ();
 }

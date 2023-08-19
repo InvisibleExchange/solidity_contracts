@@ -38,6 +38,7 @@ func close_order_tab{
     let (__fp__, _) = get_fp_and_pc();
 
     // ? Handle inputs
+    %{ order_tab_input = current_order["order_tab"] %}
     local order_tab: OrderTab;
     handle_order_tab_input(&order_tab);
 
@@ -136,7 +137,7 @@ func handle_order_tab_input{pedersen_ptr: HashBuiltin*}(order_tab: OrderTab*) {
         order_tab_addr = ids.order_tab.address_
         tab_header_addr = order_tab_addr + ORDER_TAB_TAB_HEADER_OFFSET
 
-        order_tab_input = current_order["order_tab"]
+
         memory[order_tab_addr + ORDER_TAB_TAB_IDX_OFFSET] = int(order_tab_input["tab_idx"])
         memory[order_tab_addr + ORDER_TAB_BASE_AMOUNT_OFFSET] = int(order_tab_input["base_amount"])
         memory[order_tab_addr + ORDER_TAB_QUOTE_AMOUNT_OFFSET] = int(order_tab_input["quote_amount"])

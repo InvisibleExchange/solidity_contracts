@@ -3,6 +3,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::ThreadId;
+use std::time::Instant;
 
 use num_bigint::BigUint;
 use serde_json::Value;
@@ -97,9 +98,38 @@ impl Swap {
             ));
         }
 
+        // TODO: ================================================================================================
+        let mut order_tab_mutex_a = None;
+        let mut order_tab_a = None;
+        if let Some(tab_mutex) = self.order_a.order_tab.as_ref() {
+            let tab_lock = tab_mutex.lock();
+
+            order_tab_a = Some(tab_lock.clone());
+            order_tab_mutex_a = Some(tab_lock);
+        }
+        let prev_order_tab_a = order_tab_a.clone();
+        let prev_order_tab_a2 = order_tab_a.clone();
+
+        let mut order_tab_mutex_b = None;
+        let mut order_tab_b = None;
+        if let Some(tab_mutex) = self.order_b.order_tab.as_ref() {
+            let tab_lock = tab_mutex.lock();
+
+            order_tab_b = Some(tab_lock.clone());
+            order_tab_mutex_b = Some(tab_lock);
+        }
+        let prev_order_tab_b = order_tab_b.clone();
+        let prev_order_tab_b2 = order_tab_b.clone();
+
+        // TODO: ?================================================================================================
+
+        let now = Instant::now();
+
         consistency_checks(
             &self.order_a,
             &self.order_b,
+            &order_tab_a,
+            &order_tab_b,
             self.spent_amount_a,
             self.spent_amount_b,
             self.fee_taken_a,
@@ -128,6 +158,7 @@ impl Swap {
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_a,
+                        order_tab_a,
                         &self.signature_a,
                         self.spent_amount_a,
                         self.spent_amount_b,
@@ -159,6 +190,7 @@ impl Swap {
                         &partial_fill_tracker,
                         &blocked_order_ids,
                         &self.order_b,
+                        order_tab_b,
                         &self.signature_b,
                         self.spent_amount_b,
                         self.spent_amount_a,
@@ -211,8 +243,10 @@ impl Swap {
             reverify_existances(
                 &tree_m,
                 &self.order_a,
+                &prev_order_tab_a,
                 &order_a_output.note_info_output,
                 &self.order_b,
+                &prev_order_tab_b,
                 &order_b_output.note_info_output,
             )?;
 
@@ -249,7 +283,7 @@ impl Swap {
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     self.order_a.order_id,
-                    self.order_a.order_tab.is_some(),
+                    prev_order_tab_a.is_some(),
                     &order_a_output_clone,
                 );
 
@@ -289,7 +323,7 @@ impl Swap {
                     &partial_fill_tracker,
                     &blocked_order_ids,
                     self.order_b.order_id,
-                    self.order_b.order_tab.is_some(),
+                    prev_order_tab_b.is_some(),
                     &order_b_output_clone,
                 );
 
@@ -360,15 +394,30 @@ impl Swap {
                 Err(err)
             })?;
 
-        // * JSON Output ========================================================================================
+        // * Update the mutex order tabs and release the locks
+        if let Some(mut order_tab_mutex) = order_tab_mutex_a {
+            *order_tab_mutex = execution_output_a
+                .updated_order_tab
+                .as_ref()
+                .unwrap()
+                .clone();
+        }
+        if let Some(mut order_tab_mutex) = order_tab_mutex_b {
+            *order_tab_mutex = execution_output_b
+                .updated_order_tab
+                .as_ref()
+                .unwrap()
+                .clone();
+        }
 
+        // * JSON Output ========================================================================================
         let swap_output = TransactionOutptut::new(&self);
 
         let mut spot_note_info_res_a = None;
         let mut spot_note_info_res_b = None;
         let mut updated_tab_hash_a = None;
         let mut updated_tab_hash_b = None;
-        if self.order_a.order_tab.is_some() {
+        if execution_output_a.updated_order_tab.is_some() {
             let updated_tab = execution_output_a.updated_order_tab.as_ref().unwrap();
             updated_tab_hash_a = Some(updated_tab.hash.clone());
         } else {
@@ -386,7 +435,7 @@ impl Swap {
                 new_pfr_idx_a,
             ));
         }
-        if self.order_b.order_tab.is_some() {
+        if execution_output_b.updated_order_tab.is_some() {
             let updated_tab = execution_output_b.updated_order_tab.as_ref().unwrap();
             updated_tab_hash_b = Some(updated_tab.hash.clone());
         } else {
@@ -408,6 +457,8 @@ impl Swap {
         let json_output = swap_output.wrap_output(
             &spot_note_info_res_a,
             &spot_note_info_res_b,
+            &prev_order_tab_a2,
+            &prev_order_tab_b2,
             &updated_tab_hash_a,
             &updated_tab_hash_b,
         );
@@ -416,17 +467,9 @@ impl Swap {
         swap_output_json.push(json_output);
         drop(swap_output_json);
 
-        // * Update and release the order tab mutex
-        if execution_output_a.updated_order_tab.is_some() {
-            let mut tab_a_lock = self.order_a.order_tab.as_ref().unwrap().lock();
-            *tab_a_lock = execution_output_a.updated_order_tab.unwrap();
-            drop(tab_a_lock);
-        }
-        if execution_output_b.updated_order_tab.is_some() {
-            let mut tab_b_lock = self.order_b.order_tab.as_ref().unwrap().lock();
-            *tab_b_lock = execution_output_b.updated_order_tab.unwrap();
-            drop(tab_b_lock);
-        }
+        // * Return the swap result -----------------------------------
+
+        println!("now: {:?}", now.elapsed());
 
         return Ok(SwapResponse::new(
             &execution_output_a.note_info_output,

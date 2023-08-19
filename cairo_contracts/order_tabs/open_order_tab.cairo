@@ -48,6 +48,7 @@ func open_order_tab{
     let (__fp__, _) = get_fp_and_pc();
 
     // ? Handle inputs
+    %{ order_tab_input = current_order["order_tab"] %}
     local order_tab: OrderTab;
     handle_order_tab_input(&order_tab);
 

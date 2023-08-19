@@ -40,6 +40,7 @@ pub fn execute_order(
     partial_fill_tracker_m: &Arc<Mutex<HashMap<u64, (Option<Note>, u64)>>>,
     blocked_order_ids_m: &Arc<Mutex<HashMap<u64, bool>>>,
     order: &LimitOrder,
+    order_tab: Option<OrderTab>,
     signature: &Signature,
     spent_amount_x: u64,
     spent_amount_y: u64,
@@ -53,7 +54,14 @@ pub fn execute_order(
     )?;
 
     // ? This proves the transaction is valid and the state can be updated
-    check_order_validity(tree_m, &partial_fill_info, order, spent_amount_x, signature)?;
+    check_order_validity(
+        tree_m,
+        &partial_fill_info,
+        order,
+        &order_tab,
+        spent_amount_x,
+        signature,
+    )?;
 
     // ? This generates all the notes for the update
     let (is_partialy_filled, note_info_output, updated_order_tab, new_amount_filled) =
@@ -61,6 +69,7 @@ pub fn execute_order(
             tree_m,
             &partial_fill_info,
             order,
+            order_tab,
             spent_amount_x,
             spent_amount_y,
             fee_taken_x,
@@ -78,6 +87,7 @@ fn execute_order_modifications(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
     order: &LimitOrder,
+    order_tab: Option<OrderTab>,
     spent_amount_x: u64,
     spent_amount_y: u64,
     fee_taken_x: u64,
@@ -111,9 +121,7 @@ fn execute_order_modifications(
             new_amount_filled,
         );
     } else {
-        let tab_lock = order.order_tab.as_ref().unwrap().lock();
-        let order_tab = tab_lock.clone();
-        drop(tab_lock);
+        let order_tab = order_tab.unwrap();
 
         let prev_filled_amount = if partial_fill_info.is_some() {
             partial_fill_info.as_ref().unwrap().1
@@ -144,24 +152,19 @@ fn check_order_validity(
     tree_m: &Arc<Mutex<SuperficialTree>>,
     partial_fill_info: &Option<(Option<Note>, u64)>,
     order: &LimitOrder,
+    order_tab: &Option<OrderTab>,
     spent_amount: u64,
     signature: &Signature,
 ) -> Result<(), SwapThreadExecutionError> {
     //
 
     // ? Verify that the order were signed correctly
-    order.verify_order_signature(signature)?;
+    order.verify_order_signature(signature, order_tab)?;
 
     if order.spot_note_info.is_some() {
         check_non_tab_order_validity(tree_m, partial_fill_info, order, spent_amount)?;
     } else {
-        // let prev_filled_amount = if partial_fill_info.is_some() {
-        //     partial_fill_info.as_ref().unwrap().1
-        // } else {
-        //     0
-        // };
-
-        check_tab_order_validity(tree_m, order, spent_amount)?;
+        check_tab_order_validity(tree_m, order, order_tab, spent_amount)?;
     }
 
     return Ok(());
@@ -212,8 +215,10 @@ pub fn update_state_after_order(
 pub fn reverify_existances(
     state_tree: &Arc<Mutex<SuperficialTree>>,
     order_a: &LimitOrder,
+    prev_order_tab_a: &Option<OrderTab>,
     note_info_output_a: &Option<NoteInfoExecutionOutput>,
     order_b: &LimitOrder,
+    prev_order_tab_b: &Option<OrderTab>,
     note_info_output_b: &Option<NoteInfoExecutionOutput>,
 ) -> Result<(), SwapThreadExecutionError> {
     let state_tree = state_tree.lock();
@@ -262,7 +267,7 @@ pub fn reverify_existances(
             }
         }
     } else {
-        let order_tab = order_a.order_tab.as_ref().unwrap().lock();
+        let order_tab = prev_order_tab_a.as_ref().unwrap();
 
         // ? Check that the order tab hash exists in the state --------------------------------------------
         if order_tab.hash != state_tree.get_leaf_by_index(order_tab.tab_idx as u64) {
@@ -320,7 +325,7 @@ pub fn reverify_existances(
             }
         }
     } else {
-        let order_tab = order_b.order_tab.as_ref().unwrap().lock();
+        let order_tab = prev_order_tab_b.as_ref().unwrap();
 
         // ? Check that the order tab hash exists in the state --------------------------------------------
         if order_tab.hash != state_tree.get_leaf_by_index(order_tab.tab_idx as u64) {

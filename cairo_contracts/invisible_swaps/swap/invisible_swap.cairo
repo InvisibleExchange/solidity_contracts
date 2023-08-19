@@ -65,11 +65,12 @@ func execute_swap{
     // * ORDER A =============================================================
 
     %{
-        is_tab_order = order_A_input["order_tab"] != None
+        order_tab_input = current_swap["prev_order_tab_a"]
+        is_tab_order = order_tab_input != None
         order_indexes = index_data["order_a"]
         current_order = swap_data["order_a"]
         signature = swap_data["signature_a"]
-        prev_pfr_note = None 
+        prev_pfr_note = None
         if not is_tab_order:
             prev_pfr_note = current_swap["prev_pfr_note_a"]
     %}
@@ -79,7 +80,8 @@ func execute_swap{
     // * ORDER B =============================================================
 
     %{
-        is_tab_order = order_B_input["order_tab"] != None
+        order_tab_input = current_swap["prev_order_tab_b"]
+        is_tab_order = order_tab_input != None
         order_indexes = index_data["order_b"]
         current_order = swap_data["order_b"]
         signature = swap_data["signature_b"]
@@ -122,7 +124,6 @@ func execute_transaction{
         return ();
     } else {
         // ? tab order
-
         local order_tab: OrderTab;
         handle_order_tab_input(&order_tab);
 

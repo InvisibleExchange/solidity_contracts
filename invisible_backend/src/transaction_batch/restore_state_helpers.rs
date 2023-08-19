@@ -28,13 +28,13 @@ pub fn restore_spot_order_execution(
         .unwrap();
 
     if is_tab_order {
-        let order_json = transaction
-            .get("swap_data")
-            .unwrap()
-            .get(if is_a { "order_a" } else { "order_b" })
+        let order_tab = transaction
+            .get(if is_a {
+                "prev_order_tab_a"
+            } else {
+                "prev_order_tab_b"
+            })
             .unwrap();
-
-        let order_tab = order_json.get("order_tab").unwrap();
         let tab_idx = order_tab.get("tab_idx").unwrap().as_u64().unwrap();
 
         let mut state_tree_m = tree_m.lock();

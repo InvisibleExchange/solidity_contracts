@@ -17,10 +17,11 @@ use crate::{
 pub fn check_tab_order_validity(
     state_tree: &Arc<Mutex<SuperficialTree>>,
     order: &LimitOrder,
+    order_tab: &Option<OrderTab>,
     spent_amount: u64,
 ) -> Result<(), SwapThreadExecutionError> {
     // ? Check that the order tab is valid --------------------------------------------
-    if order.order_tab.is_none() {
+    if order_tab.is_none() {
         return Err(send_swap_error(
             "order_tab is not defined".to_string(),
             Some(order.order_id),
@@ -28,8 +29,7 @@ pub fn check_tab_order_validity(
         ));
     }
 
-    let order_tab = order.order_tab.as_ref().unwrap();
-    let order_tab = order_tab.lock();
+    let order_tab = order_tab.as_ref().unwrap();
 
     // ? Check that the tokens are valid --------------------------------------------
     if (order_tab.tab_header.base_token != order.token_spent
@@ -74,16 +74,20 @@ pub fn check_tab_order_validity(
         ));
     }
 
+    // 378_357
+
     // ? Check that the order tab hash exists in the state --------------------------------------------
     let state_tree_ = state_tree.lock();
     let leaf_hash = state_tree_.get_leaf_by_index(order_tab.tab_idx as u64);
 
     if leaf_hash != order_tab.hash {
-        println!("leaves: {:?}", state_tree_.leaf_nodes);
         println!(
             "order_tab.hash: {:?} - {:?}",
             order_tab.hash, order_tab.tab_idx
         );
+
+        // Quit the application
+        std::process::exit(1234);
 
         return Err(send_swap_error(
             "order_tab hash does not exist in the state".to_string(),
@@ -91,8 +95,6 @@ pub fn check_tab_order_validity(
             None,
         ));
     }
-
-    drop(order_tab);
 
     Ok(())
 }
@@ -140,6 +142,9 @@ pub fn update_state_after_tab_order(
 ) {
     let mut state_tree_ = state_tree.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
+
+    println!("\ntab_idx: {:?}", updated_order_tab.tab_idx);
+    println!("updated_order_tab.hash: {:?}\n", updated_order_tab.hash);
 
     state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
     updated_state_hashes.insert(

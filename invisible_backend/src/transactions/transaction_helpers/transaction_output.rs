@@ -2,7 +2,7 @@ use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::utils::notes::Note;
+use crate::{order_tab::OrderTab, utils::notes::Note};
 
 use super::super::swap::Swap;
 
@@ -22,6 +22,8 @@ impl TransactionOutptut<'_> {
         // & spot_note_info_res - (prev_pfr_note, swap_note_idx, new_pfr_idx)
         spot_note_info_res_a: &Option<(Option<Note>, u64, u64)>,
         spot_note_info_res_b: &Option<(Option<Note>, u64, u64)>,
+        prev_order_tab_a: &Option<OrderTab>,
+        prev_order_tab_b: &Option<OrderTab>,
         updated_tab_hash_a: &Option<BigUint>,
         updated_tab_hash_b: &Option<BigUint>,
     ) -> serde_json::map::Map<String, Value> {
@@ -29,7 +31,6 @@ impl TransactionOutptut<'_> {
 
         let swap_json1 = serde_json::to_value(&self.swap).unwrap();
 
-        // TODO:
         let is_tab_order_a = spot_note_info_res_a.is_none();
         let is_tab_order_b = spot_note_info_res_b.is_none();
 
@@ -70,6 +71,14 @@ impl TransactionOutptut<'_> {
         json_map.insert(
             String::from("is_tab_order_b"),
             serde_json::to_value(&is_tab_order_b).unwrap(),
+        );
+        json_map.insert(
+            String::from("prev_order_tab_a"),
+            serde_json::to_value(&prev_order_tab_a).unwrap(),
+        );
+        json_map.insert(
+            String::from("prev_order_tab_b"),
+            serde_json::to_value(&prev_order_tab_b).unwrap(),
         );
         json_map.insert(
             String::from("updated_tab_hash_a"),

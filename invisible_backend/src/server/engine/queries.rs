@@ -161,12 +161,14 @@ pub async fn get_orders_inner(
                     refund_note = None;
                 };
 
+                println!("6");
                 let order_tab = if limit_order.order_tab.is_some() {
                     let lock = limit_order.order_tab.as_ref().unwrap().lock();
                     Some(GrpcOrderTab::from(lock.clone()))
                 } else {
                     None
                 };
+                println!("7");
 
                 let active_order = ActiveOrder {
                     order_id: limit_order.order_id,

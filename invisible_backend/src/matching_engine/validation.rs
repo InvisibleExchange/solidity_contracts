@@ -90,7 +90,7 @@ impl OrderRequestValidator {
         match order {
             Order::Spot(limit_order) => {
                 // ? Chack that the tokens are valid
-                
+
                 if !ASSETS.contains(&limit_order.token_spent)
                     || !ASSETS.contains(&limit_order.token_received)
                 {
@@ -107,9 +107,15 @@ impl OrderRequestValidator {
                 }
 
                 // ? Check that the signature is valid
-                if let Err(_e) = limit_order.verify_order_signature(&signature) {
+                let order_tab_lock = if limit_order.order_tab.is_some() {
+                    Some(limit_order.order_tab.as_ref().unwrap().lock().clone())
+                } else {
+                    None
+                };
+                if let Err(_e) = limit_order.verify_order_signature(&signature, &order_tab_lock) {
                     return Err("Invalid signature");
                 }
+                drop(order_tab_lock);
 
                 if limit_order.spot_note_info.is_some() {
                     let note_info = limit_order.spot_note_info.as_ref().unwrap();
