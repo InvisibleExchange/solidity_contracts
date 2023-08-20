@@ -10,7 +10,7 @@ const { priceUpdate } = require("../helpers/mmPriceFeeds");
 const CONFIG_CODE = "1234567890";
 const RELAY_SERVER_ID = "43147634234";
 
-function initServer(db, updateSpot24hInfo, updatePerp24hInfo) {
+function initServer(db, updateSpot24hInfo, updatePerp24hInfo, update24HInfo) {
   // & Init order books ==================
   const orderBooks = initOrderBooks();
   let fillUpdates = [];
@@ -67,6 +67,7 @@ function initServer(db, updateSpot24hInfo, updatePerp24hInfo) {
           })
         : null;
 
+      update24HInfo(fillUpdates);
       fillUpdates = [];
 
       let priceChanges;
@@ -93,24 +94,11 @@ function initServer(db, updateSpot24hInfo, updatePerp24hInfo) {
   getLastDayTrades(false).then((res) => {
     updateSpot24hInfo(res.token24hVolumes, res.token24hTrades);
   });
-  setInterval(() => {
-    try {
-      getLastDayTrades(false).then((res) => {
-        updateSpot24hInfo(res.token24hVolumes, res.token24hTrades);
-      });
-    } catch {}
-  }, 15 * 60 * 1000);
 
   getLastDayTrades(true).then((res) => {
     updatePerp24hInfo(res.token24hVolumes, res.token24hTrades);
   });
-  setInterval(() => {
-    try {
-      getLastDayTrades(true).then((res) => {
-        updatePerp24hInfo(res.token24hVolumes, res.token24hTrades);
-      });
-    } catch {}
-  }, 15 * 60 * 1000);
+
   // & Get funding every 1 hour  ===================================================================
 }
 

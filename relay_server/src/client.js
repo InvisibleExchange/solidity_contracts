@@ -49,6 +49,30 @@ function updatePerp24hInfo(volumes, trades) {
   perp24hVolumes = volumes;
   perp24hTrades = trades;
 }
+function update24HInfo(fillUpdates) {
+  for (let i = 0; i < fillUpdates.length; i++) {
+    let trade = JSON.parse(fillUpdates[i]);
+
+    if (trade.type == "spot") {
+      if (spot24hTrades[trade.asset]) {
+        spot24hTrades[trade.asset] += 1;
+        spot24hVolumes[trade.asset] += trade.amount;
+      } else {
+        spot24hTrades[trade.asset] = 1;
+        spot24hVolumes[trade.asset] = trade.amount;
+      }
+    } else {
+      if (perp24hTrades[trade.asset]) {
+        perp24hTrades[trade.asset] += 1;
+        perp24hVolumes[trade.asset] += trade.amount;
+      } else {
+        perp24hTrades[trade.asset] = 1;
+        perp24hVolumes[trade.asset] = trade.amount;
+      }
+    }
+  }
+}
+
 let fundingRates = {};
 let fundingPrices = {};
 function updateFundingInfo(rates, prices) {
@@ -56,7 +80,7 @@ function updateFundingInfo(rates, prices) {
   fundingPrices = prices;
 }
 
-initServer(db, updateSpot24hInfo, updatePerp24hInfo);
+initServer(db, updateSpot24hInfo, updatePerp24hInfo, update24HInfo);
 initFundingInfo(client, updateFundingInfo);
 
 /// =============================================================================
