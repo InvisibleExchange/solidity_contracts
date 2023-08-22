@@ -86,9 +86,6 @@ pub fn check_tab_order_validity(
             order_tab.hash, order_tab.tab_idx
         );
 
-        // Quit the application
-        std::process::exit(1234);
-
         return Err(send_swap_error(
             "order_tab hash does not exist in the state".to_string(),
             Some(order.order_id),
@@ -142,9 +139,6 @@ pub fn update_state_after_tab_order(
 ) {
     let mut state_tree_ = state_tree.lock();
     let mut updated_state_hashes = updated_state_hashes_m.lock();
-
-    println!("\ntab_idx: {:?}", updated_order_tab.tab_idx);
-    println!("updated_order_tab.hash: {:?}\n", updated_order_tab.hash);
 
     state_tree_.update_leaf_node(&updated_order_tab.hash, updated_order_tab.tab_idx as u64);
     updated_state_hashes.insert(

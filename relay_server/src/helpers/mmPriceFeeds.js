@@ -14,6 +14,11 @@ const MM_CONFIG = [
     exchange: "binance",
     pair: "ETHUSDT",
   },
+  {
+    symbol: "PEPE/USDC",
+    exchange: "binance",
+    pair: "PEPEUSDT",
+  },
 ];
 
 async function priceUpdate(PRICE_FEEDS) {

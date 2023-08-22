@@ -30,7 +30,7 @@ class OrderBook {
 
 function initOrderBooks() {
   const markets = [11, 12];
-  const perpMarkets = [21, 22];
+  const perpMarkets = [21, 22, 23];
 
   let orderBooks = {};
   for (let market of markets) {
@@ -233,7 +233,6 @@ function compileLiqUpdateMessage(orderBooks) {
 const path = require("path");
 const { restoreOrderbooks } = require("./restoreOrderBooks");
 function storeSpotOrder(db, order_id, orderObject) {
-
   let command = `
     INSERT OR REPLACE INTO spotOrders
       (order_id, expiration_timestamp, token_spent, token_received, amount_spent, amount_received,
@@ -379,6 +378,7 @@ function initLiquidity(db) {
   const PERP_MARKET_IDS = {
     BTCUSD: 21,
     ETHUSD: 22,
+    PEPEUSD: 23,
   };
 
   // & Restore liquidity from database

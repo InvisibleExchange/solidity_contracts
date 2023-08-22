@@ -56,6 +56,8 @@ pub fn get_max_leverage(token: u32, amount: u64) -> u64 {
 
     let max_leverage: f64;
 
+    // TODO: FIGURE OUT CORRECT MAX LEVERAGE FOR PEPE
+
     if decimal_amount < *min_bound as f64 {
         max_leverage = MAX_LEVERAGE;
     } else if decimal_amount < *max_bound as f64 {
@@ -413,8 +415,6 @@ pub fn consistency_checks(
         }
     }
 
-    // spent_synthetic: 3.984 , > perp_order.synthetic_amount: 0.100
-
     // ? Check that the amounts swapped don't exceed the order amounts
     let synthetic_dust_amount: u64 = DUST_AMOUNT_PER_ASSET[&order_a.synthetic_token.to_string()];
     let collateral_dust_amount: u64 = DUST_AMOUNT_PER_ASSET[&COLLATERAL_TOKEN.to_string()];
@@ -452,22 +452,37 @@ pub fn consistency_checks(
         }
     }
 
-    let dec_sum: u8 =
-        DECIMALS_PER_ASSET[&order_a.synthetic_token.to_string()] + COLLATERAL_TOKEN_DECIMALS;
     // & If the order is short than more collateral and less synthetic is good (higher price)
     // & If the order is long than more synthetic and less collateral is good (lower price)
     // ? Verify consistency of amounts swapped
     if order_a.order_side == OrderSide::Long {
-        // ? Check the price is consistent to 0.01% (1/10000)
-        let multiplier = 10u128.pow(dec_sum as u32 - 4);
+        // ? Check the prices are consistent to 0.01% (1/10000)
+        let a1 = spent_collateral as u128 * order_a.synthetic_amount as u128 * 9999;
+        let a2 = spent_synthetic as u128 * order_a.collateral_amount as u128 * 10000;
 
-        let a1 = spent_collateral as u128 * order_a.synthetic_amount as u128;
-        let a2 = spent_synthetic as u128 * order_a.collateral_amount as u128;
+        let b1 = spent_synthetic as u128 * order_b.collateral_amount as u128 * 10000;
+        let b2 = spent_collateral as u128 * order_b.synthetic_amount as u128 * 10001;
 
-        let b1 = spent_synthetic as u128 * order_b.collateral_amount as u128;
-        let b2 = spent_collateral as u128 * order_b.synthetic_amount as u128;
+        if a1 > a2 || b1 > b2 {
+            println!(
+                "market_price: {}",
+                spent_collateral as f64 / spent_synthetic as f64
+            );
 
-        if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
+            println!(
+                "price_a: {}",
+                order_a.collateral_amount as f64 / order_a.synthetic_amount as f64
+            );
+            println!(
+                "price_b:  {}",
+                order_b.collateral_amount as f64 / order_b.synthetic_amount as f64
+            );
+
+            println!("a1: {}", a1);
+            println!("a2: {}", a2);
+            println!("b1: {}", b1);
+            println!("b2: {}", b2);
+
             return Err(send_perp_swap_error(
                 "Amount swapped ratios are inconsistent".to_string(),
                 None,
@@ -475,22 +490,11 @@ pub fn consistency_checks(
             ));
         }
     } else {
-        // ? Check the price is consistent to 0.01% (1/10000)
-        let multiplier = 10u128.pow(dec_sum as u32 - 4);
-
-        let b1 = spent_collateral as u128 * order_b.synthetic_amount as u128;
-        let b2 = spent_synthetic as u128 * order_b.collateral_amount as u128;
-
-        let a1 = spent_synthetic as u128 * order_a.collateral_amount as u128;
-        let a2 = spent_collateral as u128 * order_a.synthetic_amount as u128;
-
-        if b1 / multiplier > b2 / multiplier || a1 / multiplier > a2 / multiplier {
-            return Err(send_perp_swap_error(
-                "Amount swapped ratios are inconsistent".to_string(),
-                None,
-                None,
-            ));
-        }
+        return Err(send_perp_swap_error(
+            "Order a should be Long and order b should be short".to_string(),
+            None,
+            None,
+        ));
     }
 
     // ? Check that the fees taken don't exceed the order fees

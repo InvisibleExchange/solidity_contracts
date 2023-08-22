@@ -83,22 +83,17 @@ impl Swap {
     ) -> Result<SwapResponse, SwapThreadExecutionError> {
         //
 
-        if self.order_a.spot_note_info.is_some() && self.order_a.order_tab.is_some() {
-            return Err(send_swap_error(
-                "order can only have spot_note_info or order_tab defined, not both.".to_string(),
-                Some(self.order_a.order_id),
-                None,
-            ));
-        }
-        if self.order_b.spot_note_info.is_some() && self.order_b.order_tab.is_some() {
-            return Err(send_swap_error(
-                "order can only have spot_note_info or order_tab defined, not both.".to_string(),
-                Some(self.order_b.order_id),
-                None,
-            ));
-        }
+        // ? Verify swap consistencies
+        consistency_checks(
+            &self.order_a,
+            &self.order_b,
+            self.spent_amount_a,
+            self.spent_amount_b,
+            self.fee_taken_a,
+            self.fee_taken_b,
+        )?;
 
-        // TODO: ================================================================================================
+        // ? Lock the order tabs and get the order tab mutexes
         let mut order_tab_mutex_a = None;
         let mut order_tab_a = None;
         if let Some(tab_mutex) = self.order_a.order_tab.as_ref() {
@@ -120,21 +115,6 @@ impl Swap {
         }
         let prev_order_tab_b = order_tab_b.clone();
         let prev_order_tab_b2 = order_tab_b.clone();
-
-        // TODO: ?================================================================================================
-
-        let now = Instant::now();
-
-        consistency_checks(
-            &self.order_a,
-            &self.order_b,
-            &order_tab_a,
-            &order_tab_b,
-            self.spent_amount_a,
-            self.spent_amount_b,
-            self.fee_taken_a,
-            self.fee_taken_b,
-        )?;
 
         let thread_id = std::thread::current().id();
 
@@ -468,8 +448,6 @@ impl Swap {
         drop(swap_output_json);
 
         // * Return the swap result -----------------------------------
-
-        println!("now: {:?}", now.elapsed());
 
         return Ok(SwapResponse::new(
             &execution_output_a.note_info_output,

@@ -31,6 +31,7 @@ use tokio_tungstenite::tungstenite::{Message, Result as WsResult};
 const BTC: u32 = 12345;
 const ETH: u32 = 54321;
 const USDC: u32 = 55555;
+const PEPE: u32 = 66666;
 
 pub static SPOT_MARKET_IDS: phf::Map<&'static str, u16> = phf_map! {
  "12345" => 11, // BTC
@@ -40,6 +41,7 @@ pub static SPOT_MARKET_IDS: phf::Map<&'static str, u16> = phf_map! {
 pub static PERP_MARKET_IDS: phf::Map<&'static str, u16> = phf_map! {
     "12345" => 21, // BTC
     "54321" => 22, // ETH
+    "66666" => 23, // PEPE
 };
 
 pub mod amend_order_execution;
@@ -71,6 +73,11 @@ pub fn init_order_books() -> (
 
     let market_id = PERP_MARKET_IDS.get(&ETH.to_string()).unwrap();
     let book = Arc::new(TokioMutex::new(OrderBook::new(ETH, USDC, *market_id)));
+    perp_order_books.insert(*market_id, book);
+
+    // & PEPE-USDC orderbook
+    let market_id = PERP_MARKET_IDS.get(&PEPE.to_string()).unwrap();
+    let book = Arc::new(TokioMutex::new(OrderBook::new(PEPE, USDC, *market_id)));
     perp_order_books.insert(*market_id, book);
 
     return (spot_order_books, perp_order_books);

@@ -18,13 +18,15 @@ const dotenv = require("dotenv");
 
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-let token2symbol = {
-  12345: "btcusd",
-  54321: "ethusd",
+let token2symbolPath = {
+  12345: "coinbase/btcusd",
+  54321: "coinbase/ethusd",
+  66666: "binance/pepeusdt",
 };
 const PRICE_DECIMALS_PER_ASSET = {
   12345: 6, // BTC
   54321: 6, // ETH
+  66666: 10, // PEPE
 };
 const { getKeyPair, sign } = require("starknet").ec;
 
@@ -33,13 +35,13 @@ const { getKeyPair, sign } = require("starknet").ec;
  * @param {"btcusd" / "ethusd"} symbol
  */
 async function getOracleUpdate(token) {
-  let symbol = token2symbol[token];
+  let symbol = token2symbolPath[token];
 
   const CRYPTOWATCH_API_KEY = process.env.CRYPTOWATCH_API_KEY;
 
   let res = await axios
     .get(
-      `https://api.cryptowat.ch/markets/coinbase/${symbol}/price?apikey=` +
+      `https://api.cryptowat.ch/markets/${symbol}/price?apikey=` +
         CRYPTOWATCH_API_KEY
     )
     .then((res) => {
@@ -79,7 +81,7 @@ function main() {
     // Call an API here
 
     let updates = [];
-    for (let token of [12345, 54321]) {
+    for (let token of [12345, 54321, 66666]) {
       let update = await getOracleUpdate(token);
       if (update) {
         updates.push(update);

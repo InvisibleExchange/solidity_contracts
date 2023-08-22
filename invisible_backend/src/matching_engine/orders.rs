@@ -183,15 +183,17 @@ pub fn link_order_tab(
 
     if limit_order.order_tab.is_some() {
         let tab = limit_order.order_tab.as_ref().unwrap().lock();
-        let order_tab_mutex = bid_queue.get_tab_mutex(&tab.hash);
+        let tab_hash = tab.hash.clone();
         drop(tab);
+        let order_tab_mutex = bid_queue.get_tab_mutex(&tab_hash);
 
         if order_tab_mutex.is_some() {
             limit_order.order_tab = order_tab_mutex;
         } else {
             let tab = limit_order.order_tab.as_ref().unwrap().lock();
-            let order_tab_mutex = ask_queue.get_tab_mutex(&tab.hash);
+            let tab_hash = tab.hash.clone();
             drop(tab);
+            let order_tab_mutex = ask_queue.get_tab_mutex(&tab_hash);
 
             if order_tab_mutex.is_some() {
                 limit_order.order_tab = order_tab_mutex;

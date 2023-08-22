@@ -183,6 +183,7 @@ impl TransactionBatch {
         // TODO: For testing only =================================================
         latest_index_price.insert(54321, 2000 * 10u64.pow(6));
         latest_index_price.insert(12345, 30000 * 10u64.pow(6));
+        latest_index_price.insert(66666, 10790);
         // TODO: For testing only =================================================
 
         let tx_batch = TransactionBatch {

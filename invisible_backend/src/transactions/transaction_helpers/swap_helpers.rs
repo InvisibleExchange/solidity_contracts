@@ -127,13 +127,35 @@ pub fn unblock_order(
 pub fn consistency_checks(
     order_a: &LimitOrder,
     order_b: &LimitOrder,
-    order_tab_a: &Option<OrderTab>,
-    order_tab_b: &Option<OrderTab>,
     spent_amount_a: u64,
     spent_amount_b: u64,
     fee_taken_a: u64,
     fee_taken_b: u64,
 ) -> Result<(), SwapThreadExecutionError> {
+    // ? Check that the order contain either the spot_note_info or the order_tab
+    let p_a = order_a.spot_note_info.is_some();
+    let q_a = order_a.order_tab.is_some();
+    let res_a = (p_a || q_a) && !(p_a && q_a);
+
+    if !res_a {
+        return Err(send_swap_error(
+            "order can only have spot_note_info or order_tab defined, not both.".to_string(),
+            Some(order_a.order_id),
+            None,
+        ));
+    }
+
+    let p_b: bool = order_b.spot_note_info.is_some();
+    let q_b = order_b.order_tab.is_some();
+    let res_b = (p_b || q_b) && !(p_b && q_b);
+    if !res_b {
+        return Err(send_swap_error(
+            "order can only have spot_note_info or order_tab defined, not both.".to_string(),
+            Some(order_b.order_id),
+            None,
+        ));
+    }
+
     non_tab_consistency_checks(order_a, order_b)?;
 
     if order_a.order_id == 0 || order_b.order_id == 0 {
@@ -304,9 +326,13 @@ pub fn consistency_checks(
     }
 
     // ? Check that the order tabs are different if they are not None
-    if order_tab_a.is_some() && order_tab_b.is_some() {
-        let order_hash_a = &order_tab_a.as_ref().unwrap().hash;
-        let order_hash_b = &order_tab_b.as_ref().unwrap().hash;
+    if order_a.order_tab.is_some() && order_b.order_tab.is_some() {
+        let tab_a = order_a.order_tab.as_ref().unwrap().lock();
+        let order_hash_a = tab_a.hash.clone();
+        drop(tab_a);
+        let tab_b = order_b.order_tab.as_ref().unwrap().lock();
+        let order_hash_b = tab_b.hash.clone();
+        drop(tab_b);
 
         if order_hash_a == order_hash_b {
             return Err(send_swap_error(
