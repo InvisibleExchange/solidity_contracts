@@ -20,8 +20,11 @@ const packageDefinition = protoLoader.loadSync(protoPath, {
   oneofs: true,
 });
 const engine = grpc.loadPackageDefinition(packageDefinition).engine;
-// const SERVER_URL = "localhost";
+
 const SERVER_URL = "54.212.28.196";
+const VHOST = "relay_server";
+// const SERVER_URL = "localhost";
+// const VHOST = "test_host";
 
 const client = new engine.Engine(
   `${SERVER_URL}:50052`,
@@ -36,7 +39,7 @@ const rabbitmqConfig = {
   port: 5672,
   username: "Snojj25",
   password: "123456790",
-  vhost: "relay_server",
+  vhost: VHOST,
 };
 
 amqp.connect(rabbitmqConfig, (error0, connection) => {

@@ -21,6 +21,9 @@ const db = initDb();
 initLiquidity(db);
 
 const SERVER_URL = "54.212.28.196";
+const VHOST = "relay_server";
+// const SERVER_URL = "localhost";
+// const VHOST = "test_host";
 
 let spot24hVolumes = {};
 let spot24hTrades = {};
@@ -75,7 +78,7 @@ const rabbitmqConfig = {
   port: 5672,
   username: "Snojj25",
   password: "123456790",
-  vhost: "relay_server",
+  vhost: VHOST,
 };
 
 // const cluster = require("cluster");
