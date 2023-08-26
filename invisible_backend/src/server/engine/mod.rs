@@ -49,6 +49,7 @@ use tonic::{Request, Response, Status};
 mod admin;
 mod note_position_helpers;
 mod onchain_interaction;
+mod onchain_order_tabs;
 mod order_executions;
 mod order_interactions;
 mod order_tabs;

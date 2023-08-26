@@ -31,6 +31,12 @@ service Engine {
 
     rpc close_order_tab (CloseOrderTabReq) returns (CloseOrderTabRes);
 
+    // on_chain_open_tab
+
+    // on_chain_add_liquidity
+
+    // on_chain_remove_liquidity
+
     // admin --------------- ----------------- ----------------
     rpc finalize_batch (EmptyReq) returns (FinalizeBatchResponse);
 
@@ -176,23 +182,6 @@ message PerpOrderMessage {
     uint64 user_id = 14; // used to send a response thorugh a ws
 }
 
-// position: {
-//     last_funding_idx: 0,
-//     liquidation_price: 0,
-//     bankruptcy_price: 0,
-//     margin: 299999999819,
-//     entry_price: 24000000000,
-//     position_header: {
-//       synthetic_token: 12345,
-//       allow_partial_liquidations: true,
-//       position_address: '2394334439046214873258482670113829106248669314014031210199769756358657682652',
-//       hash: '3265799306824681338483488955232095445773353303161780681479677966959847903378'
-//     },
-//     index: 10,
-//     position_size: 12500,
-//     order_side: 1,
-//     hash: '346676534881157352781487263435083492980076717229904082837435259177945616518'
-//   },
 
 
 message GrpcPerpPosition {
@@ -279,6 +268,49 @@ message CloseOrderTabRes {
     GrpcNote quote_return_note = 4;
 }
 
+// Onchain tab interactions
+
+message OnChainOpenOrderTabReq {
+    GrpcTabHeader tab_header = 1;
+    uint64 base_amount = 2;
+    uint64 quote_amount = 3;
+    GrpcCloseOrderFields vlp_close_order_fields = 4;
+    Signature signature = 5;
+    uint32 market_id = 6;
+}
+
+
+message OnChainAddLiqTabReq {
+    // on chain fields
+    repeated GrpcNote base_notes_in = 1;
+    GrpcNote base_refund_note = 2;
+    repeated GrpcNote quote_notes_in = 3;
+    GrpcNote quote_refund_note = 4;
+    // off chain fields
+    GrpcOrderTab order_tab = 6;
+    GrpcCloseOrderFields vlp_close_order_fields = 7;
+    Signature signature = 8;
+    uint32 market_id = 9;
+}
+
+
+message OnChainRemoveLiqTabReq {
+    // on chain fields
+    repeated GrpcNote vlp_notes_in = 1;
+    uint64 index_price = 2;
+    uint32 slippage = 3; // 100 = 1%
+    GrpcCloseOrderFields base_close_order_fields = 4;
+    GrpcCloseOrderFields quote_close_order_fields = 5;
+    // as well as tab pub key
+    // off chain fields
+    GrpcOrderTab order_tab = 6;
+    uint64 base_return_amount = 7;
+    Signature signature = 9;
+    uint32 market_id = 10;
+}
+
+
+
 
 // ------
 
@@ -288,7 +320,8 @@ message GrpcOrderTab {
     GrpcTabHeader tab_header = 2;
     uint64 base_amount = 3;
     uint64 quote_amount = 4;
-    GrpcPerpPosition position = 5;
+    uint64 vlp_supply = 5;
+    GrpcPerpPosition position = 6;
     
 }
 
@@ -299,7 +332,8 @@ message GrpcTabHeader {
     uint32 quote_token = 5;
     string base_blinding = 6;
     string quote_blinding = 7;
-    string pub_key = 8;
+    uint32 vlp_token = 8;
+    string pub_key = 9;
 
 }
 

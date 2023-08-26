@@ -16,7 +16,14 @@ use std::{
 use error_stack::Result;
 
 use crate::{
-    order_tab::{close_tab::close_order_tab, open_tab::open_order_tab},
+    order_tab::{
+        close_tab::close_order_tab,
+        onchain_interactions::{
+            add_liquidity::add_liquidity_to_order_tab, open_tab::onchain_open_order_tab,
+            remove_liquidity::remove_liquidity_from_order_tab,
+        },
+        open_tab::open_order_tab,
+    },
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
@@ -836,6 +843,8 @@ impl TransactionBatch {
         let backup_storage = self.backup_storage.clone();
         let swap_output_json = self.swap_output_json.clone();
 
+        let latest_index_price = self.latest_index_price.clone();
+
         let handle = thread::spawn(move || {
             if tab_action_message.open_order_tab_req.is_some() {
                 let open_order_tab_req = tab_action_message.open_order_tab_req.unwrap();
@@ -852,10 +861,12 @@ impl TransactionBatch {
                 let order_tab_action_response = OrderTabActionResponse {
                     open_tab_response: Some(new_order_tab),
                     close_tab_response: None,
+                    add_liq_response: None,
+                    remove_liq_response: None,
                 };
 
                 return order_tab_action_response;
-            } else {
+            } else if tab_action_message.close_order_tab_req.is_some() {
                 let close_order_tab_req = tab_action_message.close_order_tab_req.unwrap();
 
                 let close_tab_response = close_order_tab(
@@ -870,6 +881,101 @@ impl TransactionBatch {
                 let order_tab_action_response = OrderTabActionResponse {
                     open_tab_response: None,
                     close_tab_response: Some(close_tab_response),
+                    add_liq_response: None,
+                    remove_liq_response: None,
+                };
+
+                return order_tab_action_response;
+            } else if tab_action_message.onchain_open_tab_req.is_some() {
+                let open_order_tab_req = tab_action_message.onchain_open_tab_req.unwrap();
+
+                let index_price = *latest_index_price
+                    .get(&open_order_tab_req.tab_header.as_ref().unwrap().base_token)
+                    .unwrap_or(&0);
+
+                let new_order_tab = onchain_open_order_tab(
+                    &session,
+                    &backup_storage,
+                    open_order_tab_req,
+                    &state_tree,
+                    &updated_state_hashes,
+                    &swap_output_json,
+                    index_price,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    open_tab_response: Some(new_order_tab),
+                    close_tab_response: None,
+                    add_liq_response: None,
+                    remove_liq_response: None,
+                };
+
+                return order_tab_action_response;
+            } else if tab_action_message.onchain_add_liq_req.is_some() {
+                let add_liquidity_req = tab_action_message.onchain_add_liq_req.unwrap();
+
+                let index_price = *latest_index_price
+                    .get(
+                        &add_liquidity_req
+                            .order_tab
+                            .as_ref()
+                            .unwrap()
+                            .tab_header
+                            .as_ref()
+                            .unwrap()
+                            .base_token,
+                    )
+                    .unwrap_or(&0);
+
+                let add_liq_response = add_liquidity_to_order_tab(
+                    &session,
+                    &backup_storage,
+                    add_liquidity_req,
+                    &state_tree,
+                    &updated_state_hashes,
+                    &swap_output_json,
+                    index_price,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    open_tab_response: None,
+                    close_tab_response: None,
+                    add_liq_response: Some(add_liq_response),
+                    remove_liq_response: None,
+                };
+
+                return order_tab_action_response;
+            } else {
+                let remove_liquidity_req = tab_action_message.onchain_remove_liq_req.unwrap();
+
+                let index_price = *latest_index_price
+                    .get(
+                        &remove_liquidity_req
+                            .order_tab
+                            .as_ref()
+                            .unwrap()
+                            .tab_header
+                            .as_ref()
+                            .unwrap()
+                            .base_token,
+                    )
+                    .unwrap_or(&0);
+
+                let remove_liq_response = remove_liquidity_from_order_tab(
+                    &session,
+                    &backup_storage,
+                    remove_liquidity_req,
+                    &state_tree,
+                    &updated_state_hashes,
+                    &swap_output_json,
+                    index_price,
+                );
+
+                let order_tab_action_response = OrderTabActionResponse {
+                    open_tab_response: None,
+                    close_tab_response: None,
+                    add_liq_response: None,
+                    remove_liq_response: Some(remove_liq_response),
                 };
 
                 return order_tab_action_response;

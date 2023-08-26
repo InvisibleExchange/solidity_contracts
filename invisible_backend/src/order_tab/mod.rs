@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use num_bigint::BigUint;
-use num_traits::{FromPrimitive, One, Zero};
+use num_traits::{One, Zero};
 
 use crate::utils::crypto_utils::pedersen;
 use crate::utils::crypto_utils::pedersen_on_vec;
@@ -9,6 +9,7 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 pub mod close_tab;
 pub mod db_updates;
 pub mod json_output;
+pub mod onchain_interactions;
 pub mod open_tab;
 pub mod state_updates;
 
@@ -19,31 +20,48 @@ pub struct OrderTab {
     pub tab_header: TabHeader,
     pub base_amount: u64,
     pub quote_amount: u64,
+    pub vlp_supply: u64,
     //
     pub hash: BigUint,
 }
 
 impl OrderTab {
-    pub fn new(tab_header: TabHeader, base_amount: u64, quote_amount: u64) -> OrderTab {
-        let hash = hash_tab(&tab_header, base_amount, quote_amount);
+    pub fn new(
+        tab_header: TabHeader,
+        base_amount: u64,
+        quote_amount: u64,
+        vlp_supply: u64,
+    ) -> OrderTab {
+        let hash = hash_tab(&tab_header, base_amount, quote_amount, vlp_supply);
 
         OrderTab {
             tab_idx: 0,
             tab_header,
             base_amount,
             quote_amount,
+            vlp_supply,
             hash,
         }
     }
 
     pub fn update_hash(&mut self) {
-        let new_hash = hash_tab(&self.tab_header, self.base_amount, self.quote_amount);
+        let new_hash = hash_tab(
+            &self.tab_header,
+            self.base_amount,
+            self.quote_amount,
+            self.vlp_supply,
+        );
 
         self.hash = new_hash;
     }
 }
 
-fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigUint {
+fn hash_tab(
+    tab_header: &TabHeader,
+    base_amount: u64,
+    quote_amount: u64,
+    vlp_supply: u64,
+) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
     // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
@@ -51,17 +69,19 @@ fn hash_tab(tab_header: &TabHeader, base_amount: u64, quote_amount: u64) -> BigU
 
     hash_inputs.push(&tab_header.hash);
 
-    let base_commitment = pedersen(
-        &BigUint::from_u64(base_amount).unwrap(),
-        &tab_header.base_blinding,
-    );
+    let base_commitment = pedersen(&BigUint::from(base_amount), &tab_header.base_blinding);
     hash_inputs.push(&base_commitment);
 
-    let quote_commitment = pedersen(
-        &BigUint::from_u64(quote_amount).unwrap(),
-        &tab_header.quote_blinding,
-    );
+    let quote_commitment = pedersen(&BigUint::from(quote_amount), &tab_header.quote_blinding);
     hash_inputs.push(&quote_commitment);
+
+    let blindings_sum = &tab_header.base_blinding + &tab_header.quote_blinding;
+    let vlp_supply_commitment = if vlp_supply > 0 {
+        pedersen(&BigUint::from(vlp_supply), &blindings_sum)
+    } else {
+        BigUint::zero()
+    };
+    hash_inputs.push(&vlp_supply_commitment);
 
     let tab_hash = pedersen_on_vec(&hash_inputs);
 
@@ -76,6 +96,7 @@ pub struct TabHeader {
     pub quote_token: u32,
     pub base_blinding: BigUint,
     pub quote_blinding: BigUint,
+    pub vlp_token: u32,
     pub pub_key: BigUint,
     //
     pub hash: BigUint,
@@ -89,6 +110,7 @@ impl TabHeader {
         quote_token: u32,
         base_blinding: BigUint,
         quote_blinding: BigUint,
+        vlp_token: u32,
         pub_key: BigUint,
     ) -> TabHeader {
         let hash = hash_header(
@@ -96,6 +118,7 @@ impl TabHeader {
             is_smart_contract,
             base_token,
             quote_token,
+            vlp_token,
             &pub_key,
         );
 
@@ -106,6 +129,7 @@ impl TabHeader {
             quote_token,
             base_blinding,
             quote_blinding,
+            vlp_token,
             pub_key,
             hash,
         }
@@ -117,11 +141,12 @@ fn hash_header(
     is_smart_contract: bool,
     base_token: u32,
     quote_token: u32,
+    vlp_token: u32,
     pub_key: &BigUint,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
+    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, vlp_token, pub_key})
 
     let is_perp = if is_perp {
         BigUint::one()
@@ -135,10 +160,13 @@ fn hash_header(
         BigUint::zero()
     };
     hash_inputs.push(&is_smart_contract);
-    let base_token = BigUint::from_u32(base_token).unwrap();
+    let base_token = BigUint::from(base_token);
     hash_inputs.push(&base_token);
-    let quote_token = BigUint::from_u32(quote_token).unwrap();
+    let quote_token = BigUint::from(quote_token);
     hash_inputs.push(&quote_token);
+    let vlp_token = BigUint::from(vlp_token);
+    hash_inputs.push(&vlp_token);
+
     hash_inputs.push(&pub_key);
 
     let order_hash = pedersen_on_vec(&hash_inputs);
@@ -162,6 +190,7 @@ impl Serialize for OrderTab {
         order_tab.serialize_field("tab_header", &self.tab_header)?;
         order_tab.serialize_field("base_amount", &self.base_amount)?;
         order_tab.serialize_field("quote_amount", &self.quote_amount)?;
+        order_tab.serialize_field("vlp_supply", &self.vlp_supply)?;
         order_tab.serialize_field("hash", &self.hash.to_string())?;
 
         return order_tab.end();
@@ -181,6 +210,7 @@ impl Serialize for TabHeader {
         tab_header.serialize_field("quote_token", &self.quote_token)?;
         tab_header.serialize_field("base_blinding", &self.base_blinding.to_string())?;
         tab_header.serialize_field("quote_blinding", &self.quote_blinding.to_string())?;
+        tab_header.serialize_field("vlp_token", &self.vlp_token)?;
         tab_header.serialize_field("pub_key", &self.pub_key.to_string())?;
         tab_header.serialize_field("hash", &self.hash.to_string())?;
 
@@ -205,6 +235,7 @@ impl<'de> Deserialize<'de> for TabHeader {
             quote_token: u32,
             base_blinding: String,
             quote_blinding: String,
+            vlp_token: u32,
             pub_key: String,
             hash: String,
         }
@@ -219,6 +250,7 @@ impl<'de> Deserialize<'de> for TabHeader {
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
             quote_blinding: BigUint::from_str(helper.quote_blinding.as_str())
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
+            vlp_token: helper.vlp_token,
             pub_key: BigUint::from_str(helper.pub_key.as_str())
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
             hash: BigUint::from_str(helper.hash.as_str())
@@ -238,6 +270,7 @@ impl<'de> Deserialize<'de> for OrderTab {
             tab_header: TabHeader,
             base_amount: u64,
             quote_amount: u64,
+            vlp_supply: u64,
             hash: String,
         }
 
@@ -247,6 +280,7 @@ impl<'de> Deserialize<'de> for OrderTab {
             tab_header: helper.tab_header,
             base_amount: helper.base_amount,
             quote_amount: helper.quote_amount,
+            vlp_supply: helper.vlp_supply,
             hash: BigUint::from_str(helper.hash.as_str())
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
         })

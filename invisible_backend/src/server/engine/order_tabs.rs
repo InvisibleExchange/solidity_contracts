@@ -86,6 +86,9 @@ pub async fn open_order_tab_inner(
         grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
             open_order_tab_req: Some(req),
             close_order_tab_req: None,
+            onchain_add_liq_req: None,
+            onchain_open_tab_req: None,
+            onchain_remove_liq_req: None,
         });
 
         transaction_mpsc_tx
@@ -169,6 +172,9 @@ pub async fn close_order_tab_inner(
         grpc_message.order_tab_action_message = Some(OrderTabActionMessage {
             open_order_tab_req: None,
             close_order_tab_req: Some(req),
+            onchain_add_liq_req: None,
+            onchain_open_tab_req: None,
+            onchain_remove_liq_req: None,
         });
 
         transaction_mpsc_tx

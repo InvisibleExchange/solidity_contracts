@@ -204,15 +204,6 @@ pub fn consistency_checks(
     if order_a.amount_spent < spent_amount_a - dust_amount_a
         || order_b.amount_spent < spent_amount_b - dust_amount_b
     {
-        println!(
-            "order_a.amount_spent: {:?}, spent_amount_a: {:?}, dust_amount_a: {:?}",
-            order_a.amount_spent, spent_amount_a, dust_amount_a
-        );
-        println!(
-            "order_b.amount_spent: {:?}, spent_amount_b: {:?}, dust_amount_b: {:?}",
-            order_b.amount_spent, spent_amount_b, dust_amount_b
-        );
-
         return Err(send_swap_error(
             "Amounts swapped exceed order amounts".to_string(),
             None,
@@ -236,34 +227,15 @@ pub fn consistency_checks(
         ));
     }
 
-    let dec_sum: u8 = DECIMALS_PER_ASSET[order_a.token_spent.to_string().as_str()]
-        + DECIMALS_PER_ASSET[order_b.token_spent.to_string().as_str()];
     // ? Verify consistency of amounts swapped
-
     // ? Check the price is consistent to 0.01% (1/10000)
-    let multiplier = 10u128.pow(dec_sum as u32 - 4);
-    let a1 = spent_amount_a as u128 * order_a.amount_received as u128;
-    let a2 = spent_amount_b as u128 * order_a.amount_spent as u128;
-    let b1 = spent_amount_b as u128 * order_b.amount_received as u128;
-    let b2 = spent_amount_a as u128 * order_b.amount_spent as u128;
+    let a1: u128 = spent_amount_a as u128 * order_a.amount_received as u128 * 10000;
+    let a2 = spent_amount_b as u128 * order_a.amount_spent as u128 * 10001;
 
-    if a1 / multiplier > a2 / multiplier || b1 / multiplier > b2 / multiplier {
-        println!(
-            "a1: {:?}, a2: {:?}, b1: {:?}, b2: {:?}",
-            a1 / multiplier,
-            a2 / multiplier,
-            b1 / multiplier,
-            b2 / multiplier
-        );
-        println!(
-            "spent_amount_a: {:?}, order_a.amount_received: {:?}",
-            spent_amount_a, order_a.amount_received
-        );
-        println!(
-            "spent_amount_b: {:?}, order_a.amount_spent: {:?}",
-            spent_amount_b, order_a.amount_spent
-        );
+    let b1 = spent_amount_b as u128 * order_b.amount_received as u128 * 10000;
+    let b2 = spent_amount_a as u128 * order_b.amount_spent as u128 * 10001;
 
+    if a1 > a2 || b1 > b2 {
         return Err(send_swap_error(
             "Amount swapped ratios are inconsistent".to_string(),
             None,

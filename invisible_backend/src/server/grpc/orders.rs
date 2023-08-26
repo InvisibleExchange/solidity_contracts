@@ -137,7 +137,12 @@ impl TryFrom<GrpcOrderTab> for OrderTab {
     fn try_from(req: GrpcOrderTab) -> Result<Self, GrpcMessageError> {
         let tab_header = TabHeader::try_from(req.tab_header.ok_or(GrpcMessageError {})?)?;
 
-        let mut order_tab = OrderTab::new(tab_header, req.base_amount, req.quote_amount);
+        let mut order_tab = OrderTab::new(
+            tab_header,
+            req.base_amount,
+            req.quote_amount,
+            req.vlp_supply,
+        );
         order_tab.tab_idx = req.tab_idx;
 
         Ok(order_tab)
@@ -155,6 +160,7 @@ impl TryFrom<GrpcTabHeader> for TabHeader {
             req.quote_token,
             BigUint::from_str(&req.base_blinding).unwrap_or_default(),
             BigUint::from_str(&req.quote_blinding).unwrap_or_default(),
+            req.vlp_token,
             BigUint::from_str(&req.pub_key).unwrap_or_default(),
         );
 
@@ -170,6 +176,7 @@ impl From<OrderTab> for GrpcOrderTab {
             base_token: req.tab_header.base_token,
             quote_token: req.tab_header.quote_token,
             base_blinding: req.tab_header.base_blinding.to_string(),
+            vlp_token: req.tab_header.vlp_token,
             quote_blinding: req.tab_header.quote_blinding.to_string(),
             pub_key: req.tab_header.pub_key.to_string(),
         };
@@ -179,6 +186,7 @@ impl From<OrderTab> for GrpcOrderTab {
             tab_header: Some(header),
             base_amount: req.base_amount,
             quote_amount: req.quote_amount,
+            vlp_supply: req.vlp_supply,
             position: None,
         };
 

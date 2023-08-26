@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use num_bigint::BigUint;
 use parking_lot::Mutex;
 
 use firestore_db_and_auth::ServiceSession;
@@ -78,3 +79,100 @@ pub fn close_tab_db_updates(
     }
 }
 
+// * ONCHAIN INTERACTIONS ===========================================================================
+// * ================================================================================================
+
+/// Update the database after a new order tab has been opened.
+pub fn onchain_open_tab_db_updates(
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    order_tab: OrderTab,
+    vlp_note: Note,
+) {
+    //
+
+    let _h = start_add_note_thread(vlp_note, session, backup_storage);
+
+    let _h: std::thread::JoinHandle<()> =
+        start_add_order_tab_thread(order_tab, session, backup_storage);
+}
+
+/// Update the database after a new order tab has been opened.
+pub fn onchain_add_liquidity_db_updates(
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    order_tab: OrderTab,
+    base_notes_in: Vec<Note>,
+    quote_notes_in: Vec<Note>,
+    base_refund_note: Option<Note>,
+    quote_refund_note: Option<Note>,
+    vlp_note: Note,
+) {
+    //
+
+    for note in base_notes_in.into_iter() {
+        let _h = start_delete_note_thread(
+            session,
+            backup_storage,
+            note.address.x.to_string(),
+            note.index.to_string(),
+        );
+    }
+    for note in quote_notes_in.into_iter() {
+        let _h = start_delete_note_thread(
+            session,
+            backup_storage,
+            note.address.x.to_string(),
+            note.index.to_string(),
+        );
+    }
+    if let Some(note) = base_refund_note {
+        let _h = start_add_note_thread(note, session, backup_storage);
+    }
+    if let Some(note) = quote_refund_note {
+        let _h = start_add_note_thread(note, session, backup_storage);
+    }
+
+    let _h = start_add_note_thread(vlp_note, session, backup_storage);
+
+    let _h: std::thread::JoinHandle<()> =
+        start_add_order_tab_thread(order_tab, session, backup_storage);
+}
+
+/// Update the database after a new order tab has been opened.
+pub fn onchain_remove_liquidity_db_updates(
+    session: &Arc<Mutex<ServiceSession>>,
+    backup_storage: &Arc<Mutex<BackupStorage>>,
+    tab_idx: u64,
+    tab_address: BigUint,
+    order_tab: Option<OrderTab>,
+    vlp_notes_in: &Vec<Note>,
+    base_return_note: Note,
+    quote_return_note: Note,
+) {
+    //
+
+    for note in vlp_notes_in {
+        let _h = start_delete_note_thread(
+            session,
+            backup_storage,
+            note.address.x.to_string(),
+            note.index.to_string(),
+        );
+    }
+
+    let _h = start_add_note_thread(base_return_note, session, backup_storage);
+    let _h = start_add_note_thread(quote_return_note, session, backup_storage);
+
+    if let Some(tab) = order_tab {
+        let _h: std::thread::JoinHandle<()> =
+            start_add_order_tab_thread(tab, session, backup_storage);
+    } else {
+        let _h: std::thread::JoinHandle<()> = start_delete_order_tab_thread(
+            session,
+            backup_storage,
+            tab_address.to_string(),
+            tab_idx.to_string(),
+        );
+    }
+}

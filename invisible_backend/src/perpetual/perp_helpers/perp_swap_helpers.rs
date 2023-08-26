@@ -464,24 +464,7 @@ pub fn consistency_checks(
         let b2 = spent_collateral as u128 * order_b.synthetic_amount as u128 * 10001;
 
         if a1 > a2 || b1 > b2 {
-            println!(
-                "market_price: {}",
-                spent_collateral as f64 / spent_synthetic as f64
-            );
-
-            println!(
-                "price_a: {}",
-                order_a.collateral_amount as f64 / order_a.synthetic_amount as f64
-            );
-            println!(
-                "price_b:  {}",
-                order_b.collateral_amount as f64 / order_b.synthetic_amount as f64
-            );
-
-            println!("a1: {}", a1);
-            println!("a2: {}", a2);
-            println!("b1: {}", b1);
-            println!("b2: {}", b2);
+           
 
             return Err(send_perp_swap_error(
                 "Amount swapped ratios are inconsistent".to_string(),

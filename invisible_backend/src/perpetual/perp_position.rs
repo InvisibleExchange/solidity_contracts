@@ -22,7 +22,7 @@ pub struct PerpPosition {
     pub position_header: PositionHeader,
     // ? Mutable fields
     pub order_side: OrderSide, // Long or Short
-    pub position_size: u64,    // nominal size of synthetic tokens
+    pub position_size: u64,    // size of synthetic tokens
     pub margin: u64,           // margin in collateral token
 
     pub entry_price: u64,       // average buy/sell price of the position
