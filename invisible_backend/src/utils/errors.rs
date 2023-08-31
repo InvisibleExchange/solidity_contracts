@@ -217,9 +217,9 @@ pub fn send_matching_error(err_msg: String) -> Report<MatchingEngineError> {
 use tonic::{Response, Status};
 
 use crate::server::grpc::engine_proto::{
-    AmendOrderResponse, CancelOrderResponse, CloseOrderTabRes, DepositResponse, FundingRes,
-    LiquidationOrderResponse, LiquidityRes, MarginChangeRes, OpenOrderTabRes, OrderResponse,
-    SplitNotesRes, SuccessResponse,
+    AddLiqOrderTabRes, AmendOrderResponse, CancelOrderResponse, CloseOrderTabRes, DepositResponse,
+    FundingRes, LiquidationOrderResponse, LiquidityRes, MarginChangeRes, OnChainRegisterMmRes,
+    OpenOrderTabRes, OrderResponse, RemoveLiqOrderTabRes, SplitNotesRes, SuccessResponse,
 };
 
 // * ERROR GRPC REPLIES
@@ -335,6 +335,49 @@ pub fn send_open_tab_error_reply(err_msg: String) -> Result<Response<OpenOrderTa
         successful: false,
         error_message: err_msg,
         order_tab: None,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+//
+
+pub fn send_regster_mm_error_reply(
+    err_msg: String,
+) -> Result<Response<OnChainRegisterMmRes>, Status> {
+    let reply = OnChainRegisterMmRes {
+        successful: false,
+        error_message: err_msg,
+        order_tab: None,
+        position: None,
+        vlp_note: None,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_add_liq_tab_error_reply(
+    err_msg: String,
+) -> Result<Response<AddLiqOrderTabRes>, Status> {
+    let reply = AddLiqOrderTabRes {
+        successful: false,
+        error_message: err_msg,
+        order_tab: None,
+        position: None,
+        vlp_note: None,
+    };
+
+    return Ok(Response::new(reply));
+}
+
+pub fn send_remove_liq_tab_error_reply(
+    err_msg: String,
+) -> Result<Response<RemoveLiqOrderTabRes>, Status> {
+    let reply = RemoveLiqOrderTabRes {
+        successful: false,
+        error_message: err_msg,
+        tab_res: None,
+        position_res: None,
     };
 
     return Ok(Response::new(reply));

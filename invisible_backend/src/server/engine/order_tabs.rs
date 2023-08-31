@@ -87,7 +87,7 @@ pub async fn open_order_tab_inner(
             open_order_tab_req: Some(req),
             close_order_tab_req: None,
             onchain_add_liq_req: None,
-            onchain_open_tab_req: None,
+            onchain_register_mm_req: None,
             onchain_remove_liq_req: None,
         });
 
@@ -173,7 +173,7 @@ pub async fn close_order_tab_inner(
             open_order_tab_req: None,
             close_order_tab_req: Some(req),
             onchain_add_liq_req: None,
-            onchain_open_tab_req: None,
+            onchain_register_mm_req: None,
             onchain_remove_liq_req: None,
         });
 

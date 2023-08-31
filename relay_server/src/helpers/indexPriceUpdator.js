@@ -34,19 +34,37 @@ const { getKeyPair, sign } = require("starknet").ec;
  *
  * @param {"btcusd" / "ethusd"} symbol
  */
-async function getOracleUpdate(token) {
-  let symbol = token2symbolPath[token];
 
+const MM_CONFIG = {
+  12345: {
+    symbol: "BTC/USDC",
+    exchange: "binance",
+    pair: "BTCUSDT",
+  },
+  54321: {
+    symbol: "ETH/USDC",
+    exchange: "binance",
+    pair: "ETHUSDT",
+  },
+  66666: {
+    symbol: "PEPE/USDC",
+    exchange: "binance",
+    pair: "PEPEUSDT",
+  },
+};
+
+async function getOracleUpdate(token) {
   const CRYPTOWATCH_API_KEY = process.env.CRYPTOWATCH_API_KEY;
 
+  let config = MM_CONFIG[token];
   let res = await axios
     .get(
-      `https://api.cryptowat.ch/markets/${symbol}/price?apikey=` +
+      `https://api.cryptowat.ch/markets/${config.exchange}/${config.pair}/summary?apikey=` +
         CRYPTOWATCH_API_KEY
     )
     .then((res) => {
       let price = Number(
-        res.data.result.price * 10 ** PRICE_DECIMALS_PER_ASSET[token]
+        res.data.result.price.last * 10 ** PRICE_DECIMALS_PER_ASSET[token]
       );
 
       let timestamp = Math.floor(Date.now() / 1000);
@@ -99,7 +117,7 @@ function main() {
         }
       }
     );
-  }, 25_000);
+  }, 5_000);
 }
 
 main();

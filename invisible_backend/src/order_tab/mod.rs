@@ -9,7 +9,6 @@ use crate::utils::crypto_utils::pedersen_on_vec;
 pub mod close_tab;
 pub mod db_updates;
 pub mod json_output;
-pub mod onchain_interactions;
 pub mod open_tab;
 pub mod state_updates;
 
@@ -52,6 +51,7 @@ impl OrderTab {
             self.vlp_supply,
         );
 
+
         self.hash = new_hash;
     }
 }
@@ -64,8 +64,8 @@ fn hash_tab(
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, pub_key})
-    // & H({header_hash, base_commitment, quote_commitment})
+    // & header_hash = H({ is_smart_contract, base_token, quote_token, vlp_token, max_vlp_supply, pub_key})
+    // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
 
     hash_inputs.push(&tab_header.hash);
 
@@ -75,7 +75,7 @@ fn hash_tab(
     let quote_commitment = pedersen(&BigUint::from(quote_amount), &tab_header.quote_blinding);
     hash_inputs.push(&quote_commitment);
 
-    let blindings_sum = &tab_header.base_blinding + &tab_header.quote_blinding;
+    let blindings_sum = &tab_header.base_blinding / 2u32 + &tab_header.quote_blinding / 2u32;
     let vlp_supply_commitment = if vlp_supply > 0 {
         pedersen(&BigUint::from(vlp_supply), &blindings_sum)
     } else {
@@ -90,13 +90,13 @@ fn hash_tab(
 
 #[derive(Debug, Clone)]
 pub struct TabHeader {
-    pub is_perp: bool,
     pub is_smart_contract: bool,
     pub base_token: u32,
     pub quote_token: u32,
     pub base_blinding: BigUint,
     pub quote_blinding: BigUint,
     pub vlp_token: u32,
+    pub max_vlp_supply: u64,
     pub pub_key: BigUint,
     //
     pub hash: BigUint,
@@ -104,56 +104,64 @@ pub struct TabHeader {
 
 impl TabHeader {
     pub fn new(
-        is_perp: bool,
         is_smart_contract: bool,
         base_token: u32,
         quote_token: u32,
         base_blinding: BigUint,
         quote_blinding: BigUint,
         vlp_token: u32,
+        max_vlp_supply: u64,
         pub_key: BigUint,
     ) -> TabHeader {
         let hash = hash_header(
-            is_perp,
             is_smart_contract,
             base_token,
             quote_token,
             vlp_token,
+            max_vlp_supply,
             &pub_key,
         );
 
         TabHeader {
-            is_perp,
             is_smart_contract,
             base_token,
             quote_token,
             base_blinding,
             quote_blinding,
             vlp_token,
+            max_vlp_supply,
             pub_key,
             hash,
         }
     }
+
+    pub fn update_hash(&mut self) {
+        let new_hash = hash_header(
+            self.is_smart_contract,
+            self.base_token,
+            self.quote_token,
+            self.vlp_token,
+            self.max_vlp_supply,
+            &self.pub_key,
+        );
+
+
+        self.hash = new_hash;
+    }
 }
 
 fn hash_header(
-    is_perp: bool,
     is_smart_contract: bool,
     base_token: u32,
     quote_token: u32,
     vlp_token: u32,
+    max_vlp_supply: u64,
     pub_key: &BigUint,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & header_hash = H({is_perp, is_smart_contract, base_token, quote_token, vlp_token, pub_key})
+    // & header_hash = H({ is_smart_contract, base_token, quote_token, vlp_token, max_vlp_supply, pub_key})
 
-    let is_perp = if is_perp {
-        BigUint::one()
-    } else {
-        BigUint::zero()
-    };
-    hash_inputs.push(&is_perp);
     let is_smart_contract = if is_smart_contract {
         BigUint::one()
     } else {
@@ -166,8 +174,11 @@ fn hash_header(
     hash_inputs.push(&quote_token);
     let vlp_token = BigUint::from(vlp_token);
     hash_inputs.push(&vlp_token);
+    let max_vlp_supply = BigUint::from(max_vlp_supply);
+    hash_inputs.push(&max_vlp_supply);
 
     hash_inputs.push(&pub_key);
+
 
     let order_hash = pedersen_on_vec(&hash_inputs);
 
@@ -204,13 +215,13 @@ impl Serialize for TabHeader {
     {
         let mut tab_header = serializer.serialize_struct("TabHeader", 8)?;
 
-        tab_header.serialize_field("is_perp", &self.is_perp)?;
         tab_header.serialize_field("is_smart_contract", &self.is_smart_contract)?;
         tab_header.serialize_field("base_token", &self.base_token)?;
         tab_header.serialize_field("quote_token", &self.quote_token)?;
         tab_header.serialize_field("base_blinding", &self.base_blinding.to_string())?;
         tab_header.serialize_field("quote_blinding", &self.quote_blinding.to_string())?;
         tab_header.serialize_field("vlp_token", &self.vlp_token)?;
+        tab_header.serialize_field("max_vlp_supply", &self.max_vlp_supply)?;
         tab_header.serialize_field("pub_key", &self.pub_key.to_string())?;
         tab_header.serialize_field("hash", &self.hash.to_string())?;
 
@@ -229,20 +240,19 @@ impl<'de> Deserialize<'de> for TabHeader {
     {
         #[derive(DeserializeTrait)]
         struct Helper {
-            is_perp: bool,
             is_smart_contract: bool,
             base_token: u32,
             quote_token: u32,
             base_blinding: String,
             quote_blinding: String,
             vlp_token: u32,
+            max_vlp_supply: u64,
             pub_key: String,
             hash: String,
         }
 
         let helper = Helper::deserialize(deserializer)?;
         Ok(TabHeader {
-            is_perp: helper.is_perp,
             is_smart_contract: helper.is_smart_contract,
             base_token: helper.base_token,
             quote_token: helper.quote_token,
@@ -251,6 +261,7 @@ impl<'de> Deserialize<'de> for TabHeader {
             quote_blinding: BigUint::from_str(helper.quote_blinding.as_str())
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
             vlp_token: helper.vlp_token,
+            max_vlp_supply: helper.max_vlp_supply,
             pub_key: BigUint::from_str(helper.pub_key.as_str())
                 .map_err(|err| serde::de::Error::custom(err.to_string()))?,
             hash: BigUint::from_str(helper.hash.as_str())

@@ -1,9 +1,4 @@
-use std::sync::Arc;
-
-use invisible_backend::utils::{
-    cairo_output::parse_cairo_output, firestore::upload_file_to_storage,
-};
-use parking_lot::Mutex;
+use invisible_backend::utils::cairo_output::parse_cairo_output;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

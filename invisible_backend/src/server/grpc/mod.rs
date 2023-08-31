@@ -21,6 +21,7 @@ use crate::{
         perp_position::PerpPosition,
         perp_swap::PerpSwap,
     },
+    smart_contract_mms::remove_liquidity::RemoveLiqRes,
     transaction_batch::tx_batch_structs::OracleUpdate,
     transactions::{
         deposit::Deposit,
@@ -35,7 +36,7 @@ use crate::{
 };
 
 use self::engine_proto::{
-    CloseOrderTabReq, OnChainAddLiqTabReq, OnChainOpenOrderTabReq, OnChainRemoveLiqTabReq,
+    CloseOrderTabReq, OnChainAddLiqTabReq, OnChainRegisterMmReq, OnChainRemoveLiqTabReq,
     OpenOrderTabReq,
 };
 
@@ -146,7 +147,7 @@ pub struct ChangeMarginMessage {
 pub struct OrderTabActionMessage {
     pub open_order_tab_req: Option<OpenOrderTabReq>,
     pub close_order_tab_req: Option<CloseOrderTabReq>,
-    pub onchain_open_tab_req: Option<OnChainOpenOrderTabReq>,
+    pub onchain_register_mm_req: Option<OnChainRegisterMmReq>,
     pub onchain_add_liq_req: Option<OnChainAddLiqTabReq>,
     pub onchain_remove_liq_req: Option<OnChainRemoveLiqTabReq>,
 }
@@ -154,6 +155,9 @@ pub struct OrderTabActionMessage {
 pub struct OrderTabActionResponse {
     pub open_tab_response: Option<std::result::Result<OrderTab, String>>,
     pub close_tab_response: Option<std::result::Result<(Note, Note), String>>,
-    pub add_liq_response: Option<std::result::Result<(OrderTab, Note), String>>,
-    pub remove_liq_response: Option<std::result::Result<Option<OrderTab>, String>>,
+    pub register_mm_response:
+        Option<std::result::Result<(Option<OrderTab>, Option<PerpPosition>, Note), String>>,
+    pub add_liq_response:
+        Option<std::result::Result<(Option<OrderTab>, Option<PerpPosition>, Note), String>>,
+    pub remove_liq_response: Option<std::result::Result<RemoveLiqRes, String>>,
 }

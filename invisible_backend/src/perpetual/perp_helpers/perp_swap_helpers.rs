@@ -8,9 +8,8 @@ use num_bigint::BigUint;
 
 use crate::perpetual::perp_position::PerpPosition;
 use crate::perpetual::{
-    OrderSide, PositionEffectType, COLLATERAL_TOKEN, COLLATERAL_TOKEN_DECIMALS, DECIMALS_PER_ASSET,
-    DUST_AMOUNT_PER_ASSET, LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MAX_LEVERAGE,
-    SYNTHETIC_ASSETS,
+    OrderSide, PositionEffectType, COLLATERAL_TOKEN, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET,
+    LEVERAGE_BOUNDS_PER_ASSET, LEVERAGE_DECIMALS, MAX_LEVERAGE, SYNTHETIC_ASSETS,
 };
 use crate::trees::superficial_tree::SuperficialTree;
 use crate::utils::errors::{send_perp_swap_error, PerpSwapExecutionError};
@@ -464,8 +463,6 @@ pub fn consistency_checks(
         let b2 = spent_collateral as u128 * order_b.synthetic_amount as u128 * 10001;
 
         if a1 > a2 || b1 > b2 {
-           
-
             return Err(send_perp_swap_error(
                 "Amount swapped ratios are inconsistent".to_string(),
                 None,

@@ -3,7 +3,6 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::ThreadId;
-use std::time::Instant;
 
 use num_bigint::BigUint;
 use serde_json::Value;

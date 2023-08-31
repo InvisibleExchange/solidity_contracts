@@ -7,6 +7,9 @@ use self::{
     admin::{finalize_batch_inner, restore_orderbook_inner, update_index_price_inner},
     note_position_helpers::{change_position_margin_inner, split_notes_inner},
     onchain_interaction::{execute_deposit_inner, execute_withdrawal_inner},
+    onchain_order_tabs::{
+        add_liquidity_mm_inner, onchain_register_mm_inner, remove_liquidity_mm_inner,
+    },
     order_executions::{
         submit_limit_order_inner, submit_liquidation_order_inner, submit_perpetual_order_inner,
     },
@@ -18,12 +21,14 @@ use self::{
 };
 
 use super::grpc::engine_proto::{
-    AmendOrderRequest, AmendOrderResponse, CancelOrderMessage, CancelOrderResponse,
-    CloseOrderTabReq, DepositMessage, DepositResponse, EmptyReq, FinalizeBatchResponse, FundingReq,
-    FundingRes, LimitOrderMessage, LiquidationOrderMessage, LiquidationOrderResponse, LiquidityReq,
-    LiquidityRes, MarginChangeReq, MarginChangeRes, OpenOrderTabReq, OracleUpdateReq,
-    OrderResponse, OrdersReq, OrdersRes, PerpOrderMessage, RestoreOrderBookMessage, SplitNotesReq,
-    SplitNotesRes, StateInfoReq, StateInfoRes, SuccessResponse, WithdrawalMessage,
+    AddLiqOrderTabRes, AmendOrderRequest, AmendOrderResponse, CancelOrderMessage,
+    CancelOrderResponse, CloseOrderTabReq, DepositMessage, DepositResponse, EmptyReq,
+    FinalizeBatchResponse, FundingReq, FundingRes, LimitOrderMessage, LiquidationOrderMessage,
+    LiquidationOrderResponse, LiquidityReq, LiquidityRes, MarginChangeReq, MarginChangeRes,
+    OnChainAddLiqTabReq, OnChainRegisterMmReq, OnChainRegisterMmRes, OnChainRemoveLiqTabReq,
+    OpenOrderTabReq, OracleUpdateReq, OrderResponse, OrdersReq, OrdersRes, PerpOrderMessage,
+    RemoveLiqOrderTabRes, RestoreOrderBookMessage, SplitNotesReq, SplitNotesRes, StateInfoReq,
+    StateInfoRes, SuccessResponse, WithdrawalMessage,
 };
 use super::grpc::{GrpcMessage, GrpcTxResponse};
 use super::{
@@ -327,6 +332,70 @@ impl Engine for EngineService {
             &self.mpsc_tx,
             &self.main_storage,
             &self.swap_output_json,
+            &self.semaphore,
+            &self.is_paused,
+            req,
+        )
+        .await;
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn onchain_register_mm(
+        &self,
+        //
+        req: Request<OnChainRegisterMmReq>,
+    ) -> Result<Response<OnChainRegisterMmRes>, Status> {
+        return onchain_register_mm_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.order_books,
+            &self.perp_order_books,
+            &self.semaphore,
+            &self.is_paused,
+            req,
+        )
+        .await;
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn add_liquidity_mm(
+        &self,
+        req: Request<OnChainAddLiqTabReq>,
+    ) -> Result<Response<AddLiqOrderTabRes>, Status> {
+        return add_liquidity_mm_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.order_books,
+            &self.perp_order_books,
+            &self.semaphore,
+            &self.is_paused,
+            req,
+        )
+        .await;
+    }
+
+    //
+    // * ===================================================================================================================================
+    //
+
+    async fn remove_liquidity_mm(
+        &self,
+        req: Request<OnChainRemoveLiqTabReq>,
+    ) -> Result<Response<RemoveLiqOrderTabRes>, Status> {
+        return remove_liquidity_mm_inner(
+            &self.mpsc_tx,
+            &self.main_storage,
+            &self.swap_output_json,
+            &self.order_books,
+            &self.perp_order_books,
             &self.semaphore,
             &self.is_paused,
             req,

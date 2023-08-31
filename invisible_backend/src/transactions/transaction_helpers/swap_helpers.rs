@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
 use crate::{
     order_tab::OrderTab,
-    perpetual::{ASSETS, DECIMALS_PER_ASSET, DUST_AMOUNT_PER_ASSET},
+    perpetual::{ASSETS, DUST_AMOUNT_PER_ASSET},
     utils::{
         errors::{send_swap_error, SwapThreadExecutionError},
         notes::Note,

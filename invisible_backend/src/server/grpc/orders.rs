@@ -154,13 +154,13 @@ impl TryFrom<GrpcTabHeader> for TabHeader {
 
     fn try_from(req: GrpcTabHeader) -> Result<Self, GrpcMessageError> {
         let header = TabHeader::new(
-            req.is_perp,
             req.is_smart_contract,
             req.base_token,
             req.quote_token,
             BigUint::from_str(&req.base_blinding).unwrap_or_default(),
             BigUint::from_str(&req.quote_blinding).unwrap_or_default(),
             req.vlp_token,
+            req.max_vlp_supply,
             BigUint::from_str(&req.pub_key).unwrap_or_default(),
         );
 
@@ -171,13 +171,13 @@ impl TryFrom<GrpcTabHeader> for TabHeader {
 impl From<OrderTab> for GrpcOrderTab {
     fn from(req: OrderTab) -> Self {
         let header = GrpcTabHeader {
-            is_perp: req.tab_header.is_perp,
             is_smart_contract: req.tab_header.is_smart_contract,
             base_token: req.tab_header.base_token,
             quote_token: req.tab_header.quote_token,
             base_blinding: req.tab_header.base_blinding.to_string(),
-            vlp_token: req.tab_header.vlp_token,
             quote_blinding: req.tab_header.quote_blinding.to_string(),
+            vlp_token: req.tab_header.vlp_token,
+            max_vlp_supply: req.tab_header.max_vlp_supply,
             pub_key: req.tab_header.pub_key.to_string(),
         };
 
@@ -187,7 +187,6 @@ impl From<OrderTab> for GrpcOrderTab {
             base_amount: req.base_amount,
             quote_amount: req.quote_amount,
             vlp_supply: req.vlp_supply,
-            position: None,
         };
 
         return order_tab;

@@ -16,14 +16,7 @@ use std::{
 use error_stack::Result;
 
 use crate::{
-    order_tab::{
-        close_tab::close_order_tab,
-        onchain_interactions::{
-            add_liquidity::add_liquidity_to_order_tab, open_tab::onchain_open_order_tab,
-            remove_liquidity::remove_liquidity_from_order_tab,
-        },
-        open_tab::open_order_tab,
-    },
+    order_tab::{close_tab::close_order_tab, open_tab::open_order_tab},
     perpetual::{
         liquidations::{
             liquidation_engine::LiquidationSwap, liquidation_output::LiquidationResponse,
@@ -37,6 +30,21 @@ use crate::{
         COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET, SYNTHETIC_ASSETS,
     },
     server::grpc::{OrderTabActionMessage, OrderTabActionResponse},
+    smart_contract_mms::{
+        add_liquidity::add_liquidity_to_mm, register_mm::onchain_register_mm,
+        remove_liquidity::remove_liquidity_from_order_tab,
+    },
+    transaction_batch::restore_state_helpers::{
+        helpers::{restore_margin_update, restore_note_split},
+        restore_order_tabs::{
+            restore_add_liquidity, restore_close_order_tab, restore_open_order_tab,
+            restore_register_mm, restore_remove_liquidity,
+        },
+        restore_perp_swaps::{restore_liquidation_order_execution, restore_perp_order_execution},
+        restore_spot_swap::{
+            restore_deposit_update, restore_spot_order_execution, restore_withdrawal_update,
+        },
+    },
     transactions::{
         transaction_helpers::db_updates::{update_db_after_note_split, DbNoteUpdater},
         Transaction,
@@ -65,11 +73,6 @@ use crate::server::{
     server_helpers::engine_helpers::{verify_margin_change_signature, verify_position_existence},
 };
 
-use restore_state_helpers::{
-    restore_close_order_tab, restore_deposit_update, restore_liquidation_order_execution,
-    restore_margin_update, restore_note_split, restore_open_order_tab,
-    restore_perp_order_execution, restore_spot_order_execution, restore_withdrawal_update,
-};
 use tx_batch_helpers::{_per_minute_funding_update_inner, get_funding_info, split_hashmap};
 use tx_batch_structs::{get_price_info, GlobalConfig};
 
@@ -91,7 +94,7 @@ use self::tx_batch_helpers::_calculate_funding_rates;
 // TODO: If you get a note doesn't exist error, there should  be a function where you can check the existence of all your notes
 
 pub mod batch_functions;
-mod restore_state_helpers;
+pub mod restore_state_helpers;
 pub mod tx_batch_helpers;
 pub mod tx_batch_structs;
 
@@ -190,7 +193,7 @@ impl TransactionBatch {
         // TODO: For testing only =================================================
         latest_index_price.insert(54321, 2000 * 10u64.pow(6));
         latest_index_price.insert(12345, 30000 * 10u64.pow(6));
-        latest_index_price.insert(66666, 10790);
+        latest_index_price.insert(66666, 10800);
         // TODO: For testing only =================================================
 
         let tx_batch = TransactionBatch {
@@ -238,10 +241,6 @@ impl TransactionBatch {
     pub fn init(&mut self) {
         let storage = self.main_storage.lock();
         if !storage.funding_db.is_empty() {
-            if let Err(e) = storage.read_funding_info() {
-                println!("error: {:?}", e);
-            }
-
             if let Ok((funding_rates, funding_prices, funding_idx, min_funding_idxs)) =
                 storage.read_funding_info()
             {
@@ -260,6 +259,8 @@ impl TransactionBatch {
                 self.funding_idx_shift = funding_idx_shift;
 
                 self.min_funding_idxs = Arc::new(Mutex::new(min_funding_idxs));
+            } else {
+                panic!("Error reading funding info from storage");
             }
         }
 
@@ -862,6 +863,7 @@ impl TransactionBatch {
                     open_tab_response: Some(new_order_tab),
                     close_tab_response: None,
                     add_liq_response: None,
+                    register_mm_response: None,
                     remove_liq_response: None,
                 };
 
@@ -882,21 +884,22 @@ impl TransactionBatch {
                     open_tab_response: None,
                     close_tab_response: Some(close_tab_response),
                     add_liq_response: None,
+                    register_mm_response: None,
                     remove_liq_response: None,
                 };
 
                 return order_tab_action_response;
-            } else if tab_action_message.onchain_open_tab_req.is_some() {
-                let open_order_tab_req = tab_action_message.onchain_open_tab_req.unwrap();
+            } else if tab_action_message.onchain_register_mm_req.is_some() {
+                let register_mm_req = tab_action_message.onchain_register_mm_req.unwrap();
 
                 let index_price = *latest_index_price
-                    .get(&open_order_tab_req.tab_header.as_ref().unwrap().base_token)
+                    .get(&register_mm_req.base_token)
                     .unwrap_or(&0);
 
-                let new_order_tab = onchain_open_order_tab(
+                let register_mm_response = onchain_register_mm(
                     &session,
                     &backup_storage,
-                    open_order_tab_req,
+                    register_mm_req,
                     &state_tree,
                     &updated_state_hashes,
                     &swap_output_json,
@@ -904,9 +907,10 @@ impl TransactionBatch {
                 );
 
                 let order_tab_action_response = OrderTabActionResponse {
-                    open_tab_response: Some(new_order_tab),
+                    open_tab_response: None,
                     close_tab_response: None,
                     add_liq_response: None,
+                    register_mm_response: Some(register_mm_response),
                     remove_liq_response: None,
                 };
 
@@ -915,19 +919,10 @@ impl TransactionBatch {
                 let add_liquidity_req = tab_action_message.onchain_add_liq_req.unwrap();
 
                 let index_price = *latest_index_price
-                    .get(
-                        &add_liquidity_req
-                            .order_tab
-                            .as_ref()
-                            .unwrap()
-                            .tab_header
-                            .as_ref()
-                            .unwrap()
-                            .base_token,
-                    )
+                    .get(&add_liquidity_req.base_token)
                     .unwrap_or(&0);
 
-                let add_liq_response = add_liquidity_to_order_tab(
+                let result = add_liquidity_to_mm(
                     &session,
                     &backup_storage,
                     add_liquidity_req,
@@ -940,7 +935,8 @@ impl TransactionBatch {
                 let order_tab_action_response = OrderTabActionResponse {
                     open_tab_response: None,
                     close_tab_response: None,
-                    add_liq_response: Some(add_liq_response),
+                    add_liq_response: Some(result),
+                    register_mm_response: None,
                     remove_liq_response: None,
                 };
 
@@ -949,16 +945,7 @@ impl TransactionBatch {
                 let remove_liquidity_req = tab_action_message.onchain_remove_liq_req.unwrap();
 
                 let index_price = *latest_index_price
-                    .get(
-                        &remove_liquidity_req
-                            .order_tab
-                            .as_ref()
-                            .unwrap()
-                            .tab_header
-                            .as_ref()
-                            .unwrap()
-                            .base_token,
-                    )
+                    .get(&remove_liquidity_req.base_token)
                     .unwrap_or(&0);
 
                 let remove_liq_response = remove_liquidity_from_order_tab(
@@ -975,6 +962,7 @@ impl TransactionBatch {
                     open_tab_response: None,
                     close_tab_response: None,
                     add_liq_response: None,
+                    register_mm_response: None,
                     remove_liq_response: Some(remove_liq_response),
                 };
 
@@ -1291,6 +1279,19 @@ impl TransactionBatch {
                     );
                 }
                 "close_order_tab" => restore_close_order_tab(
+                    &self.state_tree,
+                    &self.updated_state_hashes,
+                    &transaction,
+                ),
+                "onchain_register_mm" => {
+                    restore_register_mm(&self.state_tree, &self.updated_state_hashes, &transaction)
+                }
+                "add_liquidity" => restore_add_liquidity(
+                    &self.state_tree,
+                    &self.updated_state_hashes,
+                    &transaction,
+                ),
+                "remove_liquidity" => restore_remove_liquidity(
                     &self.state_tree,
                     &self.updated_state_hashes,
                     &transaction,

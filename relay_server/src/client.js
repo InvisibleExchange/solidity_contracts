@@ -229,6 +229,39 @@ app.post("/modify_order_tab", (req, res) => {
   });
 });
 
+// *  REGISTER ORDER TAB -----------------------------------------------------------
+app.post("/onchain_register_mm", (req, res) => {
+  client.onchain_register_mm(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
+// *  ADD LIQUIDITY ORDER TAB -----------------------------------------------------------
+app.post("/add_liquidity_mm", (req, res) => {
+  client.add_liquidity_mm(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
+// *  REMOVE LIQUIDITY ORDER TAB -----------------------------------------------------------
+app.post("/remove_liquidity_mm", (req, res) => {
+  client.remove_liquidity_mm(req.body, function (err, response) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.send({ response: response });
+    }
+  });
+});
+
 // * GET LIQUIDITY ---------------------------------------------------------------------
 app.post("/get_liquidity", (req, res) => {
   client.get_liquidity(req.body, function (err, response) {
