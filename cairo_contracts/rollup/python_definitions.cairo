@@ -72,48 +72,12 @@ func python_define_utils() {
         POSITION_ADDRESS_OFFSET = ids.OpenOrderFields.position_address
         ALLOW_PARTIAL_LIQUIDATIONS_OFFSET = ids.OpenOrderFields.allow_partial_liquidations
 
-        CLOSE_ORDER_FIELDS_SIZE = ids.CloseOrderFields.SIZE
-        RETURN_COLLATERAL_ADDRESS_OFFSET = ids.CloseOrderFields.return_collateral_address
-        RETURN_COLLATERAL_BLINDING_OFFSET = ids.CloseOrderFields.return_collateral_blinding
-
-        # * PERPETUAL POSITION =======================================================
-        PERP_POSITION_SIZE = ids.PerpPosition.SIZE
-        POSITION_HEADER_OFFSET = ids.PerpPosition.position_header
-        PERP_POSITION_ORDER_SIDE_OFFSET = ids.PerpPosition.order_side
-        PERP_POSITION_POSITION_SIZE_OFFSET = ids.PerpPosition.position_size
-        PERP_POSITION_MARGIN_OFFSET = ids.PerpPosition.margin
-        PERP_POSITION_ENTRY_PRICE_OFFSET = ids.PerpPosition.entry_price
-        PERP_POSITION_LIQUIDATION_PRICE_OFFSET = ids.PerpPosition.liquidation_price
-        PERP_POSITION_BANKRUPTCY_PRICE_OFFSET = ids.PerpPosition.bankruptcy_price
-        PERP_POSITION_LAST_FUNDING_IDX_OFFSET = ids.PerpPosition.last_funding_idx
-        PERP_POSITION_INDEX_OFFSET = ids.PerpPosition.index
-        PERP_POSITION_HASH_OFFSET = ids.PerpPosition.hash
-
-        # Position Header
-        POSITION_HEADER_SIZE = ids.PositionHeader.SIZE
-        HEADER_SYNTHETIC_TOKEN_OFFSET = ids.PositionHeader.synthetic_token
-        HEADER_POSITION_ADDRESS_OFFSET = ids.PositionHeader.position_address
-        HEADER_PARTIAL_LIQUIDATIONS_OFFSET = ids.PositionHeader.allow_partial_liquidations
-        HEADER_HASH_OFFSET = ids.PositionHeader.hash
-
-        # * ORDER TAB ================================================================
-        ORDER_TAB_SIZE = ids.OrderTab.SIZE
-        ORDER_TAB_TAB_IDX_OFFSET = ids.OrderTab.tab_idx
-        ORDER_TAB_TAB_HEADER_OFFSET = ids.OrderTab.tab_header
-        ORDER_TAB_BASE_AMOUNT_OFFSET = ids.OrderTab.base_amount
-        ORDER_TAB_QUOTE_AMOUNT_OFFSET = ids.OrderTab.quote_amount
-        ORDER_TAB_HASH_OFFSET = ids.OrderTab.hash
-
-        # * Tab Header 
-        TAB_HEADER_SIZE = ids.TabHeader.SIZE
-        TAB_HEADER_IS_PERP_OFFSET = ids.TabHeader.is_perp
-        TAB_HEADER_IS_SMART_CONTRACT_OFFSET = ids.TabHeader.is_smart_contract
-        TAB_HEADER_BASE_TOKEN_OFFSET = ids.TabHeader.base_token
-        TAB_HEADER_QUOTE_TOKEN_OFFSET = ids.TabHeader.quote_token
-        TAB_HEADER_BASE_BLINDING_OFFSET = ids.TabHeader.base_blinding
-        TAB_HEADER_QUOTE_BLINDING_OFFSET = ids.TabHeader.quote_blinding
-        TAB_HEADER_PUB_KEY_OFFSET = ids.TabHeader.pub_key
-        TAB_HEADER_HASH_OFFSET = ids.TabHeader.hash
+        POS_HEADER_SYNTHETIC_TOKEN_OFFSET = ids.PositionHeader.synthetic_token
+        POS_HEADER_POSITION_ADDRESS_OFFSET = ids.PositionHeader.position_address
+        POS_HEADER_ALLOW_PARTIAL_LIQUIDATIONS_OFFSET = ids.PositionHeader.allow_partial_liquidations
+        POS_HEADER_VLP_TOKEN_OFFSET = ids.PositionHeader.vlp_token
+        POS_HEADER_MAX_VLP_SUPPLY_OFFSET = ids.PositionHeader.max_vlp_supply
+        POS_HEADER_HASH_OFFSET = ids.PositionHeader.hash
 
 
         # * WITHDRAWAL ================================================================
@@ -154,76 +118,90 @@ func python_define_utils() {
 
         # // * FUNCTIONS * //
         def store_output_position(position_address, index):
-            header_address = position_address + POSITION_HEADER_OFFSET
+            header_address = position_address + ids.PerpPosition.position_header
             output_positions[index] = {
-                "order_side": memory[position_address + PERP_POSITION_ORDER_SIDE_OFFSET],
-                "position_size": memory[position_address + PERP_POSITION_POSITION_SIZE_OFFSET],
-                "margin": memory[position_address + PERP_POSITION_MARGIN_OFFSET],
-                "entry_price": memory[position_address + PERP_POSITION_ENTRY_PRICE_OFFSET],
-                "liquidation_price": memory[position_address + PERP_POSITION_LIQUIDATION_PRICE_OFFSET],
-                "bankruptcy_price": memory[position_address + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET],
-                "last_funding_idx": memory[position_address + PERP_POSITION_LAST_FUNDING_IDX_OFFSET],
-                "index": memory[position_address + PERP_POSITION_INDEX_OFFSET],
-                "hash": memory[position_address + PERP_POSITION_HASH_OFFSET],
-                "synthetic_token": memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET],
-                "position_address": memory[header_address + HEADER_POSITION_ADDRESS_OFFSET],
-                "allow_partial_liquidations": memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET],
-                "header_hash": memory[header_address + HEADER_HASH_OFFSET],
+                "order_side": memory[position_address + ids.PerpPosition.order_side],
+                "position_size": memory[position_address + ids.PerpPosition.position_size],
+                "margin": memory[position_address + ids.PerpPosition.margin],
+                "entry_price": memory[position_address + ids.PerpPosition.entry_price],
+                "liquidation_price": memory[position_address + ids.PerpPosition.liquidation_price],
+                "bankruptcy_price": memory[position_address + ids.PerpPosition.bankruptcy_price],
+                "last_funding_idx": memory[position_address + ids.PerpPosition.last_funding_idx],
+                "vlp_supply": memory[position_address + ids.PerpPosition.vlp_supply],
+                "index": memory[position_address + ids.PerpPosition.index],
+                "hash": memory[position_address + ids.PerpPosition.hash],
+                "synthetic_token": memory[header_address + ids.PositionHeader.synthetic_token],
+                "position_address": memory[header_address + ids.PositionHeader.position_address],
+                "allow_partial_liquidations": memory[header_address + ids.PositionHeader.allow_partial_liquidations],
+                "vlp_token": memory[header_address + ids.PositionHeader.vlp_token],
+                "max_vlp_supply": memory[header_address + ids.PositionHeader.max_vlp_supply],
+                "header_hash": memory[header_address + ids.PositionHeader.hash],
+
             }
+
 
         def read_output_position(position_address, index):
             position_ = output_positions[index]
             
-            memory[position_address + PERP_POSITION_ORDER_SIDE_OFFSET] = int(position_["order_side"])
-            memory[position_address + PERP_POSITION_POSITION_SIZE_OFFSET] = int(position_["position_size"])
-            memory[position_address + PERP_POSITION_MARGIN_OFFSET] = int(position_["margin"])
-            memory[position_address + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(position_["entry_price"])
-            memory[position_address + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(position_["liquidation_price"])
-            memory[position_address + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(position_["bankruptcy_price"])
-            memory[position_address + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(position_["last_funding_idx"])
-            memory[position_address + PERP_POSITION_INDEX_OFFSET] = int(position_["index"])
-            memory[position_address + PERP_POSITION_HASH_OFFSET] = int(position_["hash"])
+            memory[position_address + ids.PerpPosition.order_side] = int(position_["order_side"])
+            memory[position_address + ids.PerpPosition.position_size] = int(position_["position_size"])
+            memory[position_address + ids.PerpPosition.margin] = int(position_["margin"])
+            memory[position_address + ids.PerpPosition.entry_price] = int(position_["entry_price"])
+            memory[position_address + ids.PerpPosition.liquidation_price] = int(position_["liquidation_price"])
+            memory[position_address + ids.PerpPosition.bankruptcy_price] = int(position_["bankruptcy_price"])
+            memory[position_address + ids.PerpPosition.last_funding_idx] = int(position_["last_funding_idx"])
+            memory[position_address + ids.PerpPosition.vlp_supply] = int(position_["vlp_supply"])
+            memory[position_address + ids.PerpPosition.index] = int(position_["index"])
+            memory[position_address + ids.PerpPosition.hash] = int(position_["hash"])
             #
-            header_address = position_address + POSITION_HEADER_OFFSET
-            memory[header_address + HEADER_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
-            memory[header_address + HEADER_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
-            memory[header_address + HEADER_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
-            memory[header_address + HEADER_HASH_OFFSET] = int(position_["header_hash"])
+            header_address = position_address + ids.PerpPosition.position_header
+
+            memory[header_address + POS_HEADER_SYNTHETIC_TOKEN_OFFSET] = int(position_["synthetic_token"])
+            memory[header_address + POS_HEADER_POSITION_ADDRESS_OFFSET] = int(position_["position_address"])
+            memory[header_address + POS_HEADER_ALLOW_PARTIAL_LIQUIDATIONS_OFFSET] = int(position_["allow_partial_liquidations"])
+            memory[header_address + POS_HEADER_VLP_TOKEN_OFFSET] = int(position_["vlp_token"])
+            memory[header_address + POS_HEADER_MAX_VLP_SUPPLY_OFFSET] = int(position_["max_vlp_supply"])
+            memory[header_address + POS_HEADER_HASH_OFFSET] = int(position_["header_hash"])
 
 
-        def store_output_order_tab(header_address, index, base_amount, quote_amount, new_updated_hash):
+
+        def store_output_order_tab(header_address, index, base_amount, quote_amount, vlp_supply, new_updated_hash):
             output_tabs[index] = {
                 "index": index,
-                "is_perp": memory[header_address + TAB_HEADER_IS_PERP_OFFSET],
-                "is_smart_contract": memory[header_address + TAB_HEADER_IS_SMART_CONTRACT_OFFSET],
-                "base_token": memory[header_address + TAB_HEADER_BASE_TOKEN_OFFSET],
-                "quote_token": memory[header_address + TAB_HEADER_QUOTE_TOKEN_OFFSET],
-                "base_blinding": memory[header_address + TAB_HEADER_BASE_BLINDING_OFFSET],
-                "quote_blinding": memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET],
-                "pub_key": memory[header_address + TAB_HEADER_PUB_KEY_OFFSET],
-                "header_hash": memory[header_address + TAB_HEADER_HASH_OFFSET],
+                "is_smart_contract": memory[header_address + ids.TabHeader.is_smart_contract],
+                "base_token": memory[header_address + ids.TabHeader.base_token],
+                "quote_token": memory[header_address + ids.TabHeader.quote_token],
+                "base_blinding": memory[header_address + ids.TabHeader.base_blinding],
+                "quote_blinding": memory[header_address + ids.TabHeader.quote_blinding],
+                "pub_key": memory[header_address + ids.TabHeader.pub_key],
+                "header_hash": memory[header_address + ids.TabHeader.hash],
+                "vlp_token": memory[header_address + ids.TabHeader.vlp_token],
+                "max_vlp_supply": memory[header_address + ids.TabHeader.max_vlp_supply],
                 "base_amount": base_amount,
                 "quote_amount": quote_amount,
+                "vlp_supply": vlp_supply,
                 "hash": new_updated_hash,
             }
 
         def read_output_order_tab(tab_address, index):
             order_tab = output_tabs[index]
 
-            memory[tab_address + ORDER_TAB_TAB_IDX_OFFSET] = int(order_tab["index"])
-            memory[tab_address + ORDER_TAB_BASE_AMOUNT_OFFSET] = int(order_tab["base_amount"])
-            memory[tab_address + ORDER_TAB_QUOTE_AMOUNT_OFFSET] = int(order_tab["quote_amount"])
-            memory[tab_address + ORDER_TAB_HASH_OFFSET] = int(order_tab["hash"])
+            memory[tab_address + ids.OrderTab.tab_idx] = int(order_tab["index"])
+            memory[tab_address + ids.OrderTab.base_amount] = int(order_tab["base_amount"])
+            memory[tab_address + ids.OrderTab.quote_amount] = int(order_tab["quote_amount"])
+            memory[tab_address + ids.OrderTab.vlp_supply] = int(order_tab["vlp_supply"])
+            memory[tab_address + ids.OrderTab.hash] = int(order_tab["hash"])
 
-            header_address = tab_address + ORDER_TAB_TAB_HEADER_OFFSET
-            memory[header_address + TAB_HEADER_IS_PERP_OFFSET] = int(order_tab["is_perp"])
-            memory[header_address + TAB_HEADER_IS_SMART_CONTRACT_OFFSET] = int(order_tab["is_smart_contract"])
-            memory[header_address + TAB_HEADER_BASE_TOKEN_OFFSET] = int(order_tab["base_token"])
-            memory[header_address + TAB_HEADER_QUOTE_TOKEN_OFFSET] = int(order_tab["quote_token"])
-            memory[header_address + TAB_HEADER_BASE_BLINDING_OFFSET] = int(order_tab["base_blinding"])
-            memory[header_address + TAB_HEADER_QUOTE_BLINDING_OFFSET] = int(order_tab["quote_blinding"])
-            memory[header_address + TAB_HEADER_PUB_KEY_OFFSET] = int(order_tab["pub_key"])
-            memory[header_address + TAB_HEADER_HASH_OFFSET] = int(order_tab["header_hash"])
+            header_address = tab_address + ids.OrderTab.tab_header
+            memory[header_address + ids.TabHeader.is_smart_contract] = int(order_tab["is_smart_contract"])
+            memory[header_address + ids.TabHeader.base_token] = int(order_tab["base_token"])
+            memory[header_address + ids.TabHeader.quote_token] = int(order_tab["quote_token"])
+            memory[header_address + ids.TabHeader.base_blinding] = int(order_tab["base_blinding"])
+            memory[header_address + ids.TabHeader.quote_blinding] = int(order_tab["quote_blinding"])
+            memory[header_address + ids.TabHeader.vlp_token] = int(order_tab["vlp_token"])
+            memory[header_address + ids.TabHeader.max_vlp_supply] = int(order_tab["max_vlp_supply"])
+            memory[header_address + ids.TabHeader.pub_key] = int(order_tab["pub_key"])
+            memory[header_address + ids.TabHeader.hash] = int(order_tab["header_hash"])
 
 
         def print_position(position_address):

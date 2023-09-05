@@ -208,9 +208,8 @@ message GrcpPositionHeader {
     uint32 synthetic_token = 1;
     string position_address = 2;
     bool allow_partial_liquidations = 3;
-    bool is_smart_contract = 4;
-    uint32 vlp_token = 5;
-    uint64 max_vlp_supply = 6;
+    uint32 vlp_token = 4;
+    uint64 max_vlp_supply = 5;
 }
 
 

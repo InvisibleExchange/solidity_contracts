@@ -17,7 +17,7 @@ from perpetuals.order.order_structs import CloseOrderFields
 from rollup.output_structs import ZeroOutput, NoteDiffOutput
 from rollup.global_config import GlobalConfig, get_dust_amount
 
-from order_tabs.order_tab import OrderTab, verify_order_tab_hash, update_order_tab_hash
+from order_tabs.order_tab import OrderTab, TabHeader, verify_order_tab_hash, hash_order_tab_inner
 from order_tabs.update_dicts import (
     close_tab_note_state_updates,
     remove_tab_from_state,
@@ -83,18 +83,18 @@ func close_order_tab{
     %}
 
     let (base_return_note: Note) = construct_new_note(
-        base_close_order_fields.return_collateral_address,
+        base_close_order_fields.dest_received_address,
         base_token,
         base_amount_change,
-        base_close_order_fields.return_collateral_blinding,
+        base_close_order_fields.dest_received_blinding,
         base_idx,
     );
 
     let (quote_return_note: Note) = construct_new_note(
-        quote_close_order_fields.return_collateral_address,
+        quote_close_order_fields.dest_received_address,
         quote_token,
         quote_amount_change,
-        quote_close_order_fields.return_collateral_blinding,
+        quote_close_order_fields.dest_received_blinding,
         quote_idx,
     );
 
@@ -121,8 +121,8 @@ func close_order_tab{
         let updated_base_amount = order_tab.base_amount - base_amount_change;
         let updated_quote_amount = order_tab.quote_amount - quote_amount_change;
 
-        let updated_tab_hash = update_order_tab_hash(
-            order_tab.tab_header, updated_base_amount, updated_quote_amount
+        let updated_tab_hash = hash_order_tab_inner(
+            order_tab.tab_header, updated_base_amount, updated_quote_amount, order_tab.vlp_supply
         );
 
         // ? Update the tab dict
@@ -135,23 +135,24 @@ func close_order_tab{
 func handle_order_tab_input{pedersen_ptr: HashBuiltin*}(order_tab: OrderTab*) {
     %{
         order_tab_addr = ids.order_tab.address_
-        tab_header_addr = order_tab_addr + ORDER_TAB_TAB_HEADER_OFFSET
+        tab_header_addr = order_tab_addr + ids.OrderTab.tab_header
 
-
-        memory[order_tab_addr + ORDER_TAB_TAB_IDX_OFFSET] = int(order_tab_input["tab_idx"])
-        memory[order_tab_addr + ORDER_TAB_BASE_AMOUNT_OFFSET] = int(order_tab_input["base_amount"])
-        memory[order_tab_addr + ORDER_TAB_QUOTE_AMOUNT_OFFSET] = int(order_tab_input["quote_amount"])
-        memory[order_tab_addr + ORDER_TAB_HASH_OFFSET] = int(order_tab_input["hash"])
+        memory[order_tab_addr + ids.OrderTab.tab_idx] = int(order_tab_input["tab_idx"])
+        memory[order_tab_addr + ids.OrderTab.base_amount] = int(order_tab_input["base_amount"])
+        memory[order_tab_addr + ids.OrderTab.quote_amount] = int(order_tab_input["quote_amount"])
+        memory[order_tab_addr + ids.OrderTab.vlp_supply] = int(order_tab_input["vlp_supply"])
+        memory[order_tab_addr + ids.OrderTab.hash] = int(order_tab_input["hash"])
 
         tab_header = order_tab_input["tab_header"]
-        memory[tab_header_addr + TAB_HEADER_IS_PERP_OFFSET] = int(tab_header["is_perp"])
-        memory[tab_header_addr + TAB_HEADER_IS_SMART_CONTRACT_OFFSET] = int(tab_header["is_smart_contract"])
-        memory[tab_header_addr + TAB_HEADER_BASE_TOKEN_OFFSET] = int(tab_header["base_token"])
-        memory[tab_header_addr + TAB_HEADER_QUOTE_TOKEN_OFFSET] = int(tab_header["quote_token"])
-        memory[tab_header_addr + TAB_HEADER_BASE_BLINDING_OFFSET] = int(tab_header["base_blinding"])
-        memory[tab_header_addr + TAB_HEADER_QUOTE_BLINDING_OFFSET] = int(tab_header["quote_blinding"])
-        memory[tab_header_addr + TAB_HEADER_PUB_KEY_OFFSET] = int(tab_header["pub_key"])
-        memory[tab_header_addr + TAB_HEADER_HASH_OFFSET] = int(tab_header["hash"])
+        memory[tab_header_addr + ids.TabHeader.is_smart_contract] = int(tab_header["is_smart_contract"])
+        memory[tab_header_addr + ids.TabHeader.base_token] = int(tab_header["base_token"])
+        memory[tab_header_addr +  ids.TabHeader.quote_token] = int(tab_header["quote_token"])
+        memory[tab_header_addr + ids.TabHeader.base_blinding] = int(tab_header["base_blinding"])
+        memory[tab_header_addr + ids.TabHeader.quote_blinding] = int(tab_header["quote_blinding"])
+        memory[tab_header_addr + ids.TabHeader.vlp_token] = int(tab_header["vlp_token"])
+        memory[tab_header_addr + ids.TabHeader.max_vlp_supply] = int(tab_header["max_vlp_supply"])
+        memory[tab_header_addr + ids.TabHeader.pub_key] = int(tab_header["pub_key"])
+        memory[tab_header_addr + ids.TabHeader.hash] = int(tab_header["hash"])
     %}
 
     return ();
@@ -161,14 +162,14 @@ func get_close_order_fields{pedersen_ptr: HashBuiltin*}(
     base_close_order_fields: CloseOrderFields*, quote_close_order_fields: CloseOrderFields*
 ) {
     %{
-        base_close_order_field_inputs = current_order ["base_close_order_fields"]
-        quote_close_order_field_inputs = current_order ["quote_close_order_fields"]
+        base_close_order_field_inputs = current_order["base_close_order_fields"]
+        quote_close_order_field_inputs = current_order["quote_close_order_fields"]
 
-        memory[ids.base_close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(base_close_order_field_inputs["dest_received_address"]["x"])
-        memory[ids.base_close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(base_close_order_field_inputs["dest_received_blinding"])
+        memory[ids.base_close_order_fields.address_ + ids.CloseOrderFields.dest_received_address] = int(base_close_order_field_inputs["dest_received_address"]["x"])
+        memory[ids.base_close_order_fields.address_ + ids.CloseOrderFields.dest_received_blinding] = int(base_close_order_field_inputs["dest_received_blinding"])
 
-        memory[ids.quote_close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(quote_close_order_field_inputs["dest_received_address"]["x"])
-        memory[ids.quote_close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(quote_close_order_field_inputs["dest_received_blinding"])
+        memory[ids.quote_close_order_fields.address_ + ids.CloseOrderFields.dest_received_address] = int(quote_close_order_field_inputs["dest_received_address"]["x"])
+        memory[ids.quote_close_order_fields.address_ + ids.CloseOrderFields.dest_received_blinding] = int(quote_close_order_field_inputs["dest_received_blinding"])
     %}
 
     return ();

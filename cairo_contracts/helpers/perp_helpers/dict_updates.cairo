@@ -8,7 +8,7 @@ from starkware.cairo.common.merkle_multi_update import merkle_multi_update
 from starkware.cairo.common.math import unsigned_div_rem, assert_le
 from starkware.cairo.common.math_cmp import is_le
 
-from perpetuals.order.order_structs import PerpOrder, PerpPosition
+from perpetuals.order.order_structs import PerpOrder, PerpPosition, PositionHeader
 from helpers.utils import Note
 
 func update_state_dict{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*}(

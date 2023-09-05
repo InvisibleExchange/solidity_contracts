@@ -26,7 +26,7 @@ from helpers.signatures.signatures import verify_open_order_tab_signature
 from rollup.output_structs import ZeroOutput, NoteDiffOutput
 from rollup.global_config import GlobalConfig
 
-from order_tabs.order_tab import OrderTab, verify_order_tab_hash, update_order_tab_hash
+from order_tabs.order_tab import OrderTab, verify_order_tab_hash, hash_order_tab_inner
 from order_tabs.update_dicts import (
     open_tab_state_note_updates,
     add_new_tab_to_state,
@@ -111,8 +111,8 @@ func open_order_tab{
         let updated_base_amount = order_tab.base_amount + base_amount;
         let updated_quote_amount = order_tab.quote_amount + quote_amount;
 
-        let updated_tab_hash = update_order_tab_hash(
-            order_tab.tab_header, updated_base_amount, updated_quote_amount
+        let updated_tab_hash = hash_order_tab_inner(
+            order_tab.tab_header, updated_base_amount, updated_quote_amount, order_tab.vlp_supply
         );
 
         // ? Verify the signature
@@ -167,7 +167,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
 ) {
     %{
         ##* BASE INPUT NOTES =============================================================
-        input_notes = current_order ["base_notes_in"]
+        input_notes = current_order["base_notes_in"]
 
         memory[ids.base_notes_in_len] = len(input_notes)
         memory[ids.base_notes_in] = notes_ = segments.add()
@@ -180,7 +180,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
             memory[notes_ + i* NOTE_SIZE + INDEX_OFFSET] = int(input_notes[i]["index"])
             memory[notes_ + i* NOTE_SIZE + HASH_OFFSET] = int(input_notes[i]["hash"])
 
-        refund_note__  = current_order ["base_refund_note"]
+        refund_note__  = current_order["base_refund_note"]
         if refund_note__ is not None:
             memory[ids.base_refund_note.address_ + ADDRESS_OFFSET+0] = int(refund_note__["address"]["x"])
             memory[ids.base_refund_note.address_ + ADDRESS_OFFSET+1] = int(refund_note__["address"]["y"])
@@ -200,7 +200,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
 
 
         ##* QUOTE INPUT NOTES =============================================================
-        input_notes = current_order ["quote_notes_in"]
+        input_notes = current_order["quote_notes_in"]
 
         memory[ids.quote_notes_in_len] = len(input_notes)
         memory[ids.quote_notes_in] = notes_ = segments.add()
@@ -213,7 +213,7 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
             memory[notes_ + i* NOTE_SIZE + INDEX_OFFSET] = int(input_notes[i]["index"])
             memory[notes_ + i* NOTE_SIZE + HASH_OFFSET] = int(input_notes[i]["hash"])
 
-        refund_note__  = current_order ["quote_refund_note"]
+        refund_note__  = current_order["quote_refund_note"]
         if refund_note__ is not None:
             memory[ids.quote_refund_note.address_ + ADDRESS_OFFSET+0] = int(refund_note__["address"]["x"])
             memory[ids.quote_refund_note.address_ + ADDRESS_OFFSET+1] = int(refund_note__["address"]["y"])

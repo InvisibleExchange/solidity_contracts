@@ -4,7 +4,7 @@ from starkware.cairo.common.dict_access import DictAccess
 from helpers.utils import Note
 from helpers.spot_helpers.dict_updates import _update_multi_inner
 
-from order_tabs.order_tab import OrderTab
+from order_tabs.order_tab import OrderTab, TabHeader
 
 func open_tab_state_note_updates{
     pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_updates: Note*
@@ -100,7 +100,6 @@ func close_tab_note_state_updates{
     assert state_dict_ptr.key = quote_return_note.index;
     assert state_dict_ptr.prev_value = 0;
     assert state_dict_ptr.new_value = quote_return_note.hash;
-    %{ leaf_node_types[ids.quote_return_note.index] = "note" %}
 
     let state_dict = state_dict + DictAccess.SIZE;
 
@@ -129,7 +128,7 @@ func add_new_tab_to_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
     let state_dict = state_dict + DictAccess.SIZE;
 
     %{ leaf_node_types[ids.order_tab.tab_idx] = "order_tab" %}
-    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.order_tab.tab_idx, ids.order_tab.base_amount, ids.order_tab.quote_amount, ids.order_tab.hash ) %}
+    %{ store_output_order_tab(ids.order_tab.tab_header.address_, ids.order_tab.tab_idx, ids.order_tab.base_amount, ids.order_tab.quote_amount,ids.order_tab.vlp_supply, ids.order_tab.hash ) %}
 
     return ();
 }
@@ -160,7 +159,7 @@ func update_tab_in_state{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*}(
     let state_dict = state_dict + DictAccess.SIZE;
 
     %{ leaf_node_types[ids.prev_order_tab.tab_idx] = "order_tab" %}
-    %{ store_output_order_tab(ids.prev_order_tab.tab_header.address_, ids.prev_order_tab.tab_idx, ids.new_base_amount, ids.new_quote_amount, ids.updated_tab_hash) %}
+    %{ store_output_order_tab(ids.prev_order_tab.tab_header.address_, ids.prev_order_tab.tab_idx, ids.new_base_amount, ids.new_quote_amount, ids.prev_order_tab.vlp_supply, ids.updated_tab_hash) %}
 
     return ();
 }

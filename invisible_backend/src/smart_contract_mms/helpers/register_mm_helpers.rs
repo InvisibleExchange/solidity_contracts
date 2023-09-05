@@ -82,7 +82,7 @@ pub fn verify_position_validity(
     let position = position.unwrap();
 
     // ? Verify this is a smart_contract initiated order tab
-    if position.position_header.is_smart_contract {
+    if position.vlp_supply > 0 {
         return Err("This is already a smart contract initiated position".to_string());
     }
 
@@ -93,18 +93,18 @@ pub fn verify_position_validity(
 
 /// Verify the signature for the order tab hash
 pub fn verfiy_open_order_sig(
-    pub_key: &BigUint,
+    address: &BigUint,
     hash: &BigUint,
     vlp_token: u32,
     max_vlp_supply: u64,
     close_order_fields: &CloseOrderFields,
     signature: &Signature,
 ) -> bool {
-    // & header_hash = H({pub_key, hash, vlp_token, max_vlp_supply, close_order_fields_hash})
+    // & header_hash = H({address, hash, vlp_token, max_vlp_supply, close_order_fields_hash})
 
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    hash_inputs.push(&pub_key);
+    hash_inputs.push(&address);
     hash_inputs.push(&hash);
 
     let vlp_token = BigUint::from(vlp_token);
@@ -118,7 +118,28 @@ pub fn verfiy_open_order_sig(
 
     let hash = pedersen_on_vec(&hash_inputs);
 
-    let valid = verify(&pub_key, &hash, signature);
+    let valid = verify(&address, &hash, signature);
 
     return valid;
 }
+
+// hash_inputs: [
+//     2688295601015610158450806541720213979555219946737623471796032695097995590077,
+//     2300938210107030541300502293157416800385718086400362874920098891191770379904,
+//     13579,
+//     1000000000000,
+//     3547182060266903206313892127630081181498346934536665442060261434232230303478,
+// ]
+// address: 2688295601015610158450806541720213979555219946737623471796032695097995590077
+// signature: Signature {
+//     r: "3000805497621501828596588216251781410234574544255915582503547620803747224594",
+//     s: "2301671769519052049024214131604254077807510231195197995947145021810131606688",
+// }
+
+// address:  2688295601015610158450806541720213979555219946737623471796032695097995590077
+// hash:  2300938210107030541300502293157416800385718086400362874920098891191770379904
+// vlp_token:  13579
+// max_vlp_supply:  1000000000000
+// close_order_fields_hash:  3547182060266903206313892127630081181498346934536665442060261434232230303478
+// ['371654183892826088852153788063889160997613827948105531551702258426629974366', '308946666465757347569811364838394065142080387166264029859661191326601287115']
+// 2688295601015610158450806541720213979555219946737623471796032695097995590077

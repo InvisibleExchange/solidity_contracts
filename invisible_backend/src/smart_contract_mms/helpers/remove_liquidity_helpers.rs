@@ -220,7 +220,7 @@ pub fn verfiy_position_remove_liquidity_sig(
 
     let mut hash_inputs: Vec<&BigUint> = vec![];
 
-    // & hash = H({collateral_close_order_fields_hash, position_address})
+    // & hash = H({close_order_fields_hash, position_address})
 
     let base_fields_hash = collateral_close_order_fields.hash();
     hash_inputs.push(&base_fields_hash);

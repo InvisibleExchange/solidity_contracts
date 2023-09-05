@@ -20,6 +20,7 @@ pub fn onchain_register_json_output(
     vlp_close_order_fields: &CloseOrderFields,
     vlp_note: &Note,
     max_vlp_supply: u64,
+    index_price: u64,
     signature: &Signature,
 ) {
     let mut json_map = serde_json::map::Map::new();
@@ -70,6 +71,10 @@ pub fn onchain_register_json_output(
         serde_json::to_value(&max_vlp_supply).unwrap(),
     );
     json_map.insert(
+        String::from("index_price"),
+        serde_json::to_value(&index_price).unwrap(),
+    );
+    json_map.insert(
         String::from("signature"),
         serde_json::to_value(&signature).unwrap(),
     );
@@ -92,6 +97,7 @@ pub fn onchain_tab_add_liquidity_json_output(
     new_order_tab_hash: &BigUint,
     vlp_close_order_fields: &CloseOrderFields,
     vlp_note: &Note,
+    index_price: u64,
     signature: &Signature,
 ) {
     let mut json_map = serde_json::map::Map::new();
@@ -140,6 +146,11 @@ pub fn onchain_tab_add_liquidity_json_output(
     json_map.insert(
         String::from("vlp_note_hash"),
         serde_json::to_value(&vlp_note.hash.to_string()).unwrap(),
+    );
+    //
+    json_map.insert(
+        String::from("index_price"),
+        serde_json::to_value(&index_price).unwrap(),
     );
     json_map.insert(
         String::from("signature"),

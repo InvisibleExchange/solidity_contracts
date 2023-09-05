@@ -26,15 +26,16 @@ struct OpenOrderFields {
 }
 
 struct CloseOrderFields {
-    return_collateral_address: felt,
-    return_collateral_blinding: felt,
+    dest_received_address: felt,
+    dest_received_blinding: felt,
 }
 
 struct PositionHeader {
     synthetic_token: felt,
-    // collateral_token: felt,
-    position_address: felt,
     allow_partial_liquidations: felt,
+    position_address: felt,
+    vlp_token: felt,
+    max_vlp_supply: felt,
     hash: felt,
 }
 
@@ -47,6 +48,7 @@ struct PerpPosition {
     liquidation_price: felt,
     bankruptcy_price: felt,
     last_funding_idx: felt,
+    vlp_supply: felt,
     index: felt,
     hash: felt,
 }

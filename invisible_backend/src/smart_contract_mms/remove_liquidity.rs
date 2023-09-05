@@ -232,7 +232,7 @@ pub fn remove_liquidity_from_order_tab(
         let collateral_return_note = Note::new(
             zero_idx1,
             collateral_close_order_fields.dest_received_address.clone(),
-            position.position_header.synthetic_token,
+            COLLATERAL_TOKEN,
             return_collateral_amount,
             collateral_close_order_fields.dest_received_blinding.clone(),
         );

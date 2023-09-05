@@ -76,10 +76,10 @@ func execute_margin_change{
         let return_value = abs_value(margin_change);
 
         let (return_collateral_note: Note) = construct_new_note(
-            close_order_fields.return_collateral_address,
+            close_order_fields.dest_received_address,
             global_config.collateral_token,
             return_value,
-            close_order_fields.return_collateral_blinding,
+            close_order_fields.dest_received_blinding,
             index,
         );
 
@@ -293,8 +293,8 @@ func handle_inputs{pedersen_ptr: HashBuiltin*}(
         close_order_field_inputs = current_margin_change_info["close_order_fields"]
 
 
-        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(close_order_field_inputs["dest_received_address"]["x"]) if close_order_field_inputs  else 0
-        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(close_order_field_inputs["dest_received_blinding"]) if close_order_field_inputs else 0
+        memory[ids.close_order_fields.address_ + ids.CloseOrderFields.dest_received_address] = int(close_order_field_inputs["dest_received_address"]["x"]) if close_order_field_inputs  else 0
+        memory[ids.close_order_fields.address_ + ids.CloseOrderFields.dest_received_blinding] = int(close_order_field_inputs["dest_received_blinding"]) if close_order_field_inputs else 0
 
 
         signature = current_margin_change_info["signature"]

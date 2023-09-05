@@ -212,7 +212,7 @@ pub fn verify_position_validity(
     let position = position.unwrap();
 
     // ? Verify this is a smart_contract initiated order tab
-    if !position.position_header.is_smart_contract {
+    if position.vlp_supply <= 0 {
         return Err("This is not a smart contract initiated position".to_string());
     }
 

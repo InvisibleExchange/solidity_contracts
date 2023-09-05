@@ -40,6 +40,7 @@ from perpetuals.order.order_structs import (
     OpenOrderFields,
     CloseOrderFields,
     PerpPosition,
+    PositionHeader,
 )
 from perpetuals.order.order_hash import (
     verify_order_hash,
@@ -326,10 +327,10 @@ func execute_close_order{
     %{ ids.index = order_indexes["return_collateral_idx"] %}
 
     let (return_collateral_note: Note) = construct_new_note(
-        close_order_fields.return_collateral_address,
+        close_order_fields.dest_received_address,
         global_config.collateral_token,
         collateral_returned,
-        close_order_fields.return_collateral_blinding,
+        close_order_fields.dest_received_blinding,
         index,
     );
 
@@ -337,8 +338,6 @@ func execute_close_order{
 
     return ();
 }
-
-
 
 // * ============================================================
 
@@ -525,7 +524,6 @@ func close_position{
     }
 }
 
-
 // * ============================================================
 
 func refund_unspent_margin_first_fill{
@@ -624,20 +622,23 @@ func get_perp_position() -> PerpPosition {
         position_addr = ids.position.address_
         position_header_addr = ids.position.position_header.address_
 
-        memory[position_addr + PERP_POSITION_ORDER_SIDE_OFFSET] = 1 if prev_position["order_side"] == "Long" else 0
-        memory[position_addr + PERP_POSITION_POSITION_SIZE_OFFSET] = int(prev_position["position_size"])
-        memory[position_addr + PERP_POSITION_MARGIN_OFFSET] = int(prev_position["margin"])
-        memory[position_addr + PERP_POSITION_ENTRY_PRICE_OFFSET] = int(prev_position["entry_price"])
-        memory[position_addr + PERP_POSITION_LIQUIDATION_PRICE_OFFSET] = int(prev_position["liquidation_price"])
-        memory[position_addr + PERP_POSITION_BANKRUPTCY_PRICE_OFFSET] = int(prev_position["bankruptcy_price"])
-        memory[position_addr + PERP_POSITION_LAST_FUNDING_IDX_OFFSET] = int(prev_position["last_funding_idx"])
-        memory[position_addr + PERP_POSITION_INDEX_OFFSET] = int(prev_position["index"])
-        memory[position_addr + PERP_POSITION_HASH_OFFSET] = int(prev_position["hash"])
+        memory[position_addr + ids.PerpPosition.order_side] = 1 if prev_position["order_side"] == "Long" else 0
+        memory[position_addr + ids.PerpPosition.position_size] = int(prev_position["position_size"])
+        memory[position_addr + ids.PerpPosition.margin] = int(prev_position["margin"])
+        memory[position_addr + ids.PerpPosition.entry_price] = int(prev_position["entry_price"])
+        memory[position_addr + ids.PerpPosition.liquidation_price] = int(prev_position["liquidation_price"])
+        memory[position_addr + ids.PerpPosition.bankruptcy_price] = int(prev_position["bankruptcy_price"])
+        memory[position_addr + ids.PerpPosition.last_funding_idx] = int(prev_position["last_funding_idx"])
+        memory[position_addr + ids.PerpPosition.index] = int(prev_position["index"])
+        memory[position_addr + ids.PerpPosition.vlp_supply] = int(prev_position["vlp_supply"])
+        memory[position_addr + ids.PerpPosition.hash] = int(prev_position["hash"])
 
-        memory[position_header_addr + HEADER_SYNTHETIC_TOKEN_OFFSET] = int(prev_position["position_header"]["synthetic_token"])
-        memory[position_header_addr + HEADER_POSITION_ADDRESS_OFFSET] = int(prev_position["position_header"]["position_address"])
-        memory[position_header_addr + HEADER_PARTIAL_LIQUIDATIONS_OFFSET] = int(prev_position["position_header"]["allow_partial_liquidations"])
-        memory[position_header_addr + HEADER_HASH_OFFSET] = int(prev_position["position_header"]["hash"])
+        memory[position_header_addr + ids.PositionHeader.synthetic_token] = int(prev_position["position_header"]["synthetic_token"])
+        memory[position_header_addr + ids.PositionHeader.position_address] = int(prev_position["position_header"]["position_address"])
+        memory[position_header_addr + ids.PositionHeader.allow_partial_liquidations] = int(prev_position["position_header"]["allow_partial_liquidations"])
+        memory[position_header_addr + ids.PositionHeader.vlp_token] = int(prev_position["position_header"]["vlp_token"])
+        memory[position_header_addr + ids.PositionHeader.max_vlp_supply] = int(prev_position["position_header"]["max_vlp_supply"])
+        memory[position_header_addr + ids.PositionHeader.hash] = int(prev_position["position_header"]["hash"])
     %}
 
     return (position);
@@ -693,8 +694,8 @@ func get_close_order_fields{pedersen_ptr: HashBuiltin*}(close_order_fields: Clos
     %{
         close_order_field_inputs = current_order["close_order_fields"]
 
-        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_ADDRESS_OFFSET] = int(close_order_field_inputs["dest_received_address"]["x"])
-        memory[ids.close_order_fields.address_ + RETURN_COLLATERAL_BLINDING_OFFSET] = int(close_order_field_inputs["dest_received_blinding"])
+        memory[ids.close_order_fields.address_ + ids.CloseOrderFields.dest_received_address] = int(close_order_field_inputs["dest_received_address"]["x"])
+        memory[ids.close_order_fields.address_ + ids.CloseOrderFields.dest_received_blinding] = int(close_order_field_inputs["dest_received_blinding"])
     %}
 
     return ();

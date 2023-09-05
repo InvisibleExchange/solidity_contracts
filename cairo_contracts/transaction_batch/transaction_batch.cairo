@@ -44,6 +44,10 @@ from rollup.global_config import (
     GlobalDexState,
 )
 
+from smart_contract_mms.register_mm import register_mm
+from smart_contract_mms.add_liquidity import add_liquidity_to_mm
+from smart_contract_mms.remove_liquidity import remove_liquidity_from_mm
+
 const TREE_DEPTH = 5;
 
 func main{
@@ -222,7 +226,7 @@ func main{
 
     local output_ptr: felt = cast(empty_output_ptr, felt);
 
-    // %{ print("all good") %}
+    %{ print("all good") %}
 
     return ();
 }
@@ -326,6 +330,27 @@ func execute_transactions{
         %{ current_order = current_transaction %}
 
         close_order_tab();
+
+        return execute_transactions();
+    }
+    if (nondet %{ tx_type == "onchain_register_mm" %} != 0) {
+        %{ current_order = current_transaction %}
+
+        register_mm();
+
+        return execute_transactions();
+    }
+    if (nondet %{ tx_type == "add_liquidity" %} != 0) {
+        %{ current_order = current_transaction %}
+
+        add_liquidity_to_mm();
+
+        return execute_transactions();
+    }
+    if (nondet %{ tx_type == "remove_liquidity" %} != 0) {
+        %{ current_order = current_transaction %}
+
+        remove_liquidity_from_mm();
 
         return execute_transactions();
     } else {

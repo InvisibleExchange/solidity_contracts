@@ -19,6 +19,8 @@ from rollup.global_config import (
     GlobalConfig,
 )
 
+from perpetuals.order.order_hash import _hash_position_internal
+
 // * CALCULATE PRICES * #
 
 func _get_entry_price{range_check_ptr, global_config: GlobalConfig*}(
@@ -211,4 +213,44 @@ func _get_leftover_value{range_check_ptr, global_config: GlobalConfig*}(
 
         return leftover_value;
     }
+}
+
+func update_position_info{
+    range_check_ptr, global_config: GlobalConfig*, pedersen_ptr: HashBuiltin*
+}(
+    header_hash: felt,
+    order_side: felt,
+    synthetic_token: felt,
+    position_size: felt,
+    margin: felt,
+    average_entry_price: felt,
+    funding_idx: felt,
+    allow_partial_liquidations: felt,
+    vlp_supply: felt,
+) -> (felt, felt, felt) {
+    alloc_locals;
+
+    let (bankruptcy_price: felt) = _get_bankruptcy_price(
+        average_entry_price, margin, position_size, order_side, synthetic_token
+    );
+    let (liquidation_price: felt) = _get_liquidation_price(
+        average_entry_price,
+        position_size,
+        margin,
+        order_side,
+        synthetic_token,
+        allow_partial_liquidations,
+    );
+
+    let (new_position_hash: felt) = _hash_position_internal(
+        header_hash,
+        order_side,
+        position_size,
+        average_entry_price,
+        liquidation_price,
+        funding_idx,
+        vlp_supply,
+    );
+
+    return (bankruptcy_price, liquidation_price, new_position_hash);
 }

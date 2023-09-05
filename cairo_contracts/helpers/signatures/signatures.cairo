@@ -36,9 +36,9 @@ func verify_spot_signature{ecdsa_ptr: SignatureBuiltin*}(
         ids.sig_s = int(signature[1])
     %}
 
-    // verify_ecdsa_signature(
-    //     message=tx_hash, public_key=pub_key_sum.x, signature_r=sig_r, signature_s=sig_s
-    // );
+    verify_ecdsa_signature(
+        message=tx_hash, public_key=pub_key_sum.x, signature_r=sig_r, signature_s=sig_s
+    );
 
     return (pub_key_sum,);
 }
@@ -48,16 +48,16 @@ func verify_spot_tab_order_signature{ecdsa_ptr: SignatureBuiltin*}(
 ) {
     alloc_locals;
 
-    // local sig_r: felt;
-    // local sig_s: felt;
-    // %{
-    //     ids.sig_r = int(signature[0])
-    //     ids.sig_s = int(signature[1])
-    // %}
+    local sig_r: felt;
+    local sig_s: felt;
+    %{
+        ids.sig_r = int(signature[0])
+        ids.sig_s = int(signature[1])
+    %}
 
-    // return verify_ecdsa_signature(
-    //     message=tx_hash, public_key=tab_pub_key, signature_r=sig_r, signature_s=sig_s
-    // );
+    verify_ecdsa_signature(
+        message=tx_hash, public_key=tab_pub_key, signature_r=sig_r, signature_s=sig_s
+    );
 
     return ();
 }

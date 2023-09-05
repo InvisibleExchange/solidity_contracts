@@ -29,7 +29,6 @@ impl From<PerpPosition> for GrpcPerpPosition {
             synthetic_token: req.position_header.synthetic_token,
             allow_partial_liquidations: req.position_header.allow_partial_liquidations,
             position_address: req.position_header.position_address.to_string(),
-            is_smart_contract: req.position_header.is_smart_contract,
             max_vlp_supply: req.position_header.max_vlp_supply,
             vlp_token: req.position_header.vlp_token,
         };
@@ -73,7 +72,6 @@ impl TryFrom<GrpcPerpPosition> for PerpPosition {
             pos_header.synthetic_token,
             pos_header.allow_partial_liquidations,
             position_address,
-            pos_header.is_smart_contract,
             pos_header.vlp_token,
             pos_header.max_vlp_supply,
         );

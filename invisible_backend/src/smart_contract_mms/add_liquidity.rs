@@ -129,6 +129,7 @@ pub fn add_liquidity_to_mm(
             &order_tab.hash,
             &vlp_close_order_fields,
             &vlp_note,
+            index_price,
             &signature,
         );
 

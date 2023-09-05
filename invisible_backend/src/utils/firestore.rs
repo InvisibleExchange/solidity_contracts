@@ -106,8 +106,11 @@ impl OrderTabObject {
         let vlp_supply_commitment;
         if order_tab.vlp_supply > 0 {
             // ? Hide vlp supply
-            let blindings_sum = &order_tab.tab_header.base_blinding / 2u32
-                + &order_tab.tab_header.quote_blinding / 2u32;
+
+            let b1 = &order_tab.tab_header.base_blinding % BigUint::from(2_u32).pow(128);
+            let b2 = &order_tab.tab_header.quote_blinding % BigUint::from(2_u32).pow(128);
+
+            let blindings_sum = &b1 + &b2;
             vlp_supply_commitment = pedersen(&BigUint::from(order_tab.vlp_supply), &blindings_sum);
 
             let vlp_supply_yt_digits = blindings_sum.to_u64_digits();

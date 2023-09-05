@@ -70,6 +70,8 @@ func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
         position.position_header.synthetic_token,
         position.position_header.allow_partial_liquidations,
         position.position_header.position_address,
+        position.position_header.vlp_token,
+        position.position_header.max_vlp_supply,
     );
 
     assert header_hash = position.position_header.hash;
@@ -81,6 +83,7 @@ func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
         position.entry_price,
         position.liquidation_price,
         position.last_funding_idx,
+        position.vlp_supply,
     );
 
     assert position_hash = position.hash;
@@ -89,7 +92,6 @@ func verify_position_hash{pedersen_ptr: HashBuiltin*}(position: PerpPosition) {
 }
 
 // * HASH FUNCTION HELPERS * #
-
 func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
     header_hash: felt,
     order_side: felt,
@@ -97,6 +99,7 @@ func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
     entry_price: felt,
     liquidation_price: felt,
     last_funding_idx: felt,
+    vlp_supply: felt,
 ) -> (res: felt) {
     alloc_locals;
 
@@ -109,6 +112,7 @@ func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, entry_price);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, liquidation_price);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, last_funding_idx);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, vlp_supply);
         let (res) = hash_finalize(hash_state_ptr);
         let pedersen_ptr = hash_ptr;
         return (res=res);
@@ -116,7 +120,11 @@ func _hash_position_internal{pedersen_ptr: HashBuiltin*}(
 }
 
 func _hash_position_header{pedersen_ptr: HashBuiltin*}(
-    synthetic_token: felt, allow_partial_liquidations: felt, position_address: felt
+    synthetic_token: felt,
+    allow_partial_liquidations: felt,
+    position_address: felt,
+    vlp_token: felt,
+    max_vlp_supply: felt,
 ) -> (res: felt) {
     alloc_locals;
 
@@ -126,6 +134,8 @@ func _hash_position_header{pedersen_ptr: HashBuiltin*}(
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, allow_partial_liquidations);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, synthetic_token);
         let (hash_state_ptr) = hash_update_single(hash_state_ptr, position_address);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, vlp_token);
+        let (hash_state_ptr) = hash_update_single(hash_state_ptr, max_vlp_supply);
         let (res) = hash_finalize(hash_state_ptr);
         let pedersen_ptr = hash_ptr;
         return (res=res);
@@ -169,7 +179,7 @@ func _hash_close_order_fields{pedersen_ptr: HashBuiltin*}(close_order_fields: Cl
     alloc_locals;
 
     let (hash: felt) = hash2{hash_ptr=pedersen_ptr}(
-        close_order_fields.return_collateral_address, close_order_fields.return_collateral_blinding
+        close_order_fields.dest_received_address, close_order_fields.dest_received_blinding
     );
 
     return (res=hash);

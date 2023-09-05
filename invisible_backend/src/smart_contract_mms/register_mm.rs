@@ -129,14 +129,13 @@ pub fn onchain_register_mm(
 
         // ? Update the position -----------------
 
-        position.position_header.is_smart_contract = true;
         position.position_header.vlp_token = register_mm_req.vlp_token;
         position.position_header.max_vlp_supply = register_mm_req.max_vlp_supply;
 
         position.vlp_supply = vlp_amount;
 
         position.position_header.update_hash();
-        position.update_position_info();
+        position.hash = position.hash_position();
 
         new_order_tab = None;
         new_position = Some(position);
@@ -165,6 +164,7 @@ pub fn onchain_register_mm(
         &vlp_close_order_fields,
         &vlp_note,
         register_mm_req.max_vlp_supply,
+        index_price,
         &signature,
     );
 

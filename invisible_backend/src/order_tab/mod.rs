@@ -51,7 +51,6 @@ impl OrderTab {
             self.vlp_supply,
         );
 
-
         self.hash = new_hash;
     }
 }
@@ -75,7 +74,10 @@ fn hash_tab(
     let quote_commitment = pedersen(&BigUint::from(quote_amount), &tab_header.quote_blinding);
     hash_inputs.push(&quote_commitment);
 
-    let blindings_sum = &tab_header.base_blinding / 2u32 + &tab_header.quote_blinding / 2u32;
+    let b1 = &tab_header.base_blinding % BigUint::from(2_u32).pow(128);
+    let b2 = &tab_header.quote_blinding % BigUint::from(2_u32).pow(128);
+
+    let blindings_sum = &b1 + &b2;
     let vlp_supply_commitment = if vlp_supply > 0 {
         pedersen(&BigUint::from(vlp_supply), &blindings_sum)
     } else {
@@ -145,7 +147,6 @@ impl TabHeader {
             &self.pub_key,
         );
 
-
         self.hash = new_hash;
     }
 }
@@ -178,7 +179,6 @@ fn hash_header(
     hash_inputs.push(&max_vlp_supply);
 
     hash_inputs.push(&pub_key);
-
 
     let order_hash = pedersen_on_vec(&hash_inputs);
 

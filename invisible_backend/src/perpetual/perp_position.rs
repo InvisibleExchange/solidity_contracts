@@ -74,7 +74,6 @@ impl PerpPosition {
             synthetic_token,
             allow_partial_liquidations,
             position_address,
-            false,
             0,
             0,
         );
@@ -944,10 +943,9 @@ pub struct PositionHeader {
     pub synthetic_token: u32,             // type of asset being traded
     pub position_address: BigUint,        // address of the position (for signatures)
     pub allow_partial_liquidations: bool, // if true, allow partial liquidations
-    pub is_smart_contract: bool, // if true, the position is a smart contract (in case of mms)
-    pub vlp_token: u32,          // token used for the vlp
-    pub max_vlp_supply: u64,     // max supply of vlp tokens
-    pub hash: BigUint,           // hash of the position
+    pub vlp_token: u32,                   // token used for the vlp
+    pub max_vlp_supply: u64,              // max supply of vlp tokens
+    pub hash: BigUint,                    // hash of the position
 }
 
 impl PositionHeader {
@@ -955,7 +953,6 @@ impl PositionHeader {
         synthetic_token: u32,
         allow_partial_liquidations: bool,
         position_address: BigUint,
-        is_smart_contract: bool,
         vlp_token: u32,
         max_vlp_supply: u64,
     ) -> Self {
@@ -963,7 +960,6 @@ impl PositionHeader {
             synthetic_token,
             allow_partial_liquidations,
             &position_address,
-            is_smart_contract,
             vlp_token,
             max_vlp_supply,
         );
@@ -973,7 +969,6 @@ impl PositionHeader {
             synthetic_token,
             position_address,
             hash: header_hash,
-            is_smart_contract,
             vlp_token,
             max_vlp_supply,
         }
@@ -984,7 +979,6 @@ impl PositionHeader {
             self.synthetic_token,
             self.allow_partial_liquidations,
             &self.position_address,
-            self.is_smart_contract,
             self.vlp_token,
             self.max_vlp_supply,
         );
@@ -1036,7 +1030,6 @@ impl Serialize for PositionHeader {
             &self.allow_partial_liquidations,
         )?;
         header.serialize_field("position_address", &self.position_address.to_string())?;
-        header.serialize_field("is_smart_contract", &self.is_smart_contract)?;
         header.serialize_field("vlp_token", &self.vlp_token)?;
         header.serialize_field("max_vlp_supply", &self.max_vlp_supply)?;
         header.serialize_field("hash", &self.hash.to_string())?;
@@ -1104,7 +1097,6 @@ impl<'de> Deserialize<'de> for PositionHeader {
             // collateral_token: u32,
             position_address: String,
             allow_partial_liquidations: bool,
-            is_smart_contract: bool,
             vlp_token: u32,
             max_vlp_supply: u64,
             hash: String,
@@ -1117,7 +1109,6 @@ impl<'de> Deserialize<'de> for PositionHeader {
             // collateral_token: helper.collateral_token,
             position_address: BigUint::from_str(&helper.position_address).unwrap(),
             allow_partial_liquidations: helper.allow_partial_liquidations,
-            is_smart_contract: helper.is_smart_contract,
             vlp_token: helper.vlp_token,
             max_vlp_supply: helper.max_vlp_supply,
             hash: BigUint::from_str(&helper.hash).unwrap(),
@@ -1167,13 +1158,12 @@ fn _hash_position_header(
     synthetic_token: u32,
     allow_partial_liquidations: bool,
     position_address: &BigUint,
-    is_smart_contract: bool,
     vlp_token: u32,
     max_vlp_supply: u64,
 ) -> BigUint {
     let mut hash_inputs: Vec<&BigUint> = Vec::new();
 
-    // & hash = H({allow_partial_liquidations, synthetic_token, position_address, is_smart_contract, vlp_token, max_vlp_supply})
+    // & hash = H({allow_partial_liquidations, synthetic_token, position_address,  vlp_token, max_vlp_supply})
 
     let allow_partial_liquidations =
         BigUint::from_u8(if allow_partial_liquidations { 1 } else { 0 }).unwrap();
@@ -1183,9 +1173,6 @@ fn _hash_position_header(
     hash_inputs.push(&synthetic_token);
 
     hash_inputs.push(position_address);
-
-    let is_smart_contract = BigUint::from_u8(if is_smart_contract { 1 } else { 0 }).unwrap();
-    hash_inputs.push(&is_smart_contract);
 
     let vlp_token = BigUint::from_u32(vlp_token).unwrap();
     hash_inputs.push(&vlp_token);

@@ -24,7 +24,7 @@ from rollup.output_structs import ZeroOutput
 from rollup.global_config import get_dust_amount, GlobalConfig
 
 from order_tabs.update_dicts import update_tab_in_state
-from order_tabs.order_tab import OrderTab, update_order_tab_hash
+from order_tabs.order_tab import OrderTab, hash_order_tab_inner
 
 from invisible_swaps.order.invisible_order import hash_transaction, Invisibl3Order
 
@@ -62,8 +62,8 @@ func execute_tab_orders{
         let updated_quote_amount = order_tab.quote_amount - spent_amount;
         let updated_base_amount = order_tab.base_amount + received_amount - fee_taken;
 
-        let updated_tab_hash = update_order_tab_hash(
-            order_tab.tab_header, updated_base_amount, updated_quote_amount
+        let updated_tab_hash = hash_order_tab_inner(
+            order_tab.tab_header, updated_base_amount, updated_quote_amount, order_tab.vlp_supply
         );
 
         // ? Update the state
@@ -78,8 +78,8 @@ func execute_tab_orders{
         let updated_quote_amount = order_tab.quote_amount + received_amount - fee_taken;
         let updated_base_amount = order_tab.base_amount - spent_amount;
 
-        let updated_tab_hash = update_order_tab_hash(
-            order_tab.tab_header, updated_base_amount, updated_quote_amount
+        let updated_tab_hash = hash_order_tab_inner(
+            order_tab.tab_header, updated_base_amount, updated_quote_amount, order_tab.vlp_supply
         );
 
         // ? Update the state
