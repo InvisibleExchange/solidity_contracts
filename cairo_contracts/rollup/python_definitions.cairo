@@ -24,7 +24,6 @@ func python_define_utils() {
         output_positions = {}
         output_tabs = {}
 
-
         fee_tracker_dict_manager = {}
 
         accumulated_deposit_hashes = {}
@@ -130,12 +129,12 @@ func python_define_utils() {
                 "vlp_supply": memory[position_address + ids.PerpPosition.vlp_supply],
                 "index": memory[position_address + ids.PerpPosition.index],
                 "hash": memory[position_address + ids.PerpPosition.hash],
-                "synthetic_token": memory[header_address + ids.PositionHeader.synthetic_token],
-                "position_address": memory[header_address + ids.PositionHeader.position_address],
-                "allow_partial_liquidations": memory[header_address + ids.PositionHeader.allow_partial_liquidations],
-                "vlp_token": memory[header_address + ids.PositionHeader.vlp_token],
-                "max_vlp_supply": memory[header_address + ids.PositionHeader.max_vlp_supply],
-                "header_hash": memory[header_address + ids.PositionHeader.hash],
+                "synthetic_token": memory[header_address + POS_HEADER_SYNTHETIC_TOKEN_OFFSET],
+                "position_address": memory[header_address + POS_HEADER_POSITION_ADDRESS_OFFSET],
+                "allow_partial_liquidations": memory[header_address + POS_HEADER_ALLOW_PARTIAL_LIQUIDATIONS_OFFSET],
+                "vlp_token": memory[header_address + POS_HEADER_VLP_TOKEN_OFFSET],
+                "max_vlp_supply": memory[header_address + POS_HEADER_MAX_VLP_SUPPLY_OFFSET],
+                "header_hash": memory[header_address + POS_HEADER_HASH_OFFSET],
 
             }
 

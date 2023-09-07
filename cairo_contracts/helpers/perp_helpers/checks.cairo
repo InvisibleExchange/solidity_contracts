@@ -49,23 +49,12 @@ func consistency_checks{range_check_ptr, global_config: GlobalConfig*}(
     assert_le(spent_collateral - dust_amount2, order_a.collateral_amount);
     assert_le(spent_synthetic - dust_amount1, order_b.synthetic_amount);
 
-    // & If the order is short than more collateral and less synthetic is good (higher price)
-    // & If the order is long than more synthetic and less collateral is good (lower price)
     // ? Verify consistency of amounts swaped
-    let (dec1) = token_decimals(order_a.synthetic_token);
-    let (dec2) = token_decimals(global_config.collateral_token);
     // ? Check the price is consistent to 0.01% (1/10000)
-    let (multiplier) = pow(10, dec1 + dec2 - 4);
-
-    let a1_ = spent_collateral * order_a.synthetic_amount;
-    let a2_ = spent_synthetic * order_a.collateral_amount;
-    let b1_ = spent_synthetic * order_b.collateral_amount;
-    let b2_ = spent_collateral * order_b.synthetic_amount;
-
-    let (a1, _) = unsigned_div_rem(a1_, multiplier);
-    let (a2, _) = unsigned_div_rem(a2_, multiplier);
-    let (b1, _) = unsigned_div_rem(b1_, multiplier);
-    let (b2, _) = unsigned_div_rem(b2_, multiplier);
+    let a1 = spent_collateral * order_a.synthetic_amount * 9999;
+    let a2 = spent_synthetic * order_a.collateral_amount * 10000;
+    let b1 = spent_synthetic * order_b.collateral_amount * 10000;
+    let b2 = spent_collateral * order_b.synthetic_amount * 10001;
 
     assert_le(a1, a2);
     assert_le(b1, b2);

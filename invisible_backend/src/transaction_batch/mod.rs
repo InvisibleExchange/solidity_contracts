@@ -516,8 +516,8 @@ impl TransactionBatch {
     pub fn split_notes(
         &mut self,
         notes_in: Vec<Note>,
-        new_note: Note,
-        refund_note: Option<Note>,
+        mut new_note: Note,
+        mut refund_note: Option<Note>,
     ) -> std::result::Result<Vec<u64>, String> {
         let token = notes_in[0].token;
 
@@ -548,87 +548,56 @@ impl TransactionBatch {
         }
         let new_amount = new_note.amount;
 
-        let mut notes_out = Vec::new();
-        notes_out.push(new_note);
+        // ? get and set new index
+        let new_index = state_tree.first_zero_idx();
+        new_note.index = new_index;
+
+        let mut new_indexes = vec![new_index];
 
         let mut refund_amount: u64 = 0;
         if refund_note.is_some() {
-            let refund_note_ = refund_note.unwrap();
+            let refund_note = refund_note.as_mut().unwrap();
 
-            if refund_note_.token != token {
+            if refund_note.token != token {
                 return Err("Invalid token".to_string());
             }
 
             let note_in2 = &notes_in[notes_in.len() - 1];
-            if refund_note_.blinding != note_in2.blinding
-                || refund_note_.address.x != note_in2.address.x
+            if refund_note.blinding != note_in2.blinding
+                || refund_note.address.x != note_in2.address.x
             {
                 return Err(
-                    "Mismatch od address and blinding between input/output notes".to_string(),
+                    "Mismatch of address and blinding between input/output notes".to_string(),
                 );
             }
 
-            refund_amount = refund_note_.amount;
+            refund_amount = refund_note.amount;
 
-            notes_out.push(refund_note_);
+            let new_index = state_tree.first_zero_idx();
+            refund_note.index = new_index;
+            new_indexes.push(new_index)
         }
 
-        if sum_in < new_amount + refund_amount
-            || sum_in > new_amount + refund_amount + DUST_AMOUNT_PER_ASSET[&token.to_string()]
-        {
+        if sum_in != new_amount + refund_amount {
             return Err("New note amounts exceed old note amounts".to_string());
         }
 
-        let mut zero_idxs: Vec<u64> = Vec::new(); // TODO: Should be renamed to new_idxs
-
+        // ? Remove notes in from state
         let mut updated_state_hashes = self.updated_state_hashes.lock();
-        if notes_in.len() > notes_out.len() {
-            for i in 0..notes_out.len() {
-                state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_state_hashes.insert(
-                    notes_in[i].index,
-                    (LeafNodeType::Note, notes_out[i].hash.clone()),
-                );
-
-                zero_idxs.push(notes_in[i].index)
-            }
-
-            for i in notes_out.len()..notes_in.len() {
-                state_tree.update_leaf_node(&BigUint::zero(), notes_in[i].index);
-                updated_state_hashes
-                    .insert(notes_in[i].index, (LeafNodeType::Note, BigUint::zero()));
-            }
-        } else if notes_in.len() == notes_out.len() {
-            for i in 0..notes_out.len() {
-                state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_state_hashes.insert(
-                    notes_in[i].index,
-                    (LeafNodeType::Note, notes_out[i].hash.clone()),
-                );
-
-                zero_idxs.push(notes_in[i].index);
-            }
-        } else {
-            for i in 0..notes_in.len() {
-                state_tree.update_leaf_node(&notes_out[i].hash, notes_in[i].index);
-                updated_state_hashes.insert(
-                    notes_in[i].index,
-                    (LeafNodeType::Note, notes_out[i].hash.clone()),
-                );
-
-                zero_idxs.push(notes_in[i].index);
-            }
-
-            for i in notes_in.len()..notes_out.len() {
-                let zero_idx = state_tree.first_zero_idx();
-
-                state_tree.update_leaf_node(&notes_out[i].hash, zero_idx);
-                updated_state_hashes
-                    .insert(zero_idx, (LeafNodeType::Note, notes_out[i].hash.clone()));
-
-                zero_idxs.push(zero_idx);
-            }
+        for note in notes_in.iter() {
+            state_tree.update_leaf_node(&BigUint::zero(), note.index);
+            updated_state_hashes.insert(note.index, (LeafNodeType::Note, BigUint::zero()));
         }
+
+        // ? Add return in to state
+        state_tree.update_leaf_node(&new_note.hash, new_note.index);
+        updated_state_hashes.insert(new_note.index, (LeafNodeType::Note, new_note.hash.clone()));
+
+        if let Some(note) = refund_note.as_ref() {
+            state_tree.update_leaf_node(&note.hash, note.index);
+            updated_state_hashes.insert(note.index, (LeafNodeType::Note, note.hash.clone()));
+        }
+
         drop(updated_state_hashes);
         drop(state_tree);
 
@@ -637,9 +606,9 @@ impl TransactionBatch {
         update_db_after_note_split(
             &self.firebase_session,
             &self.backup_storage,
-            notes_in.clone(),
-            notes_out.clone(),
-            &zero_idxs,
+            &notes_in,
+            new_note.clone(),
+            refund_note.clone(),
         );
 
         // ----------------------------------------------
@@ -651,14 +620,14 @@ impl TransactionBatch {
         );
         json_map.insert(
             String::from("note_split"),
-            json!({"token": token, "notes_in": notes_in, "notes_out": notes_out, "zero_idxs": zero_idxs}),
+            json!({"token": token, "notes_in": notes_in, "new_note": new_note, "refund_note": refund_note}),
         );
 
         let mut swap_output_json = self.swap_output_json.lock();
         swap_output_json.push(json_map);
         drop(swap_output_json);
 
-        Ok(zero_idxs)
+        Ok(new_indexes)
     }
 
     pub fn change_position_margin(

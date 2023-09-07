@@ -179,9 +179,9 @@ pub fn update_db_after_withdrawal(
 pub fn update_db_after_note_split(
     session: &Arc<Mutex<ServiceSession>>,
     backup_storage: &Arc<Mutex<BackupStorage>>,
-    notes_in: Vec<Note>,
-    notes_out: Vec<Note>,
-    zero_idxs: &Vec<u64>,
+    notes_in: &Vec<Note>,
+    new_note: Note,
+    refund_note: Option<Note>,
 ) {
     let mut delete_notes: Vec<(u64, String)> = Vec::new();
     let mut add_notes: Vec<Note> = Vec::new();
@@ -190,10 +190,9 @@ pub fn update_db_after_note_split(
         delete_notes.push((note.index, note.address.x.to_string()))
     }
 
-    for (i, mut note) in notes_out.into_iter().enumerate() {
-        note.index = zero_idxs[i];
-
-        add_notes.push(note.clone());
+    add_notes.push(new_note.clone());
+    if let Some(n) = refund_note {
+        add_notes.push(n);
     }
 
     let add_notes = add_notes.iter().collect::<Vec<&Note>>();

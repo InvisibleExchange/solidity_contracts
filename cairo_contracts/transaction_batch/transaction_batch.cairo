@@ -157,12 +157,7 @@ func main{
         funding_info=funding_info,
         global_config=global_config,
     }();
-    // %{
-    //     t2_end = time.time()
-    //     print("batch execution time total: ", t2_end-t1_start)
-
-    // print("countsMap: ", countsMap)
-    // %}
+    %{ print("countsMap: ", countsMap) %}
 
     // * Squash dictionaries =============================================================================
 
