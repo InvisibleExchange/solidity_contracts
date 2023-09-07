@@ -294,6 +294,42 @@ amqp.connect(rabbitmqConfig, (error0, connection) => {
       );
     });
 
+    // *  ONCHAIN REGISTER MM -----------------------------------------------------------
+    app.post("/onchain_register_mm", (req, res) => {
+      delegateRequest(
+        req.body,
+        "onchain_register_mm",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // *  ADD LIQUIDITY ORDER TAB -----------------------------------------------------------
+    app.post("/add_liquidity_mm", (req, res) => {
+      delegateRequest(
+        req.body,
+        "add_liquidity_mm",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
+    // *  REMOVE LIQUIDITY ORDER TAB -----------------------------------------------------------
+    app.post("/remove_liquidity_mm", (req, res) => {
+      delegateRequest(
+        req.body,
+        "remove_liquidity_mm",
+        channel,
+        res,
+        queue,
+        correlationIdToResolve
+      );
+    });
+
     // ! GETTERS ======================================================================
     // * GET LIQUIDITY ---------------------------------------------------------------------
     app.post("/get_liquidity", (req, res) => {

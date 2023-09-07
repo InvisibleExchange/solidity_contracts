@@ -148,6 +148,18 @@ async function processOrder(correlationId, message) {
     let res = await callModifyOrderTabRpcWithPromise(message);
 
     return res;
+  } else if (correlationId.startsWith("onchain_register_mm")) {
+    let res = await callOnChainRegisterRpcWithPromise(message);
+
+    return res;
+  } else if (correlationId.startsWith("add_liquidity_mm")) {
+    let res = await callAddLiquidityRpcWithPromise(message);
+
+    return res;
+  } else if (correlationId.startsWith("remove_liqudiity_mm")) {
+    let res = await callRemoveLiquidityRpcWithPromise(message);
+
+    return res;
   } else if (correlationId.startsWith("get_orders")) {
     // gets all orders for a user in the backend engine
     let res = await callGetOrderRpcWithPromise(message);
@@ -299,7 +311,8 @@ function callChangeMarginRpcWithPromise(marginReq) {
     });
   });
 }
-//
+
+// -------------------------------------------------
 
 function callOpenOrderTabRpcWithPromise(marginReq) {
   return new Promise((resolve, reject) => {
@@ -337,7 +350,43 @@ function callModifyOrderTabRpcWithPromise(marginReq) {
   });
 }
 
-//
+function callOnChainRegisterRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.onchain_register_mm(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callAddLiquidityRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.add_liquidity_mm(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+function callRemoveLiquidityRpcWithPromise(marginReq) {
+  return new Promise((resolve, reject) => {
+    client.remove_liquidity_mm(marginReq, function (err, response) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+// ---------------------------------------------------
 
 function callGetOrderRpcWithPromise(ordersReq) {
   return new Promise((resolve, reject) => {
