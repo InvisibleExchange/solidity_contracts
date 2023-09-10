@@ -356,65 +356,40 @@ pub fn restore_note_split(
         .unwrap()
         .as_array()
         .unwrap();
-    let notes_out = transaction
+    let new_note = transaction
         .get("note_split")
         .unwrap()
-        .get("notes_out")
-        .unwrap()
-        .as_array()
+        .get("new_note")
         .unwrap();
-    let zero_idxs = transaction
+    let refund_note = transaction
         .get("note_split")
         .unwrap()
-        .get("zero_idxs")
-        .unwrap()
-        .as_array()
+        .get("refund_note")
         .unwrap();
 
-    if notes_in.len() > notes_out.len() {
-        for i in 0..notes_out.len() {
-            let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
+    // ? Remove notes in from state
+    for note in notes_in.iter() {
+        let idx = note.get("index").unwrap().as_u64().unwrap();
 
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
-        }
-
-        for i in notes_out.len()..notes_in.len() {
-            let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
-            state_tree.update_leaf_node(&BigUint::zero(), idx);
-            updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
-        }
-    } else if notes_in.len() == notes_out.len() {
-        for i in 0..notes_out.len() {
-            let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
-
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
-        }
-    } else {
-        for i in 0..notes_in.len() {
-            let idx = notes_in[i].get("index").unwrap().as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
-
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
-        }
-
-        for i in notes_in.len()..notes_out.len() {
-            let idx = zero_idxs[i].as_u64().unwrap();
-            let note_out_hash =
-                BigUint::from_str(notes_out[i].get("hash").unwrap().as_str().unwrap()).unwrap();
-
-            state_tree.update_leaf_node(&note_out_hash, idx);
-            updated_state_hashes.insert(idx, (LeafNodeType::Note, note_out_hash));
-        }
+        state_tree.update_leaf_node(&BigUint::zero(), idx);
+        updated_state_hashes.insert(idx, (LeafNodeType::Note, BigUint::zero()));
     }
 
-    drop(state_tree);
+    // ? Add return in to state
+    let new_note_index = new_note.get("index").unwrap().as_u64().unwrap();
+    let new_note_hash = BigUint::from_str(new_note.get("hash").unwrap().as_str().unwrap()).unwrap();
+    state_tree.update_leaf_node(&new_note_hash, new_note_index);
+    updated_state_hashes.insert(new_note_index, (LeafNodeType::Note, new_note_hash));
+
+    if !refund_note.is_null() {
+        let refund_note_index = refund_note.get("index").unwrap().as_u64().unwrap();
+        let refund_note_hash =
+            BigUint::from_str(refund_note.get("hash").unwrap().as_str().unwrap()).unwrap();
+
+        state_tree.update_leaf_node(&refund_note_hash, refund_note_index);
+        updated_state_hashes.insert(refund_note_index, (LeafNodeType::Note, refund_note_hash));
+    }
+
     drop(updated_state_hashes);
+    drop(state_tree);
 }
