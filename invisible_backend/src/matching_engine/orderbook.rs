@@ -351,19 +351,63 @@ impl OrderBook {
                 );
             }
 
-            let could_be_matched = match side {
+            let mut could_be_matched = true;
+
+            // ? If the positions/order_tabs are the same then the orders can't be matched
+            match &order.order {
+                Order::Spot(spot_order) => {
+                    if let Order::Spot(opposite_order) = &opposite_order.order {
+                        if spot_order.order_tab.is_some() && opposite_order.order_tab.is_some() {
+                            let tab1_hash =
+                                spot_order.order_tab.as_ref().unwrap().lock().hash.clone();
+                            let tab2_hash = opposite_order
+                                .order_tab
+                                .as_ref()
+                                .unwrap()
+                                .lock()
+                                .hash
+                                .clone();
+
+                            if tab1_hash == tab2_hash {
+                                could_be_matched = false;
+                            }
+                        }
+                    }
+                }
+                Order::Perp(perp_order) => {
+                    if let Order::Perp(opposite_order) = &opposite_order.order {
+                        if perp_order.position.is_some() && opposite_order.position.is_some() {
+                            let pos1_hash = perp_order.position.as_ref().unwrap().hash.clone();
+                            let pos2_hash = opposite_order.position.as_ref().unwrap().hash.clone();
+
+                            if pos1_hash == pos2_hash {
+                                could_be_matched = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ? Check if the price is good enough to match
+            match side {
                 // verify bid/ask price overlap
                 OrderSide::Bid => {
-                    price
-                        >= opposite_order
-                            .order
-                            .get_price(opposite_order.order_side, Some(true))
-                }
-                OrderSide::Ask => {
-                    price
+                    if price
                         <= opposite_order
                             .order
+                            .get_price(opposite_order.order_side, Some(true))
+                    {
+                        could_be_matched = false;
+                    }
+                }
+                OrderSide::Ask => {
+                    if price
+                        >= opposite_order
+                            .order
                             .get_price(opposite_order.order_side, Some(false))
+                    {
+                        could_be_matched = false;
+                    }
                 }
             };
 

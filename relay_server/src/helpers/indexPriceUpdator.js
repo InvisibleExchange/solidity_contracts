@@ -63,7 +63,7 @@ async function getOracleUpdate(token) {
         CRYPTOWATCH_API_KEY
     )
     .then((res) => {
-      let price = Number(
+      let price = Number.parseInt(
         res.data.result.price.last * 10 ** PRICE_DECIMALS_PER_ASSET[token]
       );
 
