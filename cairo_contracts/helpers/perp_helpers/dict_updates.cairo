@@ -51,6 +51,8 @@ func update_one{pedersen_ptr: HashBuiltin*, state_dict: DictAccess*, note_update
         return ();
     }
 
+    %{ leaf_node_types[ids.note_in.index] = "note" %}
+
     return ();
 }
 
