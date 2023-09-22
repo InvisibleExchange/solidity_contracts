@@ -128,7 +128,6 @@ pub async fn execute_perp_swap(
     match perp_swap_response {
         Ok(res1) => match res1 {
             Ok(response) => {
-
                 if maker_side == OrderSide::Long {
                     book.bid_queue
                         .reduce_pending_order(maker_order_id, qty, false);
@@ -213,20 +212,6 @@ pub async fn execute_perp_swap(
                 );
             }
             Err(err) => {
-                let should_rollback = perp_rollback_safeguard.lock().contains_key(&thread_id);
-
-                if should_rollback {
-                    // ? Get the input notes if there were any before initiating the rollback
-                    let (notes_in_a, notes_in_b) = _get_notes_in(&order_a_clone, &order_b_clone);
-
-                    let rollback_message = RollbackMessage {
-                        tx_type: "perp_swap".to_string(),
-                        notes_in_a,
-                        notes_in_b,
-                    };
-                    initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-                }
-
                 // ? Reinsert the orders back into the orderbook
                 let PerpSwapExecutionError {
                     err_msg,
@@ -242,6 +227,8 @@ pub async fn execute_perp_swap(
                         } else {
                             book.ask_queue.reduce_pending_order(maker_order_id, 0, true);
                         }
+
+                        maker_order_id_ = Some(maker_order_id);
                     }
                     // ? else forcefully cancel that order since it is invalid
                     else {

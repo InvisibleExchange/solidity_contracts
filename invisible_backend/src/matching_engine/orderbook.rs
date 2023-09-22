@@ -136,6 +136,7 @@ impl OrderBook {
 
                 let order_id = (seq_id as u64) * 2_u64.pow(16) + self.market_id as u64;
 
+
                 proc_result.push(Ok(Success::Accepted {
                     id: order_id,
                     order_type: OrderType::Limit,
@@ -248,6 +249,7 @@ impl OrderBook {
                             break;
                         }
                     }
+
 
                     for (order, ts) in other_orders.into_iter().rev() {
                         opposite_queue.insert(

@@ -187,6 +187,7 @@ pub async fn submit_limit_order_inner(
         }
     };
 
+
     if retry_messages.len() > 0 {
         if let Err(e) = retry_failed_swaps(
             &mpsc_tx,
@@ -209,6 +210,7 @@ pub async fn submit_limit_order_inner(
             return send_order_error_reply(e);
         }
     }
+
 
     store_output_json(&swap_output_json, &main_storage);
 

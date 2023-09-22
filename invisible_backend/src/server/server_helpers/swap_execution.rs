@@ -44,7 +44,7 @@ type SwapErrorInfo = (Option<u64>, u64, u64, String);
 pub async fn execute_swap(
     swap: Swap,
     transaction_mpsc_tx: MpscSender<(GrpcMessage, OneshotSender<GrpcTxResponse>)>,
-    rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
+    _rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>,
     order_book: Arc<TokioMutex<OrderBook>>,
     user_id_pair: (u64, u64),
     session: Arc<Mutex<ServiceSession>>,
@@ -160,8 +160,6 @@ pub async fn execute_swap(
 
     let swap_handle = handle.await.unwrap();
 
-    let thread_id = swap_handle.thread().id();
-
     let swap_response = swap_handle.join();
 
     match swap_response {
@@ -244,23 +242,6 @@ pub async fn execute_swap(
             Err(err) => {
                 // println!("\n{:?}", err);
 
-                let should_rollback = rollback_safeguard.lock().contains_key(&thread_id);
-
-                if should_rollback {
-                    // let notes_in_a: (u64, Option<Vec<Note>>) =
-                    //     (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
-                    // let notes_in_b: (u64, Option<Vec<Note>>) =
-                    //     (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
-
-                    // let rollback_message = RollbackMessage {
-                    //     tx_type: "swap".to_string(),
-                    //     notes_in_a,
-                    //     notes_in_b,
-                    // };
-
-                    // initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-                }
-
                 let mut maker_order_id_ = None;
                 let mut error_message = "".to_string();
                 if let TransactionExecutionError::Swap(swap_execution_error) = err.current_context()
@@ -277,6 +258,8 @@ pub async fn execute_swap(
                             } else {
                                 book.ask_queue.reduce_pending_order(maker_order_id, 0, true);
                             }
+
+                            maker_order_id_ = Some(maker_order_id);
                         }
                         // ? else forcefully cancel that order since it is invalid
                         else {
@@ -314,23 +297,6 @@ pub async fn execute_swap(
             }
         },
         Err(_e) => {
-            let should_rollback = rollback_safeguard.lock().contains_key(&thread_id);
-
-            if should_rollback {
-                // let notes_in_a: (u64, Option<Vec<Note>>) =
-                //     (order_a_clone.order_id, Some(order_a_clone.notes_in.clone()));
-                // let notes_in_b: (u64, Option<Vec<Note>>) =
-                //     (order_b_clone.order_id, Some(order_b_clone.notes_in.clone()));
-
-                // let rollback_message = RollbackMessage {
-                //     tx_type: "swap".to_string(),
-                //     notes_in_a,
-                //     notes_in_b,
-                // };
-
-                // initiate_rollback(transaction_mpsc_tx, thread_id, rollback_message).await;
-            }
-
             let mut book = order_book.lock().await;
             if maker_side == OBOrderSide::Bid {
                 book.bid_queue

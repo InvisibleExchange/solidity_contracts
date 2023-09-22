@@ -54,6 +54,23 @@ impl MainStorage {
         }
     }
 
+    pub fn revert_current_tx_batch(&self) {
+        let dir = fs::read_dir("storage/transaction_data");
+
+        let batch_index = match dir {
+            Ok(dir) => {
+                dir.filter(|entry| entry.as_ref().map(|e| e.path().is_dir()).unwrap_or(false))
+                    .count()
+                    - 1
+            }
+            Err(_) => 0,
+        };
+
+        // ? delete the current batch
+        fs::remove_dir_all("storage/transaction_data/".to_string() + &batch_index.to_string())
+            .unwrap();
+    }
+
     /// Gets a batch of the latest 15-20 transactions that were executed
     /// and stores them on disk.
     ///
@@ -193,6 +210,12 @@ impl MainStorage {
         min_funding_idx: &HashMap<u32, u32>,
     ) {
         self.funding_db
+            .insert(
+                "current_funding_idx",
+                serde_json::to_vec(&current_funding_idx).unwrap(),
+            )
+            .unwrap();
+        self.funding_db
             .insert("funding_rates", serde_json::to_vec(&funding_rates).unwrap())
             .unwrap();
         self.funding_db
@@ -201,13 +224,6 @@ impl MainStorage {
                 serde_json::to_vec(&funding_prices).unwrap(),
             )
             .unwrap();
-        self.funding_db
-            .insert(
-                "current_funding_idx",
-                serde_json::to_vec(&current_funding_idx).unwrap(),
-            )
-            .unwrap();
-
         self.funding_db
             .insert(
                 "min_funding_idx",
