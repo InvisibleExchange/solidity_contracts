@@ -15,7 +15,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
     event DepositEvent(
         uint64 indexed depositId,
         uint256 indexed pubKey,
-        uint64 tokenId,
+        uint32 tokenId,
         uint64 depositAmountScaled,
         uint256 timestamp
     );
@@ -26,7 +26,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
     );
     event UpdatedPendingDepositsEvent(uint256 timestamp, uint64 txBatchId);
 
-    mapping(uint256 => mapping(uint64 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
+    mapping(uint256 => mapping(uint32 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
 
     mapping(address => mapping(address => uint256)) public s_pendingRefunds; // userAddress => tokenAddress => amount  (amounts from cancelled deposits to be claimed)
 
@@ -38,12 +38,11 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
     struct DepositCancelation {
         address depositor;
         uint256 pubKey;
-        uint64 tokenId;
+        uint32 tokenId;
     }
 
     DepositCancelation[] public s_depositCencelations;
 
-    // todo: Only allow the backend to call this function
     function updatePendingDeposits(
         DepositTransactionOutput[] memory depositOutputs,
         uint64 txBatchId
@@ -53,7 +52,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
 
             (
                 uint64 depositId,
-                uint64 tokenId,
+                uint32 tokenId,
                 uint64 depositAmount,
                 uint256 depositPubKey
             ) = uncompressDepositOutput(depositOutput);
@@ -95,7 +94,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         require(success, "Transfer failed");
 
         // ? Get the token id and scale factor
-        uint64 tokenId = getTokenId(tokenAddress);
+        uint32 tokenId = getTokenId(tokenAddress);
         uint64 depositAmountScaled = scaleDown(amount, tokenId);
 
         // ? Add the amount to the pending deposits
@@ -169,7 +168,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         require(msg.sender != address(0), "msg.sender can't be 0");
 
         // ? Get the token id and scale the amount
-        uint64 tokenId = getTokenId(tokenAddress);
+        uint32 tokenId = getTokenId(tokenAddress);
 
         s_depositCencelations.push(
             DepositCancelation(msg.sender, starkKey, tokenId)
@@ -223,7 +222,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         uint256 starkKey,
         address tokenAddress
     ) internal view returns (uint256) {
-        uint64 tokenId = getTokenId(tokenAddress);
+        uint32 tokenId = getTokenId(tokenAddress);
         uint64 pendingAmount = s_pendingDeposits[starkKey][tokenId];
         return scaleUp(pendingAmount, tokenId);
     }

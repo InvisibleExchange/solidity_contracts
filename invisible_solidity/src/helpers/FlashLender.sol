@@ -53,12 +53,9 @@ contract FlashLender is IERC3156FlashLender {
      * @dev The amount of currency available to be lent.
      * @return The amount of `token` that can be borrowed.
      */
-    function maxFlashLoan(address token)
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function maxFlashLoan(
+        address token
+    ) public view override returns (uint256) {
         return IERC20(token).balanceOf(address(this));
     }
 
@@ -67,12 +64,10 @@ contract FlashLender is IERC3156FlashLender {
      * @param amount The amount of tokens lent.
      * @return The amount of `token` to be charged for the loan, on top of the returned principal.
      */
-    function flashFee(address token, uint256 amount)
-        external
-        pure
-        override
-        returns (uint256)
-    {
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external pure override returns (uint256) {
         return _flashFee(amount);
     }
 

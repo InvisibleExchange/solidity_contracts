@@ -6,7 +6,7 @@ import "forge-std/console.sol";
 import "forge-std/Vm.sol";
 
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
-import "invisible_solidity/src/interactions/Interactions.sol";
+import "src/interactions/Interactions.sol";
 
 // import "src/interactions/Deposit.sol";
 
@@ -23,16 +23,19 @@ contract InteractionsTest is Test {
 
         testToken.mint(
             address(8953626958234137847422389523978938749873),
-            5000 * 10**18
+            5000 * 10 ** 18
         );
 
-        vm.deal(address(8953626958234137847422389523978938749873), 5 * 10**18);
+        vm.deal(
+            address(8953626958234137847422389523978938749873),
+            5 * 10 ** 18
+        );
     }
 
     function testRegisterToken() private {
         address tokenAddress = address(testToken);
 
-        uint64 tokenId = 55555;
+        uint32 tokenId = 55555;
         interactions.registerToken(tokenAddress, tokenId, 6);
 
         require(
@@ -49,15 +52,15 @@ contract InteractionsTest is Test {
     function testErc20Deposit() public {
         address tokenAddress = address(testToken);
         // ? Register token
-        uint64 tokenId = 55555;
+        uint32 tokenId = 55555;
         interactions.registerToken(tokenAddress, tokenId, 6);
         // ? Approve tokens to be spent by the contract
-        testToken.approve(address(interactions), 10**18);
+        testToken.approve(address(interactions), 10 ** 18);
         vm.recordLogs();
         uint256 starkKey = 883045738439352841478194533192765345509759306772397516907181243450667673002;
         uint64 newAmountDeposited = interactions.makeDeposit(
             tokenAddress,
-            10**18,
+            10 ** 18,
             starkKey
         );
         console.log("newAmountDeposited: ", newAmountDeposited);
@@ -97,10 +100,10 @@ contract InteractionsTest is Test {
         address tokenAddress = address(testToken);
         interactions.registerToken(tokenAddress, 55555, 6);
 
-        testToken.approve(address(interactions), 2000 * 10**18);
+        testToken.approve(address(interactions), 2000 * 10 ** 18);
 
         uint256 starkKey1 = 2459783709223877114575387623877149074199685766944984049223820349308467967672;
-        interactions.makeDeposit(tokenAddress, 2000 * 10**18, starkKey1);
+        interactions.makeDeposit(tokenAddress, 2000 * 10 ** 18, starkKey1);
 
         (bool sent, bytes memory data) = address(interactions).call{
             value: 2 ether
@@ -176,10 +179,9 @@ contract InteractionsTest is Test {
     function testParsingOutput() public {}
 }
 
-function bytesToBytes32Array(bytes memory data)
-    pure
-    returns (bytes32[] memory)
-{
+function bytesToBytes32Array(
+    bytes memory data
+) pure returns (bytes32[] memory) {
     // Find 32 bytes segments nb
     uint256 dataNb = data.length / 32;
     // Create an array of dataNb elements

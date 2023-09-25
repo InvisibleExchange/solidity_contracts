@@ -6,12 +6,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/IVaults.sol";
 
 import "../helpers/tokenInfo.sol";
-import "../helpers/parseProgramOutput.sol";
 import "../vaults/VaultRegistry.sol";
 
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
+contract MMRegistry is TokenInfo,  VaultRegistry {
     address public owner;
 
     event newSpotMMRegistration(
@@ -60,10 +59,10 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
 
     constructor(
         address _owner,
-        uint32[] calldata baseAssets,
-        uint32[] calldata quoteAssets,
-        uint32[] calldata syntheticAssets
-    ) public {
+        uint32[] memory baseAssets,
+        uint32[] memory quoteAssets,
+        uint32[] memory syntheticAssets
+    ) {
         for (uint256 i = 0; i < baseAssets.length; i++) {
             uint32 baseAsset = baseAssets[i];
             uint32 quoteAsset = quoteAssets[i];
@@ -118,7 +117,7 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
         // TODO: Get random vlpTokenId
         uint32 vlpTokenId = 1122334455;
 
-        SpotMMRegistration registration = SpotMMRegistration(
+        SpotMMRegistration memory registration = SpotMMRegistration(
             msg.sender,
             baseAsset,
             quoteAsset,
@@ -131,7 +130,7 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
         s_pendingSpotRegiistrations[s_pendingSpotMMCount] = registration;
         s_pendingSpotMMCount += 1;
 
-        emit SpotMMRegistration(
+        emit newSpotMMRegistration(
             msg.sender,
             baseAsset,
             quoteAsset,
@@ -156,7 +155,7 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
         // TODO: Get random vlpTokenId
         uint32 vlpTokenId = 1122334455;
 
-        PerpMMRegistration registration = PerpMMRegistration(
+        PerpMMRegistration memory registration = PerpMMRegistration(
             msg.sender,
             syntheticAsset,
             positionAddress,
@@ -173,7 +172,7 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
             syntheticAsset,
             positionAddress,
             maxVlpSupply,
-            vlpTokenI
+            vlpTokenId
         );
     }
 }

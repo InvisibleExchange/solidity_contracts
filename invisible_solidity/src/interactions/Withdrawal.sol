@@ -27,10 +27,13 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
                 memory withdrawalOutput = withdrawalOutputs[i];
 
             (
-                uint64 tokenId,
+                uint32 chainId,
+                uint32 tokenId,
                 uint64 amount,
                 address recipient
             ) = uncompressWithdrawalOutput(withdrawalOutput);
+
+            // TODO: Check chain id
 
             if (amount == 0) continue;
 
@@ -60,35 +63,110 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
 
     //
 
-    function _makeWithdrawal(address tokenAddress) internal {
-        require(msg.sender != address(0), "msg.sender is address(zero)");
+    function _makeWithdrawal(
+        address _tokenAddress,
+        address _recipient,
+        address _approvedProxy,
+        uint256 _proxyFee,
+        bytes memory _signature
+    ) internal {
+        //
 
-        if (tokenAddress == address(0)) {
-            return withdrawEth();
+        // TODO: Make sure that either msg.sender is the receipient
+        // TODO  or that the receipient signed a message allowing you to withdraw for a fee
+        // TODO: The fee is at most 10% of the withdrawal amount
+
+        if (msg.sender != _recipient) {
+            bytes32 messageHash = keccak256(
+                abi.encodePacked(_tokenAddress, _approvedProxy, _proxyFee)
+            );
+
+            (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+            address signer = ecrecover(messageHash, v, r, s);
+
+            // ? assert that the signer really  aproved the proxy to withdraw
+            require(signer == _recipient, "invalid signature");
+
+            // ? assert that the signer is the intended proxy
+            require(
+                _approvedProxy == msg.sender,
+                "invalid proxy caller address"
+            );
+        } else {
+            _approvedProxy = address(0);
+            _proxyFee = 0;
         }
 
+        if (_tokenAddress == address(0)) {
+            return withdrawETH(_recipient, _approvedProxy, _proxyFee);
+        } else {
+            return
+                withdrawERC20(
+                    _tokenAddress,
+                    _recipient,
+                    _approvedProxy,
+                    _proxyFee
+                );
+        }
+
+        // TODO: This probably isnt needed event is emited in the vault contract
+        // emit WithdrawalEvent(
+        //     msg.sender,
+        //     tokenAddress,
+        //     withdrawableAmount,
+        //     block.timestamp
+        // );
+    }
+
+    function withdrawERC20(
+        address tokenAddress,
+        address _recipient,
+        address _approvedProxy,
+        uint256 _proxyFee
+    ) private {
         address vaultAddress = getAssetVaultAddress(tokenAddress);
         IAssetVault vault = IAssetVault(vaultAddress);
 
-        uint256 withdrawableAmount = vault.getWithdrawableAmount(msg.sender);
+        uint256 withdrawableAmount = vault.getWithdrawableAmount(_recipient);
+        if (msg.sender != _recipient) {
+            // ? The fee is at most 10% of the withdrawal amount
+            require(
+                withdrawableAmount >= _proxyFee * 10,
+                "proxy fee is too high"
+            );
+        }
 
-        vault.makeErc20VaultWithdrawal(msg.sender, tokenAddress);
-
-        emit WithdrawalEvent(
-            msg.sender,
+        vault.makeErc20VaultWithdrawal(
             tokenAddress,
-            withdrawableAmount,
-            block.timestamp
+            _recipient,
+            _approvedProxy,
+            _proxyFee
         );
     }
 
-    function withdrawEth() private {
+    function withdrawETH(
+        address _recipient,
+        address _approvedProxy,
+        uint256 _proxyFee
+    ) private {
         address vaultAddress = getETHVaultAddress();
         IETHVault vault = IETHVault(vaultAddress);
 
-        uint256 withdrawableAmount = vault.getWithdrawableAmount(msg.sender);
+        uint256 withdrawableAmount = vault.getWithdrawableAmount(_recipient);
+        if (msg.sender != _recipient) {
+            // ? The fee is at most 10% of the withdrawal amount
+            require(
+                withdrawableAmount >= _proxyFee * 10,
+                "proxy fee is too high"
+            );
+        }
 
-        vault.makeETHVaultWithdrawal(payable(msg.sender));
+        vault.makeETHVaultWithdrawal(
+            payable(_recipient),
+            payable(_approvedProxy),
+            _proxyFee
+        );
 
         emit WithdrawalEvent(
             msg.sender,
@@ -97,4 +175,30 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
             block.timestamp
         );
     }
+}
+
+function splitSignature(
+    bytes memory sig
+) returns (bytes32 r, bytes32 s, uint8 v) {
+    require(sig.length == 65, "invalid signature length");
+
+    assembly {
+        /*
+            First 32 bytes stores the length of the signature
+
+            add(sig, 32) = pointer of sig + 32
+            effectively, skips first 32 bytes of signature
+
+            mload(p) loads next 32 bytes starting at the memory address p into memory
+            */
+
+        // first 32 bytes, after the length prefix
+        r := mload(add(sig, 32))
+        // second 32 bytes
+        s := mload(add(sig, 64))
+        // final byte (first byte of the next 32 bytes)
+        v := byte(0, mload(add(sig, 96)))
+    }
+
+    // implicitly return (r, s, v)
 }

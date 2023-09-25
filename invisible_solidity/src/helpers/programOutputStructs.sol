@@ -2,34 +2,47 @@
 pragma solidity ^0.8.17;
 
 struct GlobalDexState {
-    uint64 txBatchId; // why do we need this? (cahnge to txBatchId)
+    uint128 configCode;
     uint256 initStateRoot;
     uint256 finalStateRoot;
-    uint256 initPerpStateRoot;
-    uint256 finalPerpStateRoot;
     uint32 stateTreeDepth;
-    uint32 perpTreeDepth;
     uint32 globalExpirationTimestamp;
     uint32 nDeposits;
     uint32 nWithdrawals;
-    uint32 nOutputPositions;
-    uint32 nEmptyPositions;
-    uint32 nOutputNotes;
-    uint32 nZeroNotes;
+    // uint32 nOutputPositions;
+    // uint32 nEmptyPositions;
+    // uint32 nOutputNotes;
+    // uint32 nZeroNotes;
+}
+
+struct GlobalConfig {
+    uint32 collateralToken;
+    uint8 leverageDecimals;
+    uint32 assetsLen;
+    uint32 syntheticAssetsLen;
+    uint32 observersLen;
+    uint32 chainIdsLen;
 }
 
 // Represents the struct of data written to the program output for each Deposit.
 struct DepositTransactionOutput {
-    // & batched_note_info format: | deposit_id (64 bits) | token (64 bits) | amount (64 bits) |
+    // & batched_note_info format: | deposit_id (64 bits) | token (32 bits) | amount (64 bits) |
+    // & --------------------------  deposit_id => chain id (32 bits) | identifier (32 bits) |
     uint256 batchedDepositInfo;
     uint256 pubKey;
 }
 
 // Represents the struct of data written to the program output for each Withdrawal.
 struct WithdrawalTransactionOutput {
-    // & batched_note_info format: | token (64 bits) | amount (64 bits) |
+    // & batched_note_info format: | withdrawal_chain_id (32 bits) | token (32 bits) | amount (64 bits) |
     uint256 batchedWithdrawalInfo;
     address recipient; // This should be the eth address to withdraw from
+}
+
+struct AccumulatedHashesOutput {
+    uint32 chainId;
+    uint256 depositHash;
+    uint256 withdrawalHash;
 }
 
 // Represents the struct of data written to the program output for each Note Modifictaion.

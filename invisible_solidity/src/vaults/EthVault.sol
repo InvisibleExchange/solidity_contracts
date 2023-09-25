@@ -6,7 +6,9 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // TODO:
 contract ETHVault {
     event WithdrawalEvent(
-        address withdrawer,
+        address recipient,
+        address aprovedProxy,
+        uint256 proxyFee,
         uint256 withdrawalAmount,
         uint256 timestamp
     );
@@ -31,35 +33,57 @@ contract ETHVault {
 
     // ---------------------------------------------------------
 
-    function increaseWithdrawableAmount(address depositor, uint256 amount)
-        external
-        onlyInteractionsContract
-    {
-        withdrawableBalances[depositor] += amount;
+    function increaseWithdrawableAmount(
+        address recipient,
+        uint256 amount
+    ) external onlyInteractionsContract {
+        withdrawableBalances[recipient] += amount;
     }
 
     // ---------------------------------------------------------
 
-    function makeETHVaultWithdrawal(address payable depositor)
-        external
-        onlyInteractionsContract
-    {
-        uint256 amount = withdrawableBalances[depositor];
+    function makeETHVaultWithdrawal(
+        address payable recipient,
+        address payable approvedProxy,
+        uint256 proxyFee
+    ) external onlyInteractionsContract {
+        // ? Get the withdrawable amount pending for the recipient
+        uint256 amount = withdrawableBalances[recipient];
         require(amount > 0, "No pending withdrawals");
 
-        (bool sent, bytes memory data) = depositor.call{value: amount}("");
+        // ? Reset the withdrawable amount for the recipient
+        withdrawableBalances[recipient] = 0;
+
+        // ? Transfer the fee to the proxy
+        if (proxyFee > 0) {
+            (bool sent, bytes memory data) = approvedProxy.call{
+                value: proxyFee
+            }("");
+            require(sent, "Failed to send Ether");
+        }
+
+        // ? Transfer the rest to the recipient
+        uint256 withdrawalAmount = amount - proxyFee;
+
+        (bool sent, bytes memory data) = recipient.call{
+            value: withdrawalAmount
+        }("");
         require(sent, "Failed to send Ether");
 
-        emit WithdrawalEvent(depositor, amount, block.timestamp);
+        emit WithdrawalEvent(
+            recipient,
+            approvedProxy,
+            proxyFee,
+            withdrawalAmount,
+            block.timestamp
+        );
     }
 
     // ---------------------------------------------------------
 
-    function getWithdrawableAmount(address depositor)
-        public
-        view
-        returns (uint256)
-    {
-        return withdrawableBalances[depositor];
+    function getWithdrawableAmount(
+        address recipient
+    ) public view returns (uint256) {
+        return withdrawableBalances[recipient];
     }
 }

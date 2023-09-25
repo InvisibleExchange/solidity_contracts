@@ -151,76 +151,67 @@ fn parse_global_config(output: &[BigUint]) -> (GlobalConfig, &[BigUint]) {
     let observers_len = res_vec[4].to_u32().unwrap();
     let chain_ids_len = res_vec[5].to_u32().unwrap();
 
+    // ? 1 + 3*assets_len + 5*synthetic_assets_len + observers_len + chain_ids_len
+
     // ? assets
     let mut i = 1;
-    let i_next = i + (assets_len as f32 / 3.0).ceil() as usize;
-    let assets = split_vec_by_bytes(&output[i..i_next], vec![64, 64, 64])
+    let i_next = i + assets_len as usize;
+    let assets = output[i..i_next]
         .iter()
         .map(|v| v.to_u32().unwrap())
         .collect();
     i = i_next;
 
     // ? synthetic_assets
-    let i_next = i + (synthetic_assets_len as f32 / 3.0).ceil() as usize;
-    let synthetic_assets = split_vec_by_bytes(&output[i..i_next], vec![64, 64, 64])
+    let i_next = i + synthetic_assets_len as usize;
+    let synthetic_assets = output[i..i_next]
         .iter()
         .map(|v| v.to_u32().unwrap())
         .collect();
     i = i_next;
     //* */
     // ? decimals_per_asset
-    let i_next = i + (assets_len as f32 / 3.0).ceil() as usize;
-    let decimals_per_asset =
-        split_vec_by_bytes(&output[i..i + (assets_len as usize) / 3], vec![64, 64, 64])
-            .into_iter()
-            .map(|o| o.to_u64().unwrap())
-            .collect::<Vec<u64>>();
+    let i_next = i + assets_len as usize;
+    let decimals_per_asset = output[i..i_next]
+        .into_iter()
+        .map(|o| o.to_u64().unwrap())
+        .collect::<Vec<u64>>();
     i = i_next;
     // ? dust_amount_per_asset
-    let i_next = i + (assets_len as f32 / 3.0).ceil() as usize;
-    let dust_amount_per_asset =
-        split_vec_by_bytes(&output[i..i + (assets_len as usize) / 3], vec![64, 64, 64])
-            .into_iter()
-            .map(|o| o.to_u64().unwrap())
-            .collect::<Vec<u64>>();
+    let i_next = i + assets_len as usize;
+    let dust_amount_per_asset = output[i..i_next]
+        .into_iter()
+        .map(|o| o.to_u64().unwrap())
+        .collect::<Vec<u64>>();
     i = i_next;
 
     // *
     // ? price_decimals_per_asset
-    let i_next = i + (synthetic_assets_len as f32 / 3.0).ceil() as usize;
-    let price_decimals_per_asset = split_vec_by_bytes(
-        &output[i..i + synthetic_assets_len as usize / 3],
-        vec![64, 64, 64],
-    )
-    .into_iter()
-    .map(|o| o.to_u64().unwrap())
-    .collect::<Vec<u64>>();
+    let i_next = i + synthetic_assets_len as usize;
+    let price_decimals_per_asset = output[i..i_next]
+        .into_iter()
+        .map(|o| o.to_u64().unwrap())
+        .collect::<Vec<u64>>();
     i = i_next;
     // ? min_partial_liquidation_size
-    let i_next = i + (synthetic_assets_len as f32 / 3.0).ceil() as usize;
-    let min_partial_liquidation_sizes = split_vec_by_bytes(
-        &output[i..i + synthetic_assets_len as usize / 3],
-        vec![64, 64, 64],
-    )
-    .into_iter()
-    .map(|o| o.to_u64().unwrap())
-    .collect::<Vec<u64>>();
+    let i_next = i + synthetic_assets_len as usize;
+    let min_partial_liquidation_sizes = output[i..i_next]
+        .into_iter()
+        .map(|o| o.to_u64().unwrap())
+        .collect::<Vec<u64>>();
     i = i_next;
     // ? leverage_bounds_per_asset
-    let i_next = i + (2.0 * synthetic_assets_len as f32 / 3.0).ceil() as usize;
-    let leverage_bounds_per_asset = split_vec_by_bytes(
-        &output[i..i + (2 * synthetic_assets_len as usize) / 3],
-        vec![64, 64, 64],
-    )
-    .into_iter()
-    .map(|o| (o.to_u64().unwrap() / 100_000) as f64)
-    .collect::<Vec<f64>>();
+    let i_next = i + 2 * synthetic_assets_len as usize;
+    let leverage_bounds_per_asset = output[i..i_next]
+        .into_iter()
+        .map(|o| (o.to_u64().unwrap() / 100_000) as f64)
+        .collect::<Vec<f64>>();
     i = i_next;
     //*
 
     // ? Chain IDs
-    let i_next = i + (chain_ids_len as f32 / 3.0).ceil() as usize;
-    let chain_ids = split_vec_by_bytes(&output[i..i_next], vec![64, 64, 64])
+    let i_next = i + chain_ids_len as usize;
+    let chain_ids = output[i..i_next]
         .iter()
         .map(|v| v.to_u32().unwrap())
         .collect();

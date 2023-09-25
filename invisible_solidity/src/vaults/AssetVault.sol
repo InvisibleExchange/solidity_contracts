@@ -17,8 +17,10 @@ contract AssetVault is FlashLender {
     );
 
     event WithdrawalEvent(
-        address withdrawer,
         address tokenAddress,
+        address recipient,
+        address aprovedProxy,
+        uint256 proxyFee,
         uint256 withdrawalAmount,
         uint256 timestamp
     );
@@ -47,46 +49,64 @@ contract AssetVault is FlashLender {
         _;
     }
 
-    function makeErc20VaultWithdrawal(address depositor, address tokenAddress)
-        external
-        onlyInteractionsContract
-        onlyVaultToken(tokenAddress)
-    {
-        uint256 amount = withdrawableBalances[depositor];
+    function makeErc20VaultWithdrawal(
+        address tokenAddress,
+        address recipient,
+        address approvedProxy,
+        uint256 proxyFee
+    ) external onlyInteractionsContract onlyVaultToken(tokenAddress) {
+        // ? Get the withdrawable amount pending for the recipient
+        uint256 amount = withdrawableBalances[recipient];
         require(amount > 0, "No pending withdrawals");
 
-        withdrawableBalances[depositor] = 0;
+        // ? Reset the withdrawable amount for the recipient
+        withdrawableBalances[recipient] = 0;
 
         IERC20 token = IERC20(tokenAddress);
-        bool success = token.transfer(depositor, amount);
 
+        // ? Transfer the fee to the proxy
+        if (proxyFee > 0) {
+            bool success = token.transfer(approvedProxy, proxyFee);
+            require(success, "Transfer failed");
+        }
+
+        // ? Transfer the rest to the recipient
+        uint256 withdrawalAmount = amount - proxyFee;
+
+        bool success = token.transfer(recipient, withdrawalAmount);
         require(success, "Transfer failed");
 
-        emit WithdrawalEvent(depositor, tokenAddress, amount, block.timestamp);
+        // ? Emit an event
+        emit WithdrawalEvent(
+            tokenAddress,
+            recipient,
+            approvedProxy,
+            proxyFee,
+            withdrawalAmount,
+            block.timestamp
+        );
     }
 
     // ----------------------------------
 
     function increaseWithdrawableAmount(
-        address depositor,
+        address recipient,
         address tokenAddress,
         uint256 amount
     ) external onlyInteractionsContract onlyVaultToken(tokenAddress) {
-        withdrawableBalances[depositor] += amount;
+        withdrawableBalances[recipient] += amount;
     }
 
     // ----------------------------------
 
     // todo
-    function changeDepositContractAddress(address newAddress) public {}
+    function changeInteractionsContractAddress(address newAddress) public {}
 
     // ----------------------------------
 
-    function getWithdrawableAmount(address depositor)
-        public
-        view
-        returns (uint256)
-    {
+    function getWithdrawableAmount(
+        address depositor
+    ) public view returns (uint256) {
         return withdrawableBalances[depositor];
     }
 }

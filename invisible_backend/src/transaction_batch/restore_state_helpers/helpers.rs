@@ -5,8 +5,11 @@ use serde_json::{Map, Value};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
-    perpetual::DUST_AMOUNT_PER_ASSET, transaction_batch::LeafNodeType,
-    trees::superficial_tree::SuperficialTree, utils::crypto_utils::EcPoint, utils::notes::Note,
+    perpetual::{COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET},
+    transaction_batch::LeafNodeType,
+    trees::superficial_tree::SuperficialTree,
+    utils::crypto_utils::EcPoint,
+    utils::notes::Note,
 };
 
 // * HELPER FUNCTIONS ============================================================================================
@@ -306,15 +309,6 @@ fn rebuild_return_collateral_note(transaction: &Map<String, Value>) -> Note {
         )
         .unwrap(),
     };
-    let token = transaction
-        .get("margin_change")
-        .unwrap()
-        .get("position")
-        .unwrap()
-        .get("collateral_token")
-        .unwrap()
-        .as_u64()
-        .unwrap();
     let amount = transaction
         .get("margin_change")
         .unwrap()
@@ -336,7 +330,7 @@ fn rebuild_return_collateral_note(transaction: &Map<String, Value>) -> Note {
     )
     .unwrap();
 
-    Note::new(index, addr, token as u32, amount, blinding)
+    Note::new(index, addr, COLLATERAL_TOKEN, amount, blinding)
 }
 
 // * SPLIT NOTES RESTORE FUNCTIONS ================================================================================

@@ -6,15 +6,15 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 contract TokenInfo {
     event NewTokenRegisteredEvent(
         address tokenAddress,
-        uint64 tokenId,
+        uint32 tokenId,
         uint8 scaleFactor
     );
 
-    uint64 public constant ETH_ID = 54321; // todo: this is random for now
+    uint32 public constant ETH_ID = 54321; // todo: this is random for now
 
-    mapping(address => uint64) public s_tokenAddress2Id;
-    mapping(uint64 => address) public s_tokenId2Address;
-    mapping(uint64 => uint8) public s_tokenId2ScaleFactor;
+    mapping(address => uint32) public s_tokenAddress2Id;
+    mapping(uint32 => address) public s_tokenId2Address;
+    mapping(uint32 => uint8) public s_tokenId2ScaleFactor;
 
     constructor() {
         // ETH
@@ -30,7 +30,7 @@ contract TokenInfo {
 
     function _registerToken(
         address tokenAddress,
-        uint64 tokenId,
+        uint32 tokenId,
         uint8 offchainDecimals
     ) internal {
         // Todo: registering a token should also deploy a new vault contract for that tokendeee
@@ -63,43 +63,41 @@ contract TokenInfo {
         emit NewTokenRegisteredEvent(tokenAddress, tokenId, scaleFactor);
     }
 
-    function scaleUp(uint64 amount, uint64 tokenId)
-        internal
-        view
-        returns (uint256 amountScaled)
-    {
+    function scaleUp(
+        uint64 amount,
+        uint32 tokenId
+    ) internal view returns (uint256 amountScaled) {
         uint8 scaleFactor = s_tokenId2ScaleFactor[tokenId];
 
         require(scaleFactor >= 0, "Invalid scale factor");
         require(scaleFactor <= 18, "Invalid scale factor");
-        amountScaled = uint256(amount) * (10**scaleFactor);
+        amountScaled = uint256(amount) * (10 ** scaleFactor);
 
         return amountScaled;
     }
 
-    function scaleDown(uint256 amount, uint64 tokenId)
-        internal
-        view
-        returns (uint64 amountScaled)
-    {
+    function scaleDown(
+        uint256 amount,
+        uint32 tokenId
+    ) internal view returns (uint64 amountScaled) {
         uint8 scaleFactor = s_tokenId2ScaleFactor[tokenId];
 
         require(scaleFactor >= 0, "Invalid scale factor");
         require(scaleFactor <= 18, "Invalid scale factor");
-        amountScaled = uint64(amount / (10**scaleFactor));
+        amountScaled = uint64(amount / (10 ** scaleFactor));
 
         return amountScaled;
     }
 
-    function getTokenAddress(uint64 tokenId) public view returns (address) {
+    function getTokenAddress(uint32 tokenId) public view returns (address) {
         return s_tokenId2Address[tokenId];
     }
 
-    function getTokenId(address tokenAddress) public view returns (uint64) {
+    function getTokenId(address tokenAddress) public view returns (uint32) {
         return s_tokenAddress2Id[tokenAddress];
     }
 
-    function getScaleFactor(uint64 tokenId) public view returns (uint8) {
+    function getScaleFactor(uint32 tokenId) public view returns (uint8) {
         return s_tokenId2ScaleFactor[tokenId];
     }
 }

@@ -304,44 +304,44 @@ func init_output_structs{pedersen_ptr: HashBuiltin*}(
     assert config_output_ptr[4] = batched_info;
 
     // ? assets
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.assets_len, global_config.assets, config_output_ptr + 5
     );
     // ? synthetic assets
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.synthetic_assets_len, global_config.synthetic_assets, config_output_ptr
     );
     //
     // ? decimals_per_asset
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.assets_len, global_config.decimals_per_asset, config_output_ptr
     );
     // ? dust_amount_per_asset
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.assets_len, global_config.dust_amount_per_asset, config_output_ptr
     );
     //
     // ? price_decimals_per_asset
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.synthetic_assets_len,
         global_config.price_decimals_per_asset,
         config_output_ptr,
     );
     // ? min_partial_liquidation_size
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.synthetic_assets_len,
         global_config.min_partial_liquidation_size,
         config_output_ptr,
     );
     // ? leverage_bounds_per_asset
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         2 * global_config.synthetic_assets_len,
         global_config.leverage_bounds_per_asset,
         config_output_ptr,
     );
     //
     // ? Chain IDs
-    let (config_output_ptr: felt*) = output_batched_arr(
+    let (config_output_ptr: felt*) = output_arr(
         global_config.chain_ids_len, global_config.chain_ids, config_output_ptr
     );
     // ? observers
