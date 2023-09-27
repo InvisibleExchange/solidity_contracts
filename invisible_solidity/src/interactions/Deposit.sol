@@ -9,12 +9,15 @@ import "../helpers/tokenInfo.sol";
 import "../helpers/parseProgramOutput.sol";
 import "../vaults/VaultRegistry.sol";
 
+import "forge-std/console.sol";
+
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
 contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
+    // make depositId indexed
     event DepositEvent(
-        uint64 indexed depositId,
-        uint256 indexed pubKey,
+        uint64 depositId,
+        uint256 pubKey,
         uint32 tokenId,
         uint64 depositAmountScaled,
         uint256 timestamp
@@ -24,6 +27,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         address tokenAddress,
         uint256 timestamp
     );
+
     event UpdatedPendingDepositsEvent(uint256 timestamp, uint64 txBatchId);
 
     mapping(uint256 => mapping(uint32 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
@@ -33,7 +37,9 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
     // Todo: figure this out
     mapping(address => uint256) public s_address2PubKey;
 
-    uint64 private s_depositId = 0;
+    uint64 CHAIN_ID = 9090909;
+
+    uint64 private s_depositCount = 0;
 
     struct DepositCancelation {
         address depositor;
@@ -59,7 +65,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
 
             require(
                 s_pendingDeposits[depositPubKey][tokenId] >= depositAmount,
-                "Offchain deposit > Onchain deposit "
+                "An invalid deposit was executed offchain"
             );
 
             s_pendingDeposits[depositPubKey][tokenId] -= depositAmount;
@@ -80,8 +86,9 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         // Todo: figure out how the stark key should fit into all this (should we just verify eth signatures in deposits)
         // todo: figure out if address-pubKey should be one to one or not
         require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark Key");
+        require(starkKey > 0, "Invalid stark Key");
 
-        require(msg.sender != address(0), "Invalid stark Key");
+        require(msg.sender != address(0), "Invalid depositior address");
 
         if (msg.value > 0) {
             return makeEthDeposit(starkKey);
@@ -103,10 +110,8 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
             pendingAmount +
             depositAmountScaled;
 
-        uint64 depositId = uint64(
-            uint256(keccak256(abi.encodePacked(s_depositId)))
-        );
-        s_depositId = depositId + 1;
+        uint64 depositId = CHAIN_ID * 2 ** 32 + s_depositCount;
+        s_depositCount += 1;
 
         emit DepositEvent(
             depositId,
@@ -138,10 +143,8 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
             pendingAmount +
             depositAmountScaled;
 
-        uint64 depositId = uint64(
-            uint256(keccak256(abi.encodePacked(s_depositId)))
-        );
-        s_depositId = depositId + 1;
+        uint64 depositId = CHAIN_ID * 2 ** 32 + s_depositCount;
+        s_depositCount += 1;
 
         emit DepositEvent(
             depositId,

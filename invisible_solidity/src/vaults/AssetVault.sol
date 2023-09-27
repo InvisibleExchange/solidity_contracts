@@ -73,8 +73,8 @@ contract AssetVault is FlashLender {
         // ? Transfer the rest to the recipient
         uint256 withdrawalAmount = amount - proxyFee;
 
-        bool success = token.transfer(recipient, withdrawalAmount);
-        require(success, "Transfer failed");
+        bool success2 = token.transfer(recipient, withdrawalAmount);
+        require(success2, "Transfer failed");
 
         // ? Emit an event
         emit WithdrawalEvent(

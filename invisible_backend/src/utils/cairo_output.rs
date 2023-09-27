@@ -54,6 +54,8 @@ pub fn parse_cairo_output(raw_program_output: Vec<&str>) -> ProgramOutput {
     let (deposit_outputs, cairo_output) =
         parse_deposit_outputs(cairo_output, dex_state.program_input_counts.n_deposits);
 
+    println!("deposit_outputs: {:?}", deposit_outputs);
+
     // ? Parse withdrawals
     let (withdrawal_outputs, cairo_output) =
         parse_withdrawal_outputs(&cairo_output, dex_state.program_input_counts.n_withdrawals);
@@ -98,26 +100,27 @@ fn parse_dex_state(output: &[BigUint]) -> (GlobalDexState, &[BigUint]) {
     // & assert config_output_ptr[1] = dex_state.final_state_root;
 
     // & 1: | state_tree_depth (8 bits) | global_expiration_timestamp (32 bits) | config_code (128 bits) |
-    // & 2: | n_deposits (32 bits) | n_withdrawals (32 bits) | n_output_notes (32 bits) |
+    // & 2: | n_deposits (32 bits) | n_withdrawals (32 bits) | n_mm_registrations (32 bits) | n_output_notes (32 bits) |
     // &    | n_output_positions (32 bits) | n_output_tabs (32 bits) | n_zero_indexes (32 bits) |
 
     let init_state_root = &output[0];
     let final_state_root = &output[1];
 
     let batched_output_info = &output[2];
-    let res_vec = split_by_bytes(batched_output_info, vec![8, 32, 128]);
+    let res_vec = split_by_bytes(batched_output_info, vec![8, 32, 32]);
     let state_tree_depth = res_vec[0].to_u32().unwrap();
     let global_expiration_timestamp = res_vec[1].to_u32().unwrap();
-    let config_code = res_vec[2].to_u128().unwrap();
+    let config_code = res_vec[2].to_u32().unwrap();
 
     let batched_output_info = &output[3];
-    let res_vec = split_by_bytes(batched_output_info, vec![32, 32, 32, 32, 32, 32]);
+    let res_vec = split_by_bytes(batched_output_info, vec![32, 32, 32, 32, 32, 32, 32]);
     let n_deposits = res_vec[0].to_u32().unwrap();
     let n_withdrawals = res_vec[1].to_u32().unwrap();
-    let n_output_notes = res_vec[2].to_u32().unwrap();
-    let n_output_positions = res_vec[3].to_u32().unwrap();
-    let n_output_tabs = res_vec[4].to_u32().unwrap();
-    let n_zero_indexes = res_vec[5].to_u32().unwrap();
+    let n_mm_registration = res_vec[2].to_u32().unwrap();
+    let n_output_notes = res_vec[3].to_u32().unwrap();
+    let n_output_positions = res_vec[4].to_u32().unwrap();
+    let n_output_tabs = res_vec[5].to_u32().unwrap();
+    let n_zero_indexes = res_vec[6].to_u32().unwrap();
 
     let shifted_output = &output[4..];
     return (
@@ -133,6 +136,7 @@ fn parse_dex_state(output: &[BigUint]) -> (GlobalDexState, &[BigUint]) {
             n_zero_indexes,
             n_deposits,
             n_withdrawals,
+            n_mm_registration,
         ),
         shifted_output,
     );
@@ -679,19 +683,34 @@ fn parse_zero_indexes(output: &[BigUint], num_zero_idxs: u32) -> Vec<u64> {
 
     let slice: Vec<BigUint> = output[0..slice_len].try_into().unwrap();
 
-    let zero_idxs = split_vec_by_bytes(&slice, vec![64, 64, 64])
+    let mut zero_idxs = split_vec_by_bytes(&slice, vec![64, 64, 64])
         .into_iter()
         .map(|x| x.to_u64().unwrap())
         .collect::<Vec<u64>>();
 
-    let zero_idxs = zero_idxs[0..num_zero_idxs as usize].to_vec();
+    if num_zero_idxs > zero_idxs.len() as u32 {
+        zero_idxs.push(0)
+    } else if (zero_idxs.len() as u32) < num_zero_idxs {
+        zero_idxs = zero_idxs[0..num_zero_idxs as usize].to_vec();
+    }
 
     return zero_idxs;
 }
 
 // * =====================================================================================
 
-fn preprocess_cairo_output(program_output: Vec<&str>) -> Vec<BigUint> {
+pub fn format_cairo_ouput(program_output: &str) -> Vec<&str> {
+    // Split the string into an array of shorter strings at the newline character and trim the whitespace
+
+    let program_output = program_output
+        .split("\n")
+        .map(|s| s.trim())
+        .collect::<Vec<&str>>();
+
+    return program_output;
+}
+
+pub fn preprocess_cairo_output(program_output: Vec<&str>) -> Vec<BigUint> {
     let p: BigInt =
         BigInt::from_u64(2).unwrap().pow(251) + 17 * BigInt::from_u64(2).unwrap().pow(192) + 1;
 

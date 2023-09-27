@@ -8,7 +8,7 @@ from starkware.cairo.common.bool import TRUE, FALSE
 // - everything else: [token1, value1, token2, value2, ...]
 
 struct GlobalDexState {
-    config_code: felt,  // why do we need this? (rename)
+    tx_batch_id: felt,  // why do we need this? (rename)
     init_state_root: felt,
     final_state_root: felt,
     state_tree_depth: felt,
@@ -19,6 +19,7 @@ struct GlobalDexState {
     n_output_positions: felt,
     n_output_tabs: felt,
     n_zero_indexes: felt,
+    n_mm_registrations: felt,
 }
 
 struct GlobalConfig {
@@ -181,7 +182,7 @@ func init_global_config(global_config_ptr: GlobalConfig*) {
         dex_state = program_input["global_dex_state"]
         program_input_counts = dex_state["program_input_counts"]
         dex_state_addr = ids.global_config_ptr.address_ + ids.GlobalConfig.dex_state
-        memory[dex_state_addr + ids.GlobalDexState.config_code] = int(dex_state["config_code"])
+        memory[dex_state_addr + ids.GlobalDexState.tx_batch_id] = int(dex_state["tx_batch_id"])
         memory[dex_state_addr + ids.GlobalDexState.init_state_root] = int(dex_state["init_state_root"])
         memory[dex_state_addr + ids.GlobalDexState.final_state_root] = int(dex_state["final_state_root"])
         memory[dex_state_addr + ids.GlobalDexState.state_tree_depth] = dex_state["state_tree_depth"]
@@ -192,6 +193,7 @@ func init_global_config(global_config_ptr: GlobalConfig*) {
         memory[dex_state_addr + ids.GlobalDexState.n_output_positions] = program_input_counts["n_output_positions"]
         memory[dex_state_addr + ids.GlobalDexState.n_output_tabs] = program_input_counts["n_output_tabs"]
         memory[dex_state_addr + ids.GlobalDexState.n_zero_indexes] = program_input_counts["n_zero_indexes"]
+        memory[dex_state_addr + ids.GlobalDexState.n_mm_registrations] = program_input_counts["n_mm_registrations"]
 
         # // * GLOBAL CONFIG FIELDS
         global_config = program_input["global_config"]
@@ -267,18 +269,21 @@ func init_output_structs{pedersen_ptr: HashBuiltin*}(
     assert config_output_ptr[0] = dex_state.init_state_root;
     assert config_output_ptr[1] = dex_state.final_state_root;
 
-    // & 1: | state_tree_depth (8 bits) | global_expiration_timestamp (32 bits) | config_code (128 bits) |
+    // & 1: | state_tree_depth (8 bits) | global_expiration_timestamp (32 bits) | tx_batch_id (32 bits) |
     let batched_info = (
         (dex_state.state_tree_depth * 2 ** 32) + dex_state.global_expiration_timestamp
-    ) * 2 ** 128 + dex_state.config_code;
+    ) * 2 ** 32 + dex_state.tx_batch_id;
     assert config_output_ptr[2] = batched_info;
 
-    // & 2: | n_deposits (32 bits) | n_withdrawals (32 bits) | n_output_notes (32 bits) |
+    // & 2: | n_deposits (32 bits) | n_withdrawals (32 bits) | n_mm_registrations (32 bits) | n_output_notes (32 bits) |
     // &    | n_output_positions (32 bits) | n_output_tabs (32 bits) | n_zero_indexes (32 bits) |
     let batched_info = (
         (
             (
-                ((dex_state.n_deposits * 2 ** 32) + dex_state.n_withdrawals) * 2 ** 32 +
+                (
+                    ((dex_state.n_deposits * 2 ** 32) + dex_state.n_withdrawals) * 2 ** 32 +
+                    dex_state.n_mm_registrations
+                ) * 2 ** 32 +
                 dex_state.n_output_notes
             ) * 2 ** 32 +
             dex_state.n_output_positions

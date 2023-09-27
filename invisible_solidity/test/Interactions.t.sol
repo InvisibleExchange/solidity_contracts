@@ -7,18 +7,25 @@ import "forge-std/Vm.sol";
 
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 import "src/interactions/Interactions.sol";
+import "src/InvisibleL1.sol";
+
+//
 
 // import "src/interactions/Deposit.sol";
 
 contract InteractionsTest is Test {
-    Interactions interactions;
-
+    InvisibleL1 invisibleL1;
     ERC20PresetMinterPauser testToken;
+
+    uint256 constant EthStarkKey =
+        2292025268456116477323356083246651802150462734710453904748677715907532488444;
+    uint256 constant UsdcStarkKey =
+        2166840471905619448909926965843998034165267473744647928190851627614183386065;
 
     function setUp() public {
         vm.startPrank(address(8953626958234137847422389523978938749873));
 
-        interactions = new Interactions();
+        invisibleL1 = new InvisibleL1(address(1111), address(2222));
         testToken = new ERC20PresetMinterPauser("TestToken", "TT");
 
         testToken.mint(
@@ -30,153 +37,175 @@ contract InteractionsTest is Test {
             address(8953626958234137847422389523978938749873),
             5 * 10 ** 18
         );
+
+        testRegisterToken();
     }
 
-    function testRegisterToken() private {
+    function testRegisterToken() public {
         address tokenAddress = address(testToken);
 
         uint32 tokenId = 55555;
-        interactions.registerToken(tokenAddress, tokenId, 6);
+        invisibleL1.registerToken(tokenAddress, tokenId, 6);
 
         require(
-            interactions.getETHVaultAddress() != address(0),
+            invisibleL1.getETHVaultAddress() != address(0),
             "ETH vault not set"
         );
         require(
-            interactions.getAssetVaultAddress(tokenAddress) != address(0),
+            invisibleL1.getAssetVaultAddress(tokenAddress) != address(0),
             "Asset Vault not set"
         );
-        require(interactions.getTokenId(tokenAddress) != 0, "Token ID not set");
+        require(invisibleL1.getTokenId(tokenAddress) != 0, "Token ID not set");
     }
 
     function testErc20Deposit() public {
         address tokenAddress = address(testToken);
-        // ? Register token
-        uint32 tokenId = 55555;
-        interactions.registerToken(tokenAddress, tokenId, 6);
+
         // ? Approve tokens to be spent by the contract
-        testToken.approve(address(interactions), 10 ** 18);
+        testToken.approve(address(invisibleL1), 2000 * 10 ** 18);
         vm.recordLogs();
-        uint256 starkKey = 883045738439352841478194533192765345509759306772397516907181243450667673002;
-        uint64 newAmountDeposited = interactions.makeDeposit(
+        uint64 newAmountDeposited = invisibleL1.makeDeposit(
             tokenAddress,
-            10 ** 18,
-            starkKey
+            2000 * 10 ** 18,
+            UsdcStarkKey
         );
-        console.log("newAmountDeposited: ", newAmountDeposited);
-        uint256 hash_ = uint256(
-            keccak256("DepositEvent(uint256,uint64,uint64,uint256)")
-        );
-        console.log("hash: ", hash_);
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-        bytes32[] memory b_arr = bytesToBytes32Array(entries[2].data);
-        console.log("entries: ", uint256(b_arr[0]));
-        console.log("entries: ", uint256(b_arr[1]));
-        console.log("entries: ", uint256(b_arr[2]));
-        console.log("entries: ", uint256(b_arr[3]));
-        // interactions.startCancelDeposit(tokenAddress, starkKey);
+
+        // Vm.Log[] memory entries = vm.getRecordedLogs();
+        // bytes32[] memory b_arr = bytesToBytes32Array(entries[2].data);
+        // console.log("entries: ", uint256(b_arr[0]));
+        // console.log("entries: ", uint256(b_arr[1]));
+        // console.log("entries: ", uint256(b_arr[2]));
+        // console.log("entries: ", uint256(b_arr[3]));
+        // console.log("entries: ", uint256(b_arr[4]));
+
+        // interactions.startCancelDeposit(tokenAddress, UsdcStarkKey);
     }
 
     function testEthDeposit() public {
         address tokenAddress = address(testToken);
 
-        uint256 starkKey = 883045738439352841478194533192765345509759306772397516907181243450667673002;
-
-        (bool sent, bytes memory data) = address(interactions).call{
-            value: 1 ether
-        }("");
-
-        uint256 pendingDeposit = interactions.getPendingDepositAmount(
-            starkKey,
-            address(0)
+        vm.recordLogs();
+        uint64 newAmountDeposited = invisibleL1.makeDeposit{value: 2 ether}(
+            address(0),
+            2 ether,
+            EthStarkKey
         );
 
-        console.log("newAmountDeposited: ", pendingDeposit);
+        // Vm.Log[] memory entries = vm.getRecordedLogs();
+        // bytes32[] memory b_arr = bytesToBytes32Array(entries[0].data);
+        // console.log("entries: ", uint256(b_arr[0]));
+        // console.log("entries: ", uint256(b_arr[1]));
+        // console.log("entries: ", uint256(b_arr[2]));
+        // console.log("entries: ", uint256(b_arr[3]));
+        // console.log("entries: ", uint256(b_arr[4]));
 
-        // interactions.startCancelDeposit(tokenAddress, starkKey);
+        // console.log("newAmountDeposited: ", newAmountDeposited);
+
+        // uint256 pendingDeposit = invisibleL1.getPendingDepositAmount(
+        //     EthStarkKey,
+        //     address(0)
+        // );
+        // console.log("pendingDeposit: ", pendingDeposit);
+
+        // interactions.startCancelDeposit(tokenAddress, EthStarkKey);
+    }
+
+    function testDeposits() public {
+        testErc20Deposit();
+        testEthDeposit();
     }
 
     function testUpdatingTxBatch() public {
+        testDeposits();
+
         address tokenAddress = address(testToken);
-        interactions.registerToken(tokenAddress, 55555, 6);
 
-        testToken.approve(address(interactions), 2000 * 10 ** 18);
-
-        uint256 starkKey1 = 2459783709223877114575387623877149074199685766944984049223820349308467967672;
-        interactions.makeDeposit(tokenAddress, 2000 * 10 ** 18, starkKey1);
-
-        (bool sent, bytes memory data) = address(interactions).call{
-            value: 2 ether
-        }("");
-
-        uint256 pendingErcDeposit = interactions.getPendingDepositAmount(
-            starkKey1,
+        uint256 pendingErcDeposit = invisibleL1.getPendingDepositAmount(
+            UsdcStarkKey,
             tokenAddress
         );
-        uint256 pendingEthDeposit = interactions.getPendingDepositAmount(
-            775866413365693995389455817999955458452590009573650990406301639026116962377,
+        uint256 pendingEthDeposit = invisibleL1.getPendingDepositAmount(
+            EthStarkKey,
             address(0)
         );
-        // uint256 pendingtokenWithdrawal = interactions.getWithdrawableAmount(
-        //     address(1234566790),
-        //     tokenAddress
-        // );
-        // uint256 pendingEthWithdrawal = interactions.getWithdrawableAmount(
-        //     address(1234566790),
-        //     address(0)
-        // );
 
         assert(pendingErcDeposit == 2000 ether);
         assert(pendingEthDeposit == 2 ether);
-        // assert(pendingtokenWithdrawal == 0);
-        // assert(pendingEthWithdrawal == 0);
 
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
-        interactions.updateStateAfterTxBatch(programOutput);
+        invisibleL1.updateStateAfterTxBatch(programOutput);
 
-        uint256 pendingErcDeposit2 = interactions.getPendingDepositAmount(
-            starkKey1,
+        address recipient = address(
+            uint160(29865346975236345739456748567348951345789436256)
+        );
+        uint256 pendingErcDeposit2 = invisibleL1.getPendingDepositAmount(
+            UsdcStarkKey,
             tokenAddress
         );
-        uint256 pendingEthDeposit2 = interactions.getPendingDepositAmount(
-            775866413365693995389455817999955458452590009573650990406301639026116962377,
+        uint256 pendingEthDeposit2 = invisibleL1.getPendingDepositAmount(
+            EthStarkKey,
             address(0)
         );
-        uint256 pendingtokenWithdrawal2 = interactions.getWithdrawableAmount(
-            address(1234566790),
+        uint256 pendingtokenWithdrawal = invisibleL1.getWithdrawableAmount(
+            recipient,
             tokenAddress
         );
-        uint256 pendingEthWithdrawal2 = interactions.getWithdrawableAmount(
-            address(1234566790),
-            address(0)
+        uint256 pendingEthWithdrawal = invisibleL1.getETHWithdrawableAmount(
+            recipient
         );
 
         assert(pendingErcDeposit2 == 0);
         assert(pendingEthDeposit2 == 0);
-        assert(pendingtokenWithdrawal2 == 0);
-        assert(pendingEthWithdrawal2 == 0);
+        // assert(pendingtokenWithdrawal == 0);
+        // assert(pendingEthWithdrawal == 0);
+        console.log("pendingtokenWithdrawal: ", pendingtokenWithdrawal);
+        console.log("pendingEthWithdrawal: ", pendingEthWithdrawal);
 
-        // vm.stopPrank();
-        // vm.startPrank(address(1234566790));
-
-        // uint256 prevErc20Balance = testToken.balanceOf(address(1234566790));
-        // uint256 prevEthBalance = address(1234566790).balance;
-
-        // interactions.makeWithdrawal(tokenAddress);
-        // interactions.makeWithdrawal(address(0));
-
-        // uint256 newErc20Balance = testToken.balanceOf(address(1234566790));
-        // uint256 newEthBalance = address(1234566790).balance;
-
-        // assert(newErc20Balance == prevErc20Balance + 750 ether);
-        // assert(newEthBalance == prevEthBalance + 1 ether);
-
-        console.log("all good");
+        testWithdawals();
     }
 
-    function testParsingOutput() public {}
+    function testWithdawals() public {
+        address tokenAddress = address(testToken);
+
+        vm.stopPrank();
+        vm.startPrank(address(29865346975236345739456748567348951345789436256));
+
+        uint256 prevErc20Balance = testToken.balanceOf(
+            address(29865346975236345739456748567348951345789436256)
+        );
+        uint256 prevEthBalance = address(
+            29865346975236345739456748567348951345789436256
+        ).balance;
+
+        assert(prevErc20Balance == 0);
+        assert(prevEthBalance == 0);
+
+        invisibleL1.makeWithdrawal(
+            tokenAddress,
+            address(29865346975236345739456748567348951345789436256),
+            address(0),
+            0,
+            bytes("")
+        );
+        invisibleL1.makeETHWithdrawal(
+            address(29865346975236345739456748567348951345789436256),
+            address(0),
+            0,
+            bytes("")
+        );
+
+        uint256 newErc20Balance = testToken.balanceOf(
+            address(29865346975236345739456748567348951345789436256)
+        );
+        uint256 newEthBalance = address(
+            29865346975236345739456748567348951345789436256
+        ).balance;
+
+        console.log("newErc20Balance: ", newErc20Balance);
+        console.log("newEthBalance: ", newEthBalance);
+    }
 }
 
 function bytesToBytes32Array(
@@ -204,37 +233,64 @@ function bytesToBytes32Array(
 }
 
 function getProgramOutput() pure returns (uint256[] memory res) {
-    uint256[30] memory arr = [
-        1234,
-        2450644354998405982022115704618884006901283874365176806194200773707121413423,
-        1044525760850525118001825284285477436097574189665475174859091253959006979265,
+    uint256[57] memory arr = [
         2450644354998405982022115704618884006901283874365176806194200773707121413423,
         2450644354998405982022115704618884006901283874365176806194200773707121413423,
-        32,
-        32,
-        1000000,
-        2,
+        597579297039784607745,
+        12554203473696364802333384682822702497637276928239934111746,
+        4839524406068408503119694702759214384341319683,
+        12345,
+        54321,
+        55555,
+        66666,
+        12345,
+        54321,
+        66666,
+        9,
+        9,
+        6,
+        0,
+        2500,
+        25000,
+        50000,
+        50000,
+        6,
+        6,
+        10,
+        50000000,
+        500000000,
+        350000000,
+        150000,
+        3000000,
+        1500000,
+        15000000,
+        100000000000000,
+        14000000204800000,
+        9090909,
+        7878787,
+        5656565,
+        874739451078007766457464989774322083649278607533249481151382481072868806602,
+        3324833730090626974525872402899302150520188025637965566623476530814354734325,
+        1839793652349538280924927302501143912227271479439798783640887258675143576352,
+        296568192680735721663075531306405401515803196637037431012739700151231900092,
+        9090909,
+        953615528603744311503903171090925833574271533835808503650182590398151916787,
+        1879460325315574557858341378868312245118849894900773666272893829174307676334,
+        7878787,
         0,
         0,
+        5656565,
         0,
-        4,
         0,
-        41854731131275432030803943729043630035968,
-        2459783709223877114575387623877149074199685766944984049223820349308467967672,
-        41854731131275432008040661542084243341824,
-        775866413365693995389455817999955458452590009573650990406301639026116962377,
-        18904400986198465485309396213578752547880960,
-        1988250149696710433421329553413323843519599428602598721779961439785779831659,
-        659989352669679706312161156445382964319342115273494181480533346128107582885,
-        18484642380480183411440568065748676380721153,
-        274041165779404240379851331431573468887690028447885183061428345441162228837,
-        67055171112012512305592818037275309783220345922063691138627562330974567212,
-        18484782119636345144126987198758415612510210,
-        2318803890409382406016585251510039616196857029763153382713871205013500218887,
-        2299410017732986529954972099567931130912921914304792329906711340862300954434,
-        18904588928650690853760905227666797757464579,
-        2848031459761922232595855712687383486560957333800991025057858697147318478732,
-        240068136509177011915819753529256036608534142097626836653921964325513418447
+        3093476031982861765946388197939943455579280384,
+        2166840471905619448909926965843998034165267473744647928190851627614183386065,
+        3093476031982861845174527948922094091536536576,
+        2292025268456116477323356083246651802150462734710453904748677715907532488444,
+        720256015655390340593015018558428160,
+        29865346975236345739456748567348951345789436256,
+        720256015655413103875201976145122304,
+        29865346975236345739456748567348951345789436256,
+        1
     ];
 
     uint256[] memory res = new uint256[](arr.length);

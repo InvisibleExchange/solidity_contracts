@@ -7,11 +7,6 @@ import "./Deposit.sol";
 import "./Withdrawal.sol";
 
 contract Interactions is Deposit, Withdrawal {
-    uint64 s_txBatchId;
-    uint256 s_stateRoot;
-
-    
-
     // TODO: For testing purposes only !!!
     receive() external payable {
         uint256 starkKey = 775866413365693995389455817999955458452590009573650990406301639026116962377;

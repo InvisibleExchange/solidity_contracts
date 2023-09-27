@@ -56,25 +56,19 @@ contract ETHVault {
 
         // ? Transfer the fee to the proxy
         if (proxyFee > 0) {
-            (bool sent, bytes memory data) = approvedProxy.call{
-                value: proxyFee
-            }("");
+            (bool sent, ) = approvedProxy.call{value: proxyFee}("");
             require(sent, "Failed to send Ether");
         }
 
         // ? Transfer the rest to the recipient
-        uint256 withdrawalAmount = amount - proxyFee;
-
-        (bool sent, bytes memory data) = recipient.call{
-            value: withdrawalAmount
-        }("");
-        require(sent, "Failed to send Ether");
+        (bool sent2, ) = recipient.call{value: amount - proxyFee}("");
+        require(sent2, "Failed to send Ether");
 
         emit WithdrawalEvent(
             recipient,
             approvedProxy,
             proxyFee,
-            withdrawalAmount,
+            amount - proxyFee,
             block.timestamp
         );
     }

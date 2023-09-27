@@ -133,7 +133,7 @@ pub fn get_cross_price(
     quote_token: u32,
     base_amount: u64,
     quote_amount: u64,
-    round: Option<bool>,
+    _round: Option<bool>,
 ) -> f64 {
     // Price of two tokens in terms of each other (possible to get ETH/BTC price)
 

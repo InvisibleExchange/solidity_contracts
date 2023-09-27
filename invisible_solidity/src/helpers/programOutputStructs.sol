@@ -2,13 +2,14 @@
 pragma solidity ^0.8.17;
 
 struct GlobalDexState {
-    uint128 configCode;
+    uint64 txBatchId;
     uint256 initStateRoot;
     uint256 finalStateRoot;
     uint32 stateTreeDepth;
     uint32 globalExpirationTimestamp;
     uint32 nDeposits;
     uint32 nWithdrawals;
+    uint32 nMMRegistrations;
     // uint32 nOutputPositions;
     // uint32 nEmptyPositions;
     // uint32 nOutputNotes;

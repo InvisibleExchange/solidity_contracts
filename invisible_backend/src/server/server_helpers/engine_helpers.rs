@@ -202,7 +202,7 @@ pub fn store_output_json(
     let mut swap_output_json = swap_output_json_.lock();
 
     if !swap_output_json.is_empty() {
-        let main_storage = main_storage_.lock();
+        let mut main_storage = main_storage_.lock();
         main_storage.store_micro_batch(&swap_output_json);
         swap_output_json.clear();
         drop(swap_output_json);

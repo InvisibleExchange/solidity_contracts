@@ -236,6 +236,7 @@ impl Serialize for Withdrawal {
         let mut withdrawal = serializer.serialize_struct("Withdrawal", 9)?;
 
         withdrawal.serialize_field("transaction_type", &self.transaction_type)?;
+        withdrawal.serialize_field("withdrawal_chain", &self.withdrawal_chain_id)?;
         withdrawal.serialize_field("withdrawal_token", &self.withdrawal_token)?;
         withdrawal.serialize_field("withdrawal_amount", &self.withdrawal_amount)?;
         withdrawal.serialize_field("stark_key", &self.stark_key.to_string())?;

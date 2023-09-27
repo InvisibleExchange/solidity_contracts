@@ -18,7 +18,9 @@ pub struct MainStorage {
     pub tx_db: sled::Db,
     pub price_db: sled::Db,
     pub funding_db: sled::Db,
-    pub latest_batch: u32, // every transaction batch stores data separately
+    pub latest_batch: u32,  // every transaction batch stores data separately
+    pub n_deposits: u32,    // the number of deposits in the current batch
+    pub n_withdrawals: u32, // the number of withdrawals in the current batch
 }
 
 impl MainStorage {
@@ -51,6 +53,8 @@ impl MainStorage {
             price_db,
             funding_db,
             latest_batch: batch_index as u32,
+            n_deposits: 0,
+            n_withdrawals: 0,
         }
     }
 
@@ -78,7 +82,7 @@ impl MainStorage {
     /// * swap_output_json - a vector of the latest 15-20 transactions as json maps
     /// * index - the index of the micro batch in the current batch
     ///
-    pub fn store_micro_batch(&self, swap_output_json: &Vec<serde_json::Map<String, Value>>) {
+    pub fn store_micro_batch(&mut self, swap_output_json: &Vec<serde_json::Map<String, Value>>) {
         let index = self.tx_db.get("count").unwrap();
         let index = match index {
             Some(index) => {
@@ -87,6 +91,15 @@ impl MainStorage {
             }
             None => 0,
         };
+
+        for tx in swap_output_json.iter() {
+            let transaction_type = tx.get("transaction_type").unwrap().as_str().unwrap();
+            if transaction_type == "deposit" {
+                self.n_deposits += 1;
+            } else if transaction_type == "withdrawal" {
+                self.n_withdrawals += 1;
+            }
+        }
 
         let res = serde_json::to_vec(swap_output_json).unwrap();
 
@@ -309,6 +322,8 @@ impl MainStorage {
 
         self.tx_db = tx_db;
         self.latest_batch = new_batch_index;
+        self.n_deposits = 0;
+        self.n_withdrawals = 0;
     }
 }
 

@@ -378,7 +378,7 @@ impl Serialize for PriceInfo<'_> {
 /// It is all the relevant information needed for the cairo program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalDexState {
-    pub config_code: u128,
+    pub tx_batch_id: u32,
     pub init_state_root: String,
     pub final_state_root: String,
     pub state_tree_depth: u32,
@@ -388,7 +388,7 @@ pub struct GlobalDexState {
 
 impl GlobalDexState {
     pub fn new(
-        config_code: u128,
+        tx_batch_id: u32,
         init_state_root: &BigUint,
         final_state_root: &BigUint,
         state_tree_depth: u32,
@@ -399,6 +399,7 @@ impl GlobalDexState {
         n_zero_indexes: u32,
         n_deposits: u32,
         n_withdrawals: u32,
+        n_mm_registrations: u32,
     ) -> GlobalDexState {
         let init_state_root = init_state_root.to_string();
         let final_state_root = final_state_root.to_string();
@@ -410,10 +411,11 @@ impl GlobalDexState {
             n_zero_indexes,
             n_deposits,
             n_withdrawals,
+            n_mm_registrations,
         };
 
         GlobalDexState {
-            config_code,
+            tx_batch_id,
             init_state_root,
             final_state_root,
             state_tree_depth,
@@ -431,6 +433,7 @@ pub struct ProgramInputCounts {
     pub n_zero_indexes: u32,
     pub n_deposits: u32,
     pub n_withdrawals: u32,
+    pub n_mm_registrations: u32,
 }
 
 // * Global Config

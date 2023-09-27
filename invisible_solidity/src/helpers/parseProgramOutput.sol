@@ -8,7 +8,7 @@ contract ProgramOutputParser {
         uint256[] calldata cairoProgramOutput
     )
         internal
-        view
+        pure
         returns (
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
@@ -16,9 +16,9 @@ contract ProgramOutputParser {
             WithdrawalTransactionOutput[] memory withdrawals
         )
     {
-        dexState = parseDexState(cairoProgramOutput[:14]);
+        dexState = parseDexState(cairoProgramOutput[:4]);
 
-        cairoProgramOutput = cairoProgramOutput[14:];
+        cairoProgramOutput = cairoProgramOutput[4:];
         GlobalConfig memory config = parseGlobalConfig(cairoProgramOutput);
 
         // ? 1 + 3*assets_len + 5*synthetic_assets_len + observers_len + chain_ids_len
@@ -52,31 +52,32 @@ contract ProgramOutputParser {
     function parseDexState(
         uint256[] calldata dexStateArr
     ) private pure returns (GlobalDexState memory) {
-        uint64 txBatchId = uint64(dexStateArr[0]); // todo: change to txBatchId (and verify against s_txBatchId)
-        uint256 initStateRoot = dexStateArr[1];
-        uint256 finalStateRoot = dexStateArr[2];
+        uint256 initStateRoot = dexStateArr[0];
+        uint256 finalStateRoot = dexStateArr[1];
 
-        uint256 batchedInfo1 = dexStateArr[3];
-        uint8 stateTreeDepth = uint8(batchedInfo1 >> 160);
-        uint32 globalExpirationTimestamp = uint32(batchedInfo1 >> 128);
-        uint128 configCode = uint128(batchedInfo1);
+        uint256 batchedInfo1 = dexStateArr[2];
+        uint8 stateTreeDepth = uint8(batchedInfo1 >> 64);
+        uint32 globalExpirationTimestamp = uint32(batchedInfo1 >> 32);
+        uint32 txBatchId = uint32(batchedInfo1);
 
-        uint256 batchedInfo2 = dexStateArr[4];
-        uint32 nDeposits = uint32(batchedInfo2 >> 160);
-        uint32 nWithdrawals = uint32(batchedInfo2 >> 128);
-        // uint32 nOutputPositions = uint32(batchedInfo2[2]>>96);
-        // uint32 nEmptyPositions = uint32(batchedInfo2[3] >>64);
-        // uint32 nOutputNotes = uint32(batchedInfo2[4] >> 32);
-        // uint32 nZeroNotes = uint32(batchedInfo2[5]);
+        uint256 batchedInfo2 = dexStateArr[3];
+        uint32 nDeposits = uint32(batchedInfo2 >> 192);
+        uint32 nWithdrawals = uint32(batchedInfo2 >> 160);
+        uint32 nMMRegistrations = uint32(batchedInfo2 >> 128);
+        // uint32 nOutputPositions = uint32(batchedInfo2>>96);
+        // uint32 nEmptyPositions = uint32(batchedInfo2 >>64);
+        // uint32 nOutputNotes = uint32(batchedInfo2 >> 32);
+        // uint32 nZeroNotes = uint32(batchedInfo2);
 
         GlobalDexState memory dexState = GlobalDexState({
-            configCode: configCode,
+            txBatchId: txBatchId,
             initStateRoot: initStateRoot,
             finalStateRoot: finalStateRoot,
             stateTreeDepth: stateTreeDepth,
             globalExpirationTimestamp: globalExpirationTimestamp,
             nDeposits: nDeposits,
-            nWithdrawals: nWithdrawals
+            nWithdrawals: nWithdrawals,
+            nMMRegistrations: nMMRegistrations
             // nOutputPositions: nOutputPositions,
             // nEmptyPositions: nEmptyPositions,
             // nOutputNotes: nOutputNotes,

@@ -179,7 +179,7 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
 
 function splitSignature(
     bytes memory sig
-) returns (bytes32 r, bytes32 s, uint8 v) {
+) pure returns (bytes32 r, bytes32 s, uint8 v) {
     require(sig.length == 65, "invalid signature length");
 
     assembly {

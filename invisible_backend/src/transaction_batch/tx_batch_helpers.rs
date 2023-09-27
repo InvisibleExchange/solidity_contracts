@@ -43,11 +43,12 @@ where
 ///
 pub fn get_final_updated_counts(
     updated_state_hashes: &HashMap<u64, (LeafNodeType, BigUint)>,
-) -> [u32; 4] {
+) -> [u32; 5] {
     let mut num_output_notes: u32 = 0; //= self.updated_state_hashes.len() as u32;
     let mut num_output_positions: u32 = 0; // = self.perpetual_updated_position_hashes.len() as u32;
     let mut num_output_tabs: u32 = 0;
     let mut num_zero_indexes: u32 = 0;
+    let mut num_mm_registrations: u32 = 0;
 
     for (_, (leaf_type, leaf_hash)) in updated_state_hashes.iter() {
         if leaf_hash == &BigUint::zero() {
@@ -63,6 +64,14 @@ pub fn get_final_updated_counts(
                 LeafNodeType::OrderTab => {
                     num_output_tabs += 1;
                 }
+                LeafNodeType::MMSpotRegistration => {
+                    num_mm_registrations += 1;
+                    num_output_tabs += 1;
+                }
+                LeafNodeType::MMPerpRegistration => {
+                    num_mm_registrations += 1;
+                    num_output_positions += 1;
+                }
             }
         }
     }
@@ -72,6 +81,7 @@ pub fn get_final_updated_counts(
         num_output_positions,
         num_output_tabs,
         num_zero_indexes,
+        num_mm_registrations,
     ];
 }
 //

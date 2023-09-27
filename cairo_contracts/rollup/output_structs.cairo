@@ -47,6 +47,14 @@ struct AccumulatedHashesOutput {
     withdrawal_hash: felt,
 }
 
+// *********************************************************************************************************
+
+struct MMRegistrationOutput {
+    // & batched_registration_info format: | is_perp (1 bits) | vlp_token (32 bits) | max_vlp_supply (64 bits) |
+    address: felt,
+    batched_registration_info: felt,
+}
+
 // Represents the struct of data written to the program output for each perpetual position Modifictaion.
 struct PerpPositionOutput {
     // & format: | index (59 bits) | position_size (64 bits) | max_vlp_supply (64 bits) | vlp_token (32 bits) | synthetic_token (32 bits) |
@@ -259,6 +267,8 @@ func write_deposit_info_to_output{
         64 + deposit.amount;
     assert output.stark_key = deposit.deposit_address;
 
+    // %{ print(ids.deposit.deposit_id, ids.deposit.token, ids.deposit.amount, ids.output.batched_deposit_info, ids.deposit.deposit_address) %}
+
     let deposit_output_ptr = deposit_output_ptr + DepositTransactionOutput.SIZE;
 
     return ();
@@ -429,6 +439,22 @@ func get_accumulated_withdraw_hash{range_check_ptr, pedersen_ptr: HashBuiltin*}(
         withdraw_outputs + WithdrawalTransactionOutput.SIZE,
         accumulated_withdraw_hash,
     );
+}
+
+// * SMART CONTRACT MM REGISTATION * //
+func write_mm_registration_to_output{
+    pedersen_ptr: HashBuiltin*, range_check_ptr, mm_registration_output: MMRegistrationOutput*
+}(address: felt, vlp_token: felt, max_vlp_supply: felt, is_perp: felt) {
+    alloc_locals;
+
+    let output: MMRegistrationOutput* = mm_registration_output;
+    assert output.batched_registration_info = ((is_perp * 2 ** 32) + vlp_token) * 2 ** 64 +
+        max_vlp_supply;
+    assert output.address = address;
+
+    let mm_registration_output = mm_registration_output + MMRegistrationOutput.SIZE;
+
+    return ();
 }
 
 // * ================================================================================================================================================================

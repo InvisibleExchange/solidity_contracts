@@ -29,14 +29,17 @@ pub fn onchain_register_mm_state_updates(
         state_tree_m.update_leaf_node(&tab.hash, tab.tab_idx as u64);
         updated_state_hashes_m.insert(
             tab.tab_idx as u64,
-            (LeafNodeType::OrderTab, tab.hash.clone()),
+            (LeafNodeType::MMSpotRegistration, tab.hash.clone()),
         );
     }
 
     // ? add it to the positons state
     if let Some(pos) = position {
         state_tree_m.update_leaf_node(&pos.hash, pos.index as u64);
-        updated_state_hashes_m.insert(pos.index as u64, (LeafNodeType::Position, pos.hash.clone()));
+        updated_state_hashes_m.insert(
+            pos.index as u64,
+            (LeafNodeType::MMPerpRegistration, pos.hash.clone()),
+        );
     }
 
     drop(state_tree_m);

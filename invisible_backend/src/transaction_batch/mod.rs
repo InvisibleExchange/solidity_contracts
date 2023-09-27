@@ -27,7 +27,7 @@ use crate::{
         },
         perp_position::PerpPosition,
         perp_swap::PerpSwap,
-        COLLATERAL_TOKEN, DUST_AMOUNT_PER_ASSET, SYNTHETIC_ASSETS,
+        COLLATERAL_TOKEN, SYNTHETIC_ASSETS,
     },
     server::grpc::{OrderTabActionMessage, OrderTabActionResponse},
     smart_contract_mms::{
@@ -107,6 +107,8 @@ pub enum LeafNodeType {
     Note,
     Position,
     OrderTab,
+    MMSpotRegistration,
+    MMPerpRegistration,
 }
 pub struct TransactionBatch {
     pub state_tree: Arc<Mutex<SuperficialTree>>, // current state tree (superficial tree only stores the leaves)
@@ -133,9 +135,6 @@ pub struct TransactionBatch {
     pub current_funding_idx: u32, // the current index of the funding rates and prices arrays
     pub funding_idx_shift: HashMap<u32, u32>, // maps asset id to an funding idx shift
     pub min_funding_idxs: Arc<Mutex<HashMap<u32, u32>>>, // the min funding index of a position being updated in this batch for each asset
-    //
-    pub n_deposits: u32,    // number of deposits in this batch
-    pub n_withdrawals: u32, // number of withdrawals in this batch
     //
     pub rollback_safeguard: Arc<Mutex<HashMap<ThreadId, RollbackInfo>>>, // used to rollback the state in case of errors
     pub perp_rollback_safeguard: Arc<Mutex<HashMap<ThreadId, PerpRollbackInfo>>>, // used to rollback the perp_state in case of errors
@@ -219,9 +218,6 @@ impl TransactionBatch {
             current_funding_idx: 0,
             funding_idx_shift,
             min_funding_idxs: Arc::new(Mutex::new(min_funding_idxs)),
-            //
-            n_deposits: 0,
-            n_withdrawals: 0,
             //
             rollback_safeguard,
             perp_rollback_safeguard,
@@ -337,18 +333,6 @@ impl TransactionBatch {
             );
             return res;
         });
-
-        match tx_type.as_str() {
-            "deposit" => {
-                self.n_deposits += 1;
-            }
-            "withdrawal" => {
-                self.n_withdrawals += 1;
-            }
-            _ => {
-                self.running_tx_count += 1;
-            }
-        }
 
         return handle;
     }
@@ -958,6 +942,7 @@ impl TransactionBatch {
         let latest_output_json = latest_output_json.lock();
 
         let current_batch_index = main_storage.latest_batch;
+        let (n_deposits, n_withdrawals) = (main_storage.n_deposits, main_storage.n_withdrawals);
 
         // ? Store the latest output json
         main_storage.store_micro_batch(&latest_output_json);
@@ -981,9 +966,8 @@ impl TransactionBatch {
         let price_info_json = get_price_info(min_index_price_data, max_index_price_data);
 
         // ? Get the final updated counts for the cairo program input
-        let [num_output_notes, num_output_positions, num_output_tabs, num_zero_indexes] =
+        let [n_output_notes, n_output_positions, n_output_tabs, n_zero_indexes, n_mm_registrations] =
             get_final_updated_counts(&updated_state_hashes);
-        let (n_deposits, n_withdrawals) = (self.n_deposits, self.n_withdrawals);
 
         updated_state_hashes_c.clear();
 
@@ -1005,17 +989,18 @@ impl TransactionBatch {
             .expect("Time went backwards")
             .as_secs() as u32;
         let global_dex_state: GlobalDexState = GlobalDexState::new(
-            1234, // todo: Could be a version code and a tx_batch count
+            current_batch_index,
             &prev_spot_root,
             &new_spot_root,
             TREE_DEPTH,
             global_expiration_timestamp,
-            num_output_notes,
-            num_output_positions,
-            num_output_tabs,
-            num_zero_indexes,
+            n_output_notes,
+            n_output_positions,
+            n_output_tabs,
+            n_zero_indexes,
             n_deposits,
             n_withdrawals,
+            n_mm_registrations,
         );
 
         let global_config: GlobalConfig = GlobalConfig::new();
@@ -1141,6 +1126,8 @@ impl TransactionBatch {
     pub fn restore_state(&mut self, transactions: Vec<Map<String, Value>>) {
         // println!("Restoring state from {:?} transactions", transactions);
 
+        let mut n_deposits = 0;
+        let mut n_withdrawals = 0;
         for transaction in transactions {
             let transaction_type = transaction
                 .get("transaction_type")
@@ -1164,7 +1151,7 @@ impl TransactionBatch {
                         deposit_notes,
                     );
 
-                    self.n_deposits += 1;
+                    n_deposits += 1;
                 }
                 "withdrawal" => {
                     let withdrawal_notes_in = transaction
@@ -1183,7 +1170,7 @@ impl TransactionBatch {
                         refund_note,
                     );
 
-                    self.n_withdrawals += 1;
+                    n_withdrawals += 1;
                 }
                 "swap" => {
                     // * Order a ------------------------
@@ -1270,6 +1257,11 @@ impl TransactionBatch {
                 }
             }
         }
+
+        let mut storage = self.main_storage.lock();
+        storage.n_deposits = n_deposits;
+        storage.n_withdrawals = n_withdrawals;
+        drop(storage);
     }
 
     // * FUNDING CALCULATIONS * //
@@ -1413,9 +1405,6 @@ impl TransactionBatch {
         _init_empty_tokens_map::<u32>(&mut min_funding_idxs);
 
         self.running_tx_count = 0;
-
-        self.n_deposits = 0;
-        self.n_withdrawals = 0;
     }
 }
 

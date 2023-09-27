@@ -20,12 +20,12 @@ contract TokenInfo {
         // ETH
         s_tokenAddress2Id[address(0)] = ETH_ID;
         s_tokenId2Address[ETH_ID] = address(0);
-        s_tokenId2ScaleFactor[ETH_ID] = 18 - 8;
+        s_tokenId2ScaleFactor[ETH_ID] = 18 - 9;
     }
 
     //
     // sacle-factor = onchain_decimals - offchain_decimals
-    // If token has 18 decimals onchain and 8 decimals offchain then scale factor is 10
+    // If token has 18 decimals onchain and 9 decimals offchain then scale factor is 10
     //
 
     function _registerToken(

@@ -10,7 +10,7 @@ import "../vaults/VaultRegistry.sol";
 
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-contract MMRegistry is TokenInfo,  VaultRegistry {
+contract MMRegistry is TokenInfo, VaultRegistry {
     address public owner;
 
     event newSpotMMRegistration(
@@ -53,9 +53,9 @@ contract MMRegistry is TokenInfo,  VaultRegistry {
     }
 
     uint32 public s_pendingSpotMMCount = 0;
-    SpotMMRegistration[] public s_pendingSpotRegiistrations;
+    mapping(uint256 => SpotMMRegistration) public s_pendingSpotRegistrations; // tabAddress => SpotMMRegistration
     uint32 public s_pendingPerpMMCount = 0;
-    PerpMMRegistration[] public s_pendingPerpRegiistrations;
+    mapping(uint256 => PerpMMRegistration) public s_pendingPerpRegistrations; // posAddress => PerpMMRegistration
 
     constructor(
         address _owner,
@@ -108,10 +108,13 @@ contract MMRegistry is TokenInfo,  VaultRegistry {
             s_approvedSpotMMs[msg.sender][tabAddress],
             "Only approved spot market makers can register"
         );
-
         require(
             s_spotMarkets[baseAsset][quoteAsset],
             "Spot market does not exist"
+        );
+        require(
+            s_pendingSpotRegistrations[tabAddress].tabAddress != 0,
+            "already registered"
         );
 
         // TODO: Get random vlpTokenId
@@ -127,8 +130,7 @@ contract MMRegistry is TokenInfo,  VaultRegistry {
         );
 
         // store the registration under pending registrations
-        s_pendingSpotRegiistrations[s_pendingSpotMMCount] = registration;
-        s_pendingSpotMMCount += 1;
+        s_pendingSpotRegistrations[tabAddress] = registration;
 
         emit newSpotMMRegistration(
             msg.sender,
@@ -149,8 +151,11 @@ contract MMRegistry is TokenInfo,  VaultRegistry {
             s_approvedPerpMMs[msg.sender][positionAddress],
             "Only approved perp market makers can register"
         );
-
         require(s_perpMarkets[syntheticAsset], "Perp market does not exist");
+        require(
+            s_pendingPerpRegistrations[syntheticAsset].positionAddress != 0,
+            "already registered"
+        );
 
         // TODO: Get random vlpTokenId
         uint32 vlpTokenId = 1122334455;
@@ -164,8 +169,7 @@ contract MMRegistry is TokenInfo,  VaultRegistry {
         );
 
         // store the registration under pending registrations
-        s_pendingPerpRegiistrations[s_pendingPerpMMCount] = registration;
-        s_pendingPerpMMCount += 1;
+        s_pendingPerpRegistrations[positionAddress] = registration;
 
         emit newPerpMMRegistration(
             msg.sender,

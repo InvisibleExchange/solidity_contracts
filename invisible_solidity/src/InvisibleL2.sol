@@ -3,10 +3,15 @@ pragma solidity ^0.8.17;
 
 import "src/interfaces/IVaults.sol";
 
+import "src/interfaces/IPedersenHash.sol";
+
 import "src/interactions/Deposit.sol";
 import "src/interactions/Withdrawal.sol";
 
-contract Interactions is Interactions, MMRegistry {
+import "src/interactions/Interactions.sol";
+import "src/interactions/RegisterMM.sol";
+
+contract InvisibleL2 is Interactions {
     uint64 s_txBatchId;
 
     mapping(uint64 => uint256) public s_txBatchId2StateRoot;
@@ -19,11 +24,17 @@ contract Interactions is Interactions, MMRegistry {
 
     address s_admin;
     address s_L1MessageRelay; // The contract that passes messages from the L1 contract
+    address s_pedersenHashAddress;
 
-    constructor(address _admin, address _L1MessageRelay) {
+    constructor(
+        address _admin,
+        address _L1MessageRelay,
+        address _pedersenHashAddress
+    ) {
         s_txBatchId = 0;
         s_admin = _admin;
-        s_L1MessageRelay = _L1MessagePasser;
+        s_L1MessageRelay = _L1MessageRelay;
+        s_pedersenHashAddress = _pedersenHashAddress;
     }
 
     modifier onlyAdmin() {
@@ -49,7 +60,10 @@ contract Interactions is Interactions, MMRegistry {
         uint256 accumulateWithdrawalHash
     ) external onlyMessageRelay {
         require(txBatchId > s_txBatchId, "Invalid txBatchId");
-        require(newStateRoot != s_stateRoot, "Invalid state root");
+        require(
+            newStateRoot != s_txBatchId2StateRoot[s_txBatchId],
+            "Invalid state root"
+        );
 
         s_txBatchId = txBatchId;
         s_txBatchId2StateRoot[txBatchId] = newStateRoot;
@@ -63,5 +77,81 @@ contract Interactions is Interactions, MMRegistry {
         ] = accumulateWithdrawalHash;
     }
 
-    function processL1Update(uint64 txBatchId, ) external {}
+    function processL1Update(
+        uint64 txBatchId,
+        DepositTransactionOutput[] calldata deposits,
+        WithdrawalTransactionOutput[] calldata withdrawals
+    ) external {
+        //
+
+        // ? Process deposits ————————————————————————————————————————————————————
+        if (!s_txBatchId2AccumulatedDepositsProcessed[txBatchId]) {
+            uint256 accumulatedDepositHash = 0;
+
+            for (uint256 i = 0; i < deposits.length; i++) {
+                DepositTransactionOutput calldata deposit = deposits[i];
+
+                uint256 depositHash = IPedersenHash(s_pedersenHashAddress).hash(
+                    abi.encodePacked(
+                        [deposit.batchedDepositInfo, deposit.pubKey]
+                    )
+                )[0];
+
+                accumulatedDepositHash = IPedersenHash(s_pedersenHashAddress)
+                    .hash(
+                        abi.encodePacked([accumulatedDepositHash, depositHash])
+                    )[0];
+            }
+
+            require(
+                accumulatedDepositHash ==
+                    s_txBatchId2AccumulatedDepositHashes[txBatchId],
+                "Invalid accumulated deposit hash"
+            );
+
+            s_txBatchId2AccumulatedDepositsProcessed[txBatchId] = true;
+
+            // ? Updating pending deposits
+            updatePendingDeposits(deposits, txBatchId);
+        }
+
+        // ? Process withdrawals ————————————————————————————————————————————————
+        if (!s_txBatchId2AccumulatedWithdrawalsProcessed[txBatchId]) {
+            uint256 accumulatedWithdrawalHash = 0;
+
+            for (uint256 i = 0; i < withdrawals.length; i++) {
+                WithdrawalTransactionOutput calldata withdrawal = withdrawals[
+                    i
+                ];
+
+                uint256 withdrawalHash = IPedersenHash(s_pedersenHashAddress)
+                    .hash(
+                        abi.encodePacked(
+                            [
+                                withdrawal.batchedWithdrawalInfo,
+                                uint256(uint160(withdrawal.recipient))
+                            ]
+                        )
+                    )[0];
+
+                accumulatedWithdrawalHash = IPedersenHash(s_pedersenHashAddress)
+                    .hash(
+                        abi.encodePacked(
+                            [accumulatedWithdrawalHash, withdrawalHash]
+                        )
+                    )[0];
+            }
+
+            require(
+                accumulatedWithdrawalHash ==
+                    s_txBatchId2AccumulatedWithdrawalHashes[txBatchId],
+                "Invalid accumulated withdrawal hash"
+            );
+
+            s_txBatchId2AccumulatedWithdrawalsProcessed[txBatchId] = true;
+
+            // ? Store new withdrawal outputs
+            storeNewBatchWithdrawalOutputs(withdrawals, txBatchId);
+        }
+    }
 }
