@@ -40,13 +40,15 @@ impl MainStorage {
             .path("./storage/transaction_data/".to_string() + &batch_index.to_string());
         let tx_db = config.open().unwrap();
 
-        let config =
-            Config::new().path("./storage/price_data/".to_string() + &batch_index.to_string());
+        let config = Config::new().path("./storage/price_data".to_string());
         let price_db = config.open().unwrap();
 
-        let config =
-            Config::new().path("./storage/funding_info/".to_string() + &batch_index.to_string());
+        let config = Config::new().path("./storage/funding_info".to_string());
         let funding_db = config.open().unwrap();
+
+        // let config =
+        //     Config::new().path("./storage/backups".to_string());
+        // let backups_db = config.open().unwrap();
 
         MainStorage {
             tx_db,
