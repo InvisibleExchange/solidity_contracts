@@ -5,7 +5,7 @@ use num_traits::{FromPrimitive, One, ToPrimitive, Zero};
 use crate::{
     perpetual::OrderSide,
     transaction_batch::{
-        tx_batch_structs::{GlobalConfig, GlobalDexState},
+        tx_batch_structs::{GlobalConfig, GlobalDexState, ProgramInputCounts},
         CHAIN_IDS,
     },
 };
@@ -116,13 +116,24 @@ fn parse_dex_state(output: &[BigUint]) -> (GlobalDexState, &[BigUint]) {
     let res_vec = split_by_bytes(batched_output_info, vec![32, 32, 32, 32, 32, 32, 32]);
     let n_deposits = res_vec[0].to_u32().unwrap();
     let n_withdrawals = res_vec[1].to_u32().unwrap();
-    let n_mm_registration = res_vec[2].to_u32().unwrap();
+    let n_mm_registrations = res_vec[2].to_u32().unwrap();
     let n_output_notes = res_vec[3].to_u32().unwrap();
     let n_output_positions = res_vec[4].to_u32().unwrap();
     let n_output_tabs = res_vec[5].to_u32().unwrap();
     let n_zero_indexes = res_vec[6].to_u32().unwrap();
 
     let shifted_output = &output[4..];
+
+    let program_input_counts = ProgramInputCounts {
+        n_output_notes,
+        n_output_positions,
+        n_output_tabs,
+        n_zero_indexes,
+        n_deposits,
+        n_withdrawals,
+        n_mm_registrations,
+    };
+
     return (
         GlobalDexState::new(
             config_code,
@@ -130,13 +141,7 @@ fn parse_dex_state(output: &[BigUint]) -> (GlobalDexState, &[BigUint]) {
             &final_state_root,
             state_tree_depth,
             global_expiration_timestamp,
-            n_output_notes,
-            n_output_positions,
-            n_output_tabs,
-            n_zero_indexes,
-            n_deposits,
-            n_withdrawals,
-            n_mm_registration,
+            program_input_counts,
         ),
         shifted_output,
     );

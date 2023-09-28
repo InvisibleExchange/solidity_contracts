@@ -1,6 +1,5 @@
 use error_stack::Result;
 
-use serde::Deserialize as DeserializeTrait;
 use std::{collections::HashMap, str::FromStr};
 
 use num_bigint::BigUint;
@@ -23,6 +22,8 @@ use crate::{
 
 use crate::utils::crypto_utils::Signature;
 
+use super::CHAIN_IDS;
+
 // * ORACLE PRICE UPDATES ================================================================================
 
 // PrivKeys: 0x1, 0x2, 0x3, 0x4
@@ -34,7 +35,7 @@ pub static OBSERVERS: [&'static str; 4] = [
 ];
 
 /// This is received from the oracle containing the new prices and signatures to update the index price
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct OracleUpdate {
     pub token: u32,                 // Token id
     pub timestamp: u32,             // Timestamp of the update
@@ -123,75 +124,12 @@ impl OracleUpdate {
     }
 }
 
-impl Serialize for OracleUpdate {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut oracle_update = serializer.serialize_struct("OracleUpdate", 4)?;
-
-        oracle_update.serialize_field("token", &self.token)?;
-        oracle_update.serialize_field("timestamp", &self.timestamp)?;
-        oracle_update.serialize_field("prices", &self.prices)?;
-        oracle_update.serialize_field("observer_idxs", &self.observer_ids)?;
-        oracle_update.serialize_field("signatures", &self.signatures)?;
-
-        return oracle_update.end();
-    }
-}
-
-// * DESERIALIZE * //
-use serde::de::Deserializer;
-
-use super::CHAIN_IDS;
-
-impl<'de> Deserialize<'de> for OracleUpdate {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(DeserializeTrait, Debug)]
-        struct Sig {
-            r: String,
-            s: String,
-        }
-
-        #[derive(DeserializeTrait, Debug)]
-        struct Helper {
-            token: u32,
-            timestamp: u32,
-            observer_idxs: Vec<u32>,
-            prices: Vec<u64>,
-            signatures: Vec<Sig>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-
-        let sigs = helper
-            .signatures
-            .iter()
-            .map(|sig| Signature {
-                r: sig.r.clone(),
-                s: sig.s.clone(),
-            })
-            .collect::<Vec<Signature>>();
-
-        Ok(OracleUpdate {
-            timestamp: helper.timestamp,
-            token: helper.token,
-            prices: helper.prices,
-            observer_ids: helper.observer_idxs,
-            signatures: sigs,
-        })
-    }
-}
-
 // * FUNDING ================================================================================
 
 /// The information about the funding rates and prices for each token.\
 /// This is constructed after each transaction batch finalization and
 /// fed as input to the cairo program
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FundingInfo {
     /// Funding_rates structure is as follows: \
     ///  \[0] = token id, \[1] = min_funding_idx, \[2] = token funding_rates len (n-3), \[3..n] = funding_rates \
@@ -393,26 +331,27 @@ impl GlobalDexState {
         final_state_root: &BigUint,
         state_tree_depth: u32,
         global_expiration_timestamp: u32,
-        n_output_notes: u32,
-        n_output_positions: u32,
-        n_output_tabs: u32,
-        n_zero_indexes: u32,
-        n_deposits: u32,
-        n_withdrawals: u32,
-        n_mm_registrations: u32,
+        program_input_counts: ProgramInputCounts,
+        // n_output_notes: u32,
+        // n_output_positions: u32,
+        // n_output_tabs: u32,
+        // n_zero_indexes: u32,
+        // n_deposits: u32,
+        // n_withdrawals: u32,
+        // n_mm_registrations: u32,
     ) -> GlobalDexState {
         let init_state_root = init_state_root.to_string();
         let final_state_root = final_state_root.to_string();
 
-        let program_input_counts = ProgramInputCounts {
-            n_output_notes,
-            n_output_positions,
-            n_output_tabs,
-            n_zero_indexes,
-            n_deposits,
-            n_withdrawals,
-            n_mm_registrations,
-        };
+        // let program_input_counts = ProgramInputCounts {
+        //     n_output_notes,
+        //     n_output_positions,
+        //     n_output_tabs,
+        //     n_zero_indexes,
+        //     n_deposits,
+        //     n_withdrawals,
+        //     n_mm_registrations,
+        // };
 
         GlobalDexState {
             tx_batch_id,

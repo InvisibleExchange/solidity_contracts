@@ -52,27 +52,12 @@ pub fn verify(stark_key: &BigUint, msg_hash: &BigUint, signature: &Signature) ->
 
 // * STRUCTS ======================================================================================
 
-use serde::ser::{Serialize, SerializeStruct, SerializeTuple, Serializer};
+use serde::{Deserialize as DeserializeTrait, Serialize as SerializeTrait};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SerializeTrait, DeserializeTrait)]
 pub struct Signature {
     pub r: String,
     pub s: String,
-}
-
-// * SERIALIZE * //
-impl Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut sig = serializer.serialize_tuple(2)?;
-
-        sig.serialize_element(&self.r)?;
-        sig.serialize_element(&self.s)?;
-
-        return sig.end();
-    }
 }
 
 impl Signature {
@@ -84,7 +69,7 @@ impl Signature {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SerializeTrait, DeserializeTrait)]
 pub struct EcPoint {
     pub x: BigInt,
     pub y: BigInt,
@@ -119,19 +104,5 @@ impl From<&AffinePoint> for EcPoint {
             x: BigInt::from_str(&p.x.to_string()).unwrap(),
             y: BigInt::from_str(&p.y.to_string()).unwrap(),
         }
-    }
-}
-
-impl Serialize for EcPoint {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut note = serializer.serialize_struct("EcPoint", 2)?;
-
-        note.serialize_field("x", &self.x.to_string())?;
-        note.serialize_field("y", &self.y.to_string())?;
-
-        return note.end();
     }
 }

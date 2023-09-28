@@ -1,6 +1,7 @@
 use invisible_backend::server::grpc::MarginChangeResponse;
 use invisible_backend::server::server_helpers::periodic_updates::start_periodic_updates;
-use invisible_backend::transaction_batch::{TransactionBatch, TREE_DEPTH};
+use invisible_backend::transaction_batch::batch_functions::batch_transition::TREE_DEPTH;
+use invisible_backend::transaction_batch::TransactionBatch;
 use parking_lot::Mutex;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, thread::ThreadId};
 use tokio::net::TcpListener;
