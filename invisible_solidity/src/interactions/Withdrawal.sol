@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../interfaces/IVaults.sol";
+import "forge-std/console.sol";
 
 import "../helpers/tokenInfo.sol";
 import "../helpers/parseProgramOutput.sol";
@@ -68,7 +69,9 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
         address _recipient,
         address _approvedProxy,
         uint256 _proxyFee,
-        bytes memory _signature
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) internal {
         //
 
@@ -81,13 +84,14 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
                 abi.encodePacked(_tokenAddress, _approvedProxy, _proxyFee)
             );
 
-            (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-            address signer = ecrecover(messageHash, v, r, s);
+            bytes memory prefix = "\x19Ethereum Signed Message:\n32";
+            bytes32 prefixedHashMessage = keccak256(
+                abi.encodePacked(prefix, messageHash)
+            );
+            address signer = ecrecover(prefixedHashMessage, v, r, s);
 
             // ? assert that the signer really  aproved the proxy to withdraw
             require(signer == _recipient, "invalid signature");
-
             // ? assert that the signer is the intended proxy
             require(
                 _approvedProxy == msg.sender,
@@ -179,8 +183,8 @@ contract Withdrawal is TokenInfo, ProgramOutputParser, VaultRegistry {
 
 function splitSignature(
     bytes memory sig
-) pure returns (bytes32 r, bytes32 s, uint8 v) {
-    require(sig.length == 65, "invalid signature length");
+) view returns (bytes32 r, bytes32 s, uint8 v) {
+    // require(sig.length == 65, "invalid signature length");
 
     assembly {
         /*

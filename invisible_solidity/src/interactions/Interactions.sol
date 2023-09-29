@@ -52,7 +52,9 @@ contract Interactions is Deposit, Withdrawal {
         address _recipient,
         address _approvedProxy,
         uint256 _proxyFee,
-        bytes calldata _signature
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external {
         return
             _makeWithdrawal(
@@ -60,7 +62,9 @@ contract Interactions is Deposit, Withdrawal {
                 _recipient,
                 _approvedProxy,
                 _proxyFee,
-                _signature
+                v,
+                r,
+                s
             );
     }
 
@@ -68,7 +72,9 @@ contract Interactions is Deposit, Withdrawal {
         address _recipient,
         address _approvedProxy,
         uint256 _proxyFee,
-        bytes calldata _signature
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external {
         return
             _makeWithdrawal(
@@ -76,7 +82,9 @@ contract Interactions is Deposit, Withdrawal {
                 _recipient,
                 _approvedProxy,
                 _proxyFee,
-                _signature
+                v,
+                r,
+                s
             );
     }
 

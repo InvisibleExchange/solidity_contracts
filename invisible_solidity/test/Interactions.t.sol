@@ -138,7 +138,7 @@ contract InteractionsTest is Test {
         invisibleL1.updateStateAfterTxBatch(programOutput);
 
         address recipient = address(
-            uint160(29865346975236345739456748567348951345789436256)
+            uint160(649643524963080317271811968397224848924325242593)
         );
         uint256 pendingErcDeposit2 = invisibleL1.getPendingDepositAmount(
             UsdcStarkKey,
@@ -162,21 +162,23 @@ contract InteractionsTest is Test {
         // assert(pendingEthWithdrawal == 0);
         console.log("pendingtokenWithdrawal: ", pendingtokenWithdrawal);
         console.log("pendingEthWithdrawal: ", pendingEthWithdrawal);
-
-        testWithdawals();
     }
 
     function testWithdawals() public {
+        testUpdatingTxBatch();
+
         address tokenAddress = address(testToken);
 
         vm.stopPrank();
-        vm.startPrank(address(29865346975236345739456748567348951345789436256));
+        vm.startPrank(
+            address(649643524963080317271811968397224848924325242593)
+        );
 
         uint256 prevErc20Balance = testToken.balanceOf(
-            address(29865346975236345739456748567348951345789436256)
+            address(649643524963080317271811968397224848924325242593)
         );
         uint256 prevEthBalance = address(
-            29865346975236345739456748567348951345789436256
+            649643524963080317271811968397224848924325242593
         ).balance;
 
         assert(prevErc20Balance == 0);
@@ -184,27 +186,107 @@ contract InteractionsTest is Test {
 
         invisibleL1.makeWithdrawal(
             tokenAddress,
-            address(29865346975236345739456748567348951345789436256),
+            address(649643524963080317271811968397224848924325242593),
             address(0),
             0,
-            bytes("")
+            0,
+            bytes32(""),
+            bytes32("")
         );
         invisibleL1.makeETHWithdrawal(
-            address(29865346975236345739456748567348951345789436256),
+            address(649643524963080317271811968397224848924325242593),
             address(0),
             0,
-            bytes("")
+            0,
+            bytes32(""),
+            bytes32("")
         );
 
         uint256 newErc20Balance = testToken.balanceOf(
-            address(29865346975236345739456748567348951345789436256)
+            address(649643524963080317271811968397224848924325242593)
         );
         uint256 newEthBalance = address(
-            29865346975236345739456748567348951345789436256
+            649643524963080317271811968397224848924325242593
         ).balance;
 
         console.log("newErc20Balance: ", newErc20Balance);
         console.log("newEthBalance: ", newEthBalance);
+    }
+
+    function testDelegatedWithdawals() public {
+        testUpdatingTxBatch();
+
+        address tokenAddress = address(testToken); //0x99F2226cf67E3270701C8eF16349E8e4F398dB2e
+
+        vm.startPrank(
+            address(845977816346026234456067308737012157398485141494)
+        );
+
+        invisibleL1.makeWithdrawal(
+            tokenAddress,
+            address(649643524963080317271811968397224848924325242593),
+            address(845977816346026234456067308737012157398485141494),
+            10000000000000000000,
+            27,
+            bytes32(
+                0xeaee5268fc6984140aea5671a7476e4d2eeb36e7f771b4dd50103cbc15816aa4
+            ),
+            bytes32(
+                0x70410f00f7d1956abab42d07bb3cee2b103d6374444e96196e11a49b09d8ebef
+            )
+        );
+        invisibleL1.makeETHWithdrawal(
+            address(649643524963080317271811968397224848924325242593),
+            address(845977816346026234456067308737012157398485141494),
+            10000000000000000,
+            28,
+            bytes32(
+                0x2be5c5919f810768302f87c44e865dc1c3aa458982d60a41163d458553517304
+            ),
+            bytes32(
+                0x255a831b08fe04ce9204bb59f9b3a6baad63ab344056ab41cf6d441895aca292
+            )
+        );
+
+        uint256 newErc20Balance = testToken.balanceOf(
+            address(649643524963080317271811968397224848924325242593)
+        );
+        uint256 newEthBalance = address(
+            649643524963080317271811968397224848924325242593
+        ).balance;
+
+        console.log("recipient newErc20Balance: ", newErc20Balance);
+        console.log("recipient newEthBalance: ", newEthBalance);
+        // -- -- -- -- -- -- -- -- -- -- --
+        uint256 newErc20Balance2 = testToken.balanceOf(
+            address(845977816346026234456067308737012157398485141494)
+        );
+        uint256 newEthBalance2 = address(
+            845977816346026234456067308737012157398485141494
+        ).balance;
+
+        console.log("proxy newErc20Balance: ", newErc20Balance2);
+        console.log("proxy newEthBalance: ", newEthBalance2);
+    }
+
+    function testEncode() public {
+        address _tokenAddress = address(
+            uint160(149118583348991840656470636803218188963536151985)
+        );
+        address _approvedProxy = address(
+            uint160(149118583348991840656470636803218188963536151985)
+        );
+        uint256 _proxyFee = 1000000000000;
+
+        bytes memory res = abi.encode(_tokenAddress, _approvedProxy, _proxyFee);
+
+        // bytes32[] memory b_arr = bytesToBytes32Array(res);
+        // console.log("res: ", uint256(b_arr[0]));
+        // console.log("res: ", uint256(b_arr[1]));
+
+        uint256 hashRes = uint256(keccak256(res));
+
+        console.log("hashRes: ", hashRes);
     }
 }
 
@@ -287,9 +369,9 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         3093476031982861845174527948922094091536536576,
         2292025268456116477323356083246651802150462734710453904748677715907532488444,
         720256015655390340593015018558428160,
-        29865346975236345739456748567348951345789436256,
+        649643524963080317271811968397224848924325242593,
         720256015655413103875201976145122304,
-        29865346975236345739456748567348951345789436256,
+        649643524963080317271811968397224848924325242593,
         1
     ];
 
@@ -300,3 +382,5 @@ function getProgramOutput() pure returns (uint256[] memory res) {
 
     return res;
 }
+
+// 0x56570de287d73cd1cb6092bb8fdee6173974955fdef345ae579ee9f475ea7432

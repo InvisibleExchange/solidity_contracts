@@ -59,10 +59,10 @@ contract InvisibleL1 is Interactions {
         //     dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
         //     "Invalid state root"
         // );
-        require(
-            dexState.globalExpirationTimestamp < block.timestamp,
-            "Invalid expiration timestamp"
-        );
+        // require(
+        //     dexState.globalExpirationTimestamp < block.timestamp,
+        //     "Invalid expiration timestamp"
+        // );
         //
 
         updatePendingDeposits(deposits, s_txBatchId);

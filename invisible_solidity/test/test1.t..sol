@@ -101,4 +101,20 @@ contract Test1 is Test {
 
         console.log("res", res[0]);
     }
+
+    function testEncode() public {
+        address _tokenAddress = address(
+            uint160(149118583348991840656470636803218188963536151985)
+        );
+        address _approvedProxy = address(
+            uint160(149118583348991840656470636803218188963536151985)
+        );
+        uint256 _proxyFee = 1000000000000;
+
+        bytes memory res = abi.encode(_tokenAddress, _approvedProxy, _proxyFee);
+
+        uint256 res2 = uint256(bytes32(res));
+
+        console.log("res", res2);
+    }
 }

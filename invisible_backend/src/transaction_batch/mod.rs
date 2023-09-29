@@ -1,14 +1,12 @@
 use firestore_db_and_auth::ServiceSession;
 use num_bigint::BigUint;
 use parking_lot::Mutex;
-use serde_json::{to_vec, Map, Value};
+use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
     fs,
-    path::Path,
     sync::Arc,
     thread::{self, JoinHandle, ThreadId},
-    time::SystemTime,
 };
 
 use error_stack::Result;
@@ -23,15 +21,10 @@ use crate::{
         perp_swap::PerpSwap,
     },
     server::grpc::{OrderTabActionMessage, OrderTabActionResponse},
-    transaction_batch::batch_functions::batch_transition::TREE_DEPTH,
     transactions::Transaction,
-    utils::firestore::upload_file_to_storage,
 };
 use crate::{server::grpc::RollbackMessage, utils::storage::MainStorage};
-use crate::{
-    trees::{superficial_tree::SuperficialTree, Tree},
-    utils::storage::BackupStorage,
-};
+use crate::{trees::superficial_tree::SuperficialTree, utils::storage::BackupStorage};
 
 use crate::utils::{
     errors::{
@@ -46,12 +39,9 @@ use crate::transactions::{swap::SwapResponse, transaction_helpers::rollbacks::Ro
 
 use crate::server::grpc::{ChangeMarginMessage, FundingUpdateMessage};
 
-use tx_batch_helpers::{get_funding_info, split_hashmap};
-use tx_batch_structs::{get_price_info, GlobalConfig};
-
 use crate::transaction_batch::{
-    tx_batch_helpers::{_init_empty_tokens_map, get_final_updated_counts, get_json_output},
-    tx_batch_structs::{FundingInfo, GlobalDexState, OracleUpdate, SwapFundingInfo},
+    tx_batch_helpers::_init_empty_tokens_map,
+    tx_batch_structs::{OracleUpdate, SwapFundingInfo},
 };
 
 use self::{
