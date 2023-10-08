@@ -13,7 +13,8 @@ contract ProgramOutputParser {
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
             DepositTransactionOutput[] memory deposits,
-            WithdrawalTransactionOutput[] memory withdrawals
+            WithdrawalTransactionOutput[] memory withdrawals,
+            MMRegistrationOutput[] memory registrations
         )
     {
         dexState = parseDexState(cairoProgramOutput[:4]);
@@ -45,7 +46,12 @@ contract ProgramOutputParser {
             cairoProgramOutput[:dexState.nWithdrawals * 2]
         );
 
-        return (dexState, hashes, deposits, withdrawals);
+        cairoProgramOutput = cairoProgramOutput[dexState.nWithdrawals * 2:];
+        registrations = parseMMRegistrationsArray(
+            cairoProgramOutput[:dexState.nMMRegistrations * 2]
+        );
+
+        return (dexState, hashes, deposits, withdrawals, registrations);
     }
 
     // * ------------------------------------------------------
@@ -180,6 +186,27 @@ contract ProgramOutputParser {
         return withdrawals;
     }
 
+    // * ------------------------------------------------------
+    function parseMMRegistrationsArray(
+        uint256[] calldata registrationsArr
+    ) private pure returns (MMRegistrationOutput[] memory) {
+        uint256 nRegistrations = registrationsArr.length / 2;
+        MMRegistrationOutput[]
+            memory registrations = new MMRegistrationOutput[](nRegistrations);
+
+        for (uint256 i = 0; i < registrationsArr.length; i += 2) {
+            uint256 registrationInfo = registrationsArr[i];
+            uint256 mmAddress = uint256(registrationsArr[i + 1]);
+
+            registrations[i / 2] = MMRegistrationOutput({
+                batchedRegistrationInfo: registrationInfo,
+                mmAddress: mmAddress
+            });
+        }
+
+        return registrations;
+    }
+
     // * —————————————————————————————————————————————————————————————————————
     // * ------------------------------------------------------
     function uncompressDepositOutput(
@@ -216,5 +243,25 @@ contract ProgramOutputParser {
         tokenId = uint32(withdrawal.batchedWithdrawalInfo >> 64);
         amount = uint64(withdrawal.batchedWithdrawalInfo);
         recipient = withdrawal.recipient;
+    }
+
+    function uncompressRegistrationOutput(
+        MMRegistrationOutput memory registration
+    )
+        internal
+        pure
+        returns (
+            bool isPerp,
+            uint32 vlpToken,
+            uint64 maxVlpSupply,
+            uint256 mmAddress
+        )
+    {
+        // & batched_registration_info format: | is_perp (1 bits) | vlp_token (32 bits) | max_vlp_supply (64 bits) |
+
+        isPerp = registration.batchedRegistrationInfo >> 96 == 1;
+        vlpToken = uint32(registration.batchedRegistrationInfo >> 64);
+        maxVlpSupply = uint64(registration.batchedRegistrationInfo);
+        mmAddress = registration.mmAddress;
     }
 }

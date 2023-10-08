@@ -25,7 +25,11 @@ contract InteractionsTest is Test {
     function setUp() public {
         vm.startPrank(address(8953626958234137847422389523978938749873));
 
-        invisibleL1 = new InvisibleL1(address(1111), address(2222));
+        invisibleL1 = new InvisibleL1(
+            address(8953626958234137847422389523978938749873),
+            address(8953626958234137847422389523978938749873)
+        );
+
         testToken = new ERC20PresetMinterPauser("TestToken", "TT");
 
         testToken.mint(
@@ -375,12 +379,10 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         1
     ];
 
-    uint256[] memory res = new uint256[](arr.length);
+    res = new uint256[](arr.length);
     for (uint256 i = 0; i < arr.length; i++) {
         res[i] = arr[i];
     }
 
     return res;
 }
-
-// 0x56570de287d73cd1cb6092bb8fdee6173974955fdef345ae579ee9f475ea7432

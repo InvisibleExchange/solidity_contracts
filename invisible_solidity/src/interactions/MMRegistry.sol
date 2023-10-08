@@ -4,14 +4,18 @@ pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../interfaces/IVaults.sol";
+import "forge-std/console.sol";
 
 import "../helpers/tokenInfo.sol";
 import "../vaults/VaultRegistry.sol";
 
+import "../helpers/parseProgramOutput.sol";
+import "../helpers/programOutputStructs.sol";
+
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-contract MMRegistry is TokenInfo, VaultRegistry {
-    address public owner;
+contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
+    // address public s_admin;
 
     event newSpotMMRegistration(
         address mmOwner,
@@ -22,7 +26,7 @@ contract MMRegistry is TokenInfo, VaultRegistry {
         uint32 vlpTokenId
     );
     event newPerpMMRegistration(
-        address owner,
+        address mmOwner,
         uint32 syntheticAsset,
         uint256 positionAddress,
         uint64 maxVlpSupply,
@@ -42,27 +46,84 @@ contract MMRegistry is TokenInfo, VaultRegistry {
         uint256 tabAddress;
         uint64 maxVlpSupply;
         uint32 vlpTokenId;
+        bool isRegistered;
     }
 
     struct PerpMMRegistration {
-        address owner;
+        address mmOwner;
         uint32 syntheticAsset;
         uint256 positionAddress;
         uint64 maxVlpSupply;
         uint32 vlpTokenId;
+        bool isRegistered;
     }
 
     uint32 public s_pendingSpotMMCount = 0;
-    mapping(uint256 => SpotMMRegistration) public s_pendingSpotRegistrations; // tabAddress => SpotMMRegistration
+    mapping(uint256 => SpotMMRegistration) public s_spotRegistrations; // tabAddress => SpotMMRegistration
     uint32 public s_pendingPerpMMCount = 0;
-    mapping(uint256 => PerpMMRegistration) public s_pendingPerpRegistrations; // posAddress => PerpMMRegistration
+    mapping(uint256 => PerpMMRegistration) public s_perpRegistrations; // posAddress => PerpMMRegistration
 
-    constructor(
-        address _owner,
+    constructor(address _admin) {
+        // s_admin = _admin;
+    }
+
+    modifier onlyAdmin() {
+        // require(msg.sender == s_admin, "Only admin");
+        // TODO: Make a global contract that sets permissions for all contracts
+        _;
+    }
+
+    function updatePendingRegistrations(
+        MMRegistrationOutput[] memory registrations,
+        uint64 txBatchId
+    ) public {
+        for (uint256 i = 0; i < registrations.length; i++) {
+            MMRegistrationOutput memory registration = registrations[i];
+
+            (
+                bool isPerp,
+                uint32 vlpToken,
+                uint64 maxVlpSupply,
+                uint256 mmAddress
+            ) = uncompressRegistrationOutput(registration);
+
+            if (isPerp) {
+                // ? isPerp
+                PerpMMRegistration
+                    storage perpRegistration = s_perpRegistrations[mmAddress];
+
+                if (
+                    perpRegistration.vlpTokenId == vlpToken &&
+                    perpRegistration.maxVlpSupply == maxVlpSupply &&
+                    perpRegistration.positionAddress == mmAddress
+                ) {
+                    perpRegistration.isRegistered = true;
+                }
+            } else {
+                // ? isSpot
+                SpotMMRegistration
+                    storage spotRegistration = s_spotRegistrations[mmAddress];
+
+                if (
+                    spotRegistration.vlpTokenId == vlpToken &&
+                    spotRegistration.maxVlpSupply == maxVlpSupply &&
+                    spotRegistration.tabAddress == mmAddress
+                ) {
+                    spotRegistration.isRegistered = true;
+                }
+            }
+        }
+    }
+
+    //
+
+    function registerNewMarkets(
         uint32[] memory baseAssets,
         uint32[] memory quoteAssets,
         uint32[] memory syntheticAssets
-    ) {
+    ) public onlyAdmin {
+        require(baseAssets.length == quoteAssets.length, "Invalid input");
+
         for (uint256 i = 0; i < baseAssets.length; i++) {
             uint32 baseAsset = baseAssets[i];
             uint32 quoteAsset = quoteAssets[i];
@@ -75,22 +136,13 @@ contract MMRegistry is TokenInfo, VaultRegistry {
 
             s_perpMarkets[syntheticAsset] = true;
         }
-
-        owner = _owner;
     }
-
-    //
 
     function approveMMRegistration(
         bool isPerp,
         address mmOwner,
         uint256 tabPosAddress
-    ) public {
-        require(
-            msg.sender == owner,
-            "Only owner can register a spot market maker"
-        );
-
+    ) public onlyAdmin {
         if (isPerp) {
             s_approvedPerpMMs[mmOwner][tabPosAddress] = true;
         } else {
@@ -113,7 +165,7 @@ contract MMRegistry is TokenInfo, VaultRegistry {
             "Spot market does not exist"
         );
         require(
-            s_pendingSpotRegistrations[tabAddress].tabAddress != 0,
+            s_spotRegistrations[tabAddress].tabAddress == 0,
             "already registered"
         );
 
@@ -126,11 +178,12 @@ contract MMRegistry is TokenInfo, VaultRegistry {
             quoteAsset,
             tabAddress,
             maxVlpSupply,
-            vlpTokenId
+            vlpTokenId,
+            false
         );
 
         // store the registration under pending registrations
-        s_pendingSpotRegistrations[tabAddress] = registration;
+        s_spotRegistrations[tabAddress] = registration;
 
         emit newSpotMMRegistration(
             msg.sender,
@@ -153,7 +206,7 @@ contract MMRegistry is TokenInfo, VaultRegistry {
         );
         require(s_perpMarkets[syntheticAsset], "Perp market does not exist");
         require(
-            s_pendingPerpRegistrations[syntheticAsset].positionAddress != 0,
+            s_perpRegistrations[syntheticAsset].positionAddress != 0,
             "already registered"
         );
 
@@ -165,11 +218,12 @@ contract MMRegistry is TokenInfo, VaultRegistry {
             syntheticAsset,
             positionAddress,
             maxVlpSupply,
-            vlpTokenId
+            vlpTokenId,
+            false
         );
 
         // store the registration under pending registrations
-        s_pendingPerpRegistrations[positionAddress] = registration;
+        s_perpRegistrations[positionAddress] = registration;
 
         emit newPerpMMRegistration(
             msg.sender,
@@ -178,5 +232,11 @@ contract MMRegistry is TokenInfo, VaultRegistry {
             maxVlpSupply,
             vlpTokenId
         );
+    }
+
+    function isAddressRegistered(uint256 mmAddress) public view returns (bool) {
+        return
+            s_spotRegistrations[mmAddress].isRegistered ||
+            s_perpRegistrations[mmAddress].isRegistered;
     }
 }

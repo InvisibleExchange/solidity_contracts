@@ -9,7 +9,7 @@ import "src/interactions/Deposit.sol";
 import "src/interactions/Withdrawal.sol";
 
 import "src/interactions/Interactions.sol";
-import "src/interactions/RegisterMM.sol";
+import "src/interactions/MMRegistry.sol";
 
 contract InvisibleL2 is Interactions {
     uint64 s_txBatchId;

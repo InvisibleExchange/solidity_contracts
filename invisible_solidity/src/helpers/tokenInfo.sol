@@ -20,7 +20,7 @@ contract TokenInfo {
         // ETH
         s_tokenAddress2Id[address(0)] = ETH_ID;
         s_tokenId2Address[ETH_ID] = address(0);
-        s_tokenId2ScaleFactor[ETH_ID] = 18 - 9;
+        s_tokenId2ScaleFactor[ETH_ID] = 18 - 8;
     }
 
     //

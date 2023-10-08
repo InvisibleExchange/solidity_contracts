@@ -37,7 +37,13 @@ struct DepositTransactionOutput {
 struct WithdrawalTransactionOutput {
     // & batched_note_info format: | withdrawal_chain_id (32 bits) | token (32 bits) | amount (64 bits) |
     uint256 batchedWithdrawalInfo;
-    address recipient; // This should be the eth address to withdraw from
+    address recipient;
+}
+
+struct MMRegistrationOutput {
+    // & batched_registration_info format: | is_perp (1 bits) | vlp_token (32 bits) | max_vlp_supply (64 bits) |
+    uint256 batchedRegistrationInfo;
+    uint256 mmAddress;
 }
 
 struct AccumulatedHashesOutput {

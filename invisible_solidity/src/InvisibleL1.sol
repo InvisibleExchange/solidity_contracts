@@ -8,11 +8,11 @@ import "src/interactions/Deposit.sol";
 import "src/interactions/Withdrawal.sol";
 
 import "src/interactions/Interactions.sol";
-import "src/interactions/RegisterMM.sol";
+import "src/interactions/MMRegistry.sol";
 
 import "forge-std/console.sol";
 
-contract InvisibleL1 is Interactions {
+contract InvisibleL1 is Interactions, MMRegistry {
     uint64 s_txBatchId;
 
     mapping(uint64 => uint256) public s_txBatchId2StateRoot;
@@ -26,17 +26,20 @@ contract InvisibleL1 is Interactions {
     uint256 constant INIT_STATE_ROOT =
         2450644354998405982022115704618884006901283874365176806194200773707121413423;
 
-    constructor(address _admin, address _L1MessageRelay) {
+    constructor(
+        address _admin,
+        address _L1MessageRelay
+    ) MMRegistry(address(1234)) {
         s_txBatchId = 0;
         s_txBatchId2StateRoot[0] = INIT_STATE_ROOT;
         s_admin = _admin;
         s_L1MessageRelay = _L1MessageRelay;
     }
 
-    modifier onlyAdmin() {
-        require(msg.sender == s_admin, "Only admin");
-        _;
-    }
+    // modifier onlyAdmin() {
+    //     require(msg.sender == s_admin, "Only admin");
+    //     _;
+    // }
 
     /// @notice Processes a new L1 update
     /// @dev After the proof is verified on L1 this will be called to update the state and process deposits/withdrawals. The contract will
@@ -51,7 +54,8 @@ contract InvisibleL1 is Interactions {
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
             DepositTransactionOutput[] memory deposits,
-            WithdrawalTransactionOutput[] memory withdrawals
+            WithdrawalTransactionOutput[] memory withdrawals,
+            MMRegistrationOutput[] memory registrations
         ) = parseProgramOutput(programOutput);
 
         // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
@@ -67,6 +71,7 @@ contract InvisibleL1 is Interactions {
 
         updatePendingDeposits(deposits, s_txBatchId);
         storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
+        updatePendingRegistrations(registrations, s_txBatchId);
 
         s_txBatchId += 1;
         s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
@@ -76,7 +81,7 @@ contract InvisibleL1 is Interactions {
     function relayAccumulatedHashes(
         uint64 txBatchId,
         AccumulatedHashesOutput[] memory accumulatedHashOutputs
-    ) public onlyAdmin {
+    ) public {
         require(
             !s_accumulatedHashesRelayed[txBatchId],
             "Hashes Already Relayed"
