@@ -9,21 +9,19 @@ interface IETHVault {
 
     function makeETHVaultWithdrawal(
         address payable recipient,
-        address payable _approvedProxy,
-        uint256 _proxyFee
+        uint256 _gasFee
     ) external;
 
-    function getWithdrawableAmount(
-        address recipient
-    ) external view returns (uint256);
+    // function getWithdrawableAmount(
+    //     address recipient
+    // ) external view returns (uint256);
 }
 
 interface IAssetVault {
     function makeErc20VaultWithdrawal(
         address tokenAddress,
         address recipient,
-        address _approvedProxy,
-        uint256 _proxyFee
+        uint256 _gasFee
     ) external;
 
     function increaseWithdrawableAmount(
@@ -32,7 +30,7 @@ interface IAssetVault {
         uint256 amount
     ) external;
 
-    function getWithdrawableAmount(
-        address recipient
-    ) external view returns (uint256);
+    // function getWithdrawableAmount(
+    //     address recipient
+    // ) external view returns (uint256);
 }

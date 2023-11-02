@@ -93,7 +93,16 @@ contract InteractionsTest is Test {
         quoteAssets[0] = 55555;
         quoteAssets[1] = 55555;
 
-        invisibleL1.registerNewMarkets(baseAssets, quoteAssets, baseAssets);
+        uint32[] memory syntheticAssets = new uint32[](3);
+        baseAssets[0] = 12345;
+        baseAssets[1] = 54321;
+        baseAssets[2] = 66666;
+
+        invisibleL1.registerNewMarkets(
+            baseAssets,
+            quoteAssets,
+            syntheticAssets
+        );
     }
 
     function testRegisterMM() public {
