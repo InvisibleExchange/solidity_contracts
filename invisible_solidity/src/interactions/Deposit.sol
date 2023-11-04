@@ -7,13 +7,13 @@ import "../interfaces/IVaults.sol";
 
 import "../helpers/tokenInfo.sol";
 import "../helpers/parseProgramOutput.sol";
-import "../vaults/VaultRegistry.sol";
+import "../vaults/VaultManager.sol";
 
 import "forge-std/console.sol";
 
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
+abstract contract Deposit is TokenInfo, VaultManager {
     // make depositId indexed
     event DepositEvent(
         uint64 depositId,
@@ -31,8 +31,6 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
     event UpdatedPendingDepositsEvent(uint256 timestamp, uint64 txBatchId);
 
     mapping(uint256 => mapping(uint32 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
-
-    mapping(address => mapping(address => uint256)) public s_pendingRefunds; // userAddress => tokenAddress => amount  (amounts from cancelled deposits to be claimed)
 
     // Todo: figure this out
     mapping(address => uint256) public s_address2PubKey;
@@ -61,7 +59,7 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
                 uint32 tokenId,
                 uint64 depositAmount,
                 uint256 depositPubKey
-            ) = uncompressDepositOutput(depositOutput);
+            ) = ProgramOutputParser.uncompressDepositOutput(depositOutput);
 
             require(
                 s_pendingDeposits[depositPubKey][tokenId] >= depositAmount,
@@ -91,53 +89,19 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         require(msg.sender != address(0), "Invalid depositior address");
 
         if (msg.value > 0) {
-            return makeEthDeposit(starkKey);
+            return _makeEthDeposit(starkKey);
+        } else {
+            return _makeErc20Deposit(tokenAddress, amount, starkKey);
         }
-
-        address vaultAddress = getAssetVaultAddress(tokenAddress);
-        IERC20 token = IERC20(tokenAddress);
-        bool success = token.transferFrom(msg.sender, vaultAddress, amount);
-
-        require(success, "Transfer failed");
-
-        // ? Get the token id and scale factor
-        uint32 tokenId = getTokenId(tokenAddress);
-        uint64 depositAmountScaled = scaleDown(amount, tokenId);
-
-        // ? Add the amount to the pending deposits
-        uint64 pendingAmount = s_pendingDeposits[starkKey][tokenId];
-        s_pendingDeposits[starkKey][tokenId] =
-            pendingAmount +
-            depositAmountScaled;
-
-        uint64 depositId = CHAIN_ID * 2 ** 32 + s_depositCount;
-        s_depositCount += 1;
-
-        emit DepositEvent(
-            depositId,
-            starkKey,
-            tokenId,
-            depositAmountScaled,
-            block.timestamp
-        );
-
-        return (pendingAmount + depositAmountScaled);
     }
 
-    function makeEthDeposit(
+    function _makeEthDeposit(
         uint256 starkKey
     ) private returns (uint64 newAmountDeposited) {
-        address payable vaultAddress = payable(getETHVaultAddress());
+        //
 
-        (bool sent, bytes memory _data) = vaultAddress.call{value: msg.value}(
-            ""
-        );
-        require(sent, "Failed to send Ether");
-
-        // ? Get the scale factor
         uint64 depositAmountScaled = scaleDown(msg.value, TokenInfo.ETH_ID);
 
-        // ? Add the amount to the pending deposits
         uint64 pendingAmount = s_pendingDeposits[starkKey][TokenInfo.ETH_ID];
         s_pendingDeposits[starkKey][TokenInfo.ETH_ID] =
             pendingAmount +
@@ -150,6 +114,37 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
             depositId,
             starkKey,
             TokenInfo.ETH_ID,
+            depositAmountScaled,
+            block.timestamp
+        );
+
+        return (pendingAmount + depositAmountScaled);
+    }
+
+    function _makeErc20Deposit(
+        address tokenAddress,
+        uint256 amount,
+        uint256 starkKey
+    ) private returns (uint64 newAmountDeposited) {
+        //
+
+        makeErc20VaultDeposit(tokenAddress, amount);
+
+        uint32 tokenId = getTokenId(tokenAddress);
+        uint64 depositAmountScaled = scaleDown(amount, tokenId);
+
+        uint64 pendingAmount = s_pendingDeposits[starkKey][tokenId];
+        s_pendingDeposits[starkKey][tokenId] =
+            pendingAmount +
+            depositAmountScaled;
+
+        uint64 depositId = CHAIN_ID * 2 ** 32 + s_depositCount;
+        s_depositCount += 1;
+
+        emit DepositEvent(
+            depositId,
+            starkKey,
+            tokenId,
             depositAmountScaled,
             block.timestamp
         );
@@ -173,6 +168,9 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
         // ? Get the token id and scale the amount
         uint32 tokenId = getTokenId(tokenAddress);
 
+        uint64 pendingAmount = s_pendingDeposits[starkKey][tokenId];
+        if (pendingAmount == 0) return;
+
         s_depositCencelations.push(
             DepositCancelation(msg.sender, starkKey, tokenId)
         );
@@ -193,24 +191,14 @@ contract Deposit is TokenInfo, ProgramOutputParser, VaultRegistry {
 
             uint256 refundAmount = scaleUp(pendingAmount, cancelation.tokenId);
 
-            if (cancelation.tokenId == TokenInfo.ETH_ID) {
-                address vaultAddress = getETHVaultAddress();
-                IETHVault vault = IETHVault(vaultAddress);
-
-                vault.increaseWithdrawableAmount(
-                    cancelation.depositor,
-                    refundAmount
-                );
-            } else {
+            if (cancelation.tokenId == TokenInfo.ETH_ID) {} else {
                 address tokenAddress = getTokenAddress(cancelation.tokenId);
 
-                address vaultAddress = getAssetVaultAddress(tokenAddress);
-                IAssetVault vault = IAssetVault(vaultAddress);
-
-                vault.increaseWithdrawableAmount(
-                    cancelation.depositor,
+                makeErc20VaultWithdrawal(
                     tokenAddress,
-                    refundAmount
+                    cancelation.depositor,
+                    refundAmount,
+                    0
                 );
             }
         }

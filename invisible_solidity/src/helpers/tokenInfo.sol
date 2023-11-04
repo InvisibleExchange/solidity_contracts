@@ -89,6 +89,12 @@ contract TokenInfo {
         return amountScaled;
     }
 
+    function getTokenPrice(address tokenAddress) public view returns (uint256) {
+        // TODO: Get the tokenPrice from somewhere like chainlink
+
+        return 100000000;
+    }
+
     function getTokenAddress(uint32 tokenId) public view returns (address) {
         return s_tokenId2Address[tokenId];
     }

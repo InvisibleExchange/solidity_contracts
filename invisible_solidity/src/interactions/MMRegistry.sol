@@ -3,18 +3,17 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "../interfaces/IVaults.sol";
 import "forge-std/console.sol";
 
 import "../helpers/tokenInfo.sol";
-import "../vaults/VaultRegistry.sol";
+// import "../vaults/VaultManager.sol";
 
 import "../helpers/parseProgramOutput.sol";
 import "../helpers/programOutputStructs.sol";
 
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
+abstract contract MMRegistry {
     // address public s_admin;
 
     event newSpotMMRegistration(
@@ -85,7 +84,7 @@ contract MMRegistry is TokenInfo, ProgramOutputParser, VaultRegistry {
                 uint32 vlpToken,
                 uint64 maxVlpSupply,
                 uint256 mmAddress
-            ) = uncompressRegistrationOutput(registration);
+            ) = ProgramOutputParser.uncompressRegistrationOutput(registration);
 
             if (isPerp) {
                 // ? isPerp

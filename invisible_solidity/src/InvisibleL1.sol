@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
+import "src/helpers/parseProgramOutput.sol";
+
 import "src/interfaces/IVaults.sol";
 import "src/interfaces/IPedersenHash.sol";
 
@@ -56,7 +58,7 @@ contract InvisibleL1 is Interactions, MMRegistry {
             DepositTransactionOutput[] memory deposits,
             WithdrawalTransactionOutput[] memory withdrawals,
             MMRegistrationOutput[] memory registrations
-        ) = parseProgramOutput(programOutput);
+        ) = ProgramOutputParser.parseProgramOutput(programOutput);
 
         // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
         // require(

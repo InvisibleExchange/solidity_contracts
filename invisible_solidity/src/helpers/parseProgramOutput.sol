@@ -3,7 +3,7 @@ pragma solidity ^0.8.17;
 
 import "./programOutputStructs.sol";
 
-contract ProgramOutputParser {
+library ProgramOutputParser {
     function parseProgramOutput(
         uint256[] calldata cairoProgramOutput
     )
@@ -207,6 +207,7 @@ contract ProgramOutputParser {
         return registrations;
     }
 
+    // * —————————————————————————————————————————————————————————————————————
     // * —————————————————————————————————————————————————————————————————————
     // * ------------------------------------------------------
     function uncompressDepositOutput(

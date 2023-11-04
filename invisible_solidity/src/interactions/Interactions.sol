@@ -47,45 +47,15 @@ contract Interactions is Deposit, Withdrawal {
     }
 
     // Withdrawals
-    function makeWithdrawal(
-        address tokenAddress,
-        address _recipient,
-        address _approvedProxy,
-        uint256 _proxyFee,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external {
-        return
-            _makeWithdrawal(
-                tokenAddress,
-                _recipient,
-                _approvedProxy,
-                _proxyFee,
-                v,
-                r,
-                s
-            );
+    function makeWithdrawal(address tokenAddress, address _recipient) external {
+        return _makeWithdrawal(tokenAddress, _recipient);
     }
 
     function makeETHWithdrawal(
         address _recipient,
-        address _approvedProxy,
-        uint256 _proxyFee,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        address _approvedProxy
     ) external {
-        return
-            _makeWithdrawal(
-                address(0),
-                _recipient,
-                _approvedProxy,
-                _proxyFee,
-                v,
-                r,
-                s
-            );
+        return _makeWithdrawal(address(0), _recipient);
     }
 
     function getWithdrawableAmount(
