@@ -3,7 +3,7 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-contract TokenInfo {
+abstract contract TokenInfo {
     event NewTokenRegisteredEvent(
         address tokenAddress,
         uint32 tokenId,
@@ -16,7 +16,7 @@ contract TokenInfo {
     mapping(uint32 => address) public s_tokenId2Address;
     mapping(uint32 => uint8) public s_tokenId2ScaleFactor;
 
-    constructor() {
+    function __tokenInfo_init() internal {
         // ETH
         s_tokenAddress2Id[address(0)] = ETH_ID;
         s_tokenId2Address[ETH_ID] = address(0);
@@ -52,9 +52,6 @@ contract TokenInfo {
         uint8 scaleFactor = tokenDecimals - offchainDecimals;
 
         require(scaleFactor <= 18, "Scale factor too large");
-
-        // tokenId = uint64(uint256(keccak256(abi.encodePacked(tokenAddress)))); // Todo
-        // tokenId = 55555;
 
         s_tokenAddress2Id[tokenAddress] = tokenId;
         s_tokenId2Address[tokenId] = tokenAddress;

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.22;
 
 import "src/helpers/parseProgramOutput.sol";
 
-import "src/interfaces/IVaults.sol";
 import "src/interfaces/IPedersenHash.sol";
 
 import "src/interactions/Deposit.sol";
@@ -14,7 +13,17 @@ import "src/interactions/MMRegistry.sol";
 
 import "forge-std/console.sol";
 
-contract InvisibleL1 is Interactions, MMRegistry {
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+contract InvisibleL1 is
+    Interactions,
+    MMRegistry,
+    Initializable,
+    OwnableUpgradeable,
+    UUPSUpgradeable
+{
     uint64 s_txBatchId;
 
     mapping(uint64 => uint256) public s_txBatchId2StateRoot;
@@ -28,20 +37,15 @@ contract InvisibleL1 is Interactions, MMRegistry {
     uint256 constant INIT_STATE_ROOT =
         2450644354998405982022115704618884006901283874365176806194200773707121413423;
 
-    constructor(
-        address _admin,
-        address _L1MessageRelay
-    ) MMRegistry(address(1234)) {
-        s_txBatchId = 0;
-        s_txBatchId2StateRoot[0] = INIT_STATE_ROOT;
-        s_admin = _admin;
-        s_L1MessageRelay = _L1MessageRelay;
-    }
+    function initialize(address initialOwner) public initializer {
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
 
-    // modifier onlyAdmin() {
-    //     require(msg.sender == s_admin, "Only admin");
-    //     _;
-    // }
+        __VaultManager_init();
+
+        s_txBatchId = 0;
+        s_txBatchId2StateRoot[s_txBatchId] = INIT_STATE_ROOT;
+    }
 
     /// @notice Processes a new L1 update
     /// @dev After the proof is verified on L1 this will be called to update the state and process deposits/withdrawals. The contract will
@@ -50,7 +54,7 @@ contract InvisibleL1 is Interactions, MMRegistry {
     function updateStateAfterTxBatch(
         uint256[] calldata programOutput
     ) external {
-        // Todo: only privileged address can call this function
+        // Todo: only privileged address can call this function (or can anyone call it?)
 
         (
             GlobalDexState memory dexState,
@@ -60,16 +64,15 @@ contract InvisibleL1 is Interactions, MMRegistry {
             MMRegistrationOutput[] memory registrations
         ) = ProgramOutputParser.parseProgramOutput(programOutput);
 
-        // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
-        // require(
-        //     dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
-        //     "Invalid state root"
-        // );
-        // require(
-        //     dexState.globalExpirationTimestamp < block.timestamp,
-        //     "Invalid expiration timestamp"
-        // );
-        //
+        require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
+        require(
+            dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
+            "Invalid state root"
+        );
+        require(
+            dexState.globalExpirationTimestamp < block.timestamp,
+            "Invalid expiration timestamp"
+        );
 
         updatePendingDeposits(deposits, s_txBatchId);
         storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
@@ -83,7 +86,7 @@ contract InvisibleL1 is Interactions, MMRegistry {
     function relayAccumulatedHashes(
         uint64 txBatchId,
         AccumulatedHashesOutput[] memory accumulatedHashOutputs
-    ) public {
+    ) external {
         require(
             !s_accumulatedHashesRelayed[txBatchId],
             "Hashes Already Relayed"

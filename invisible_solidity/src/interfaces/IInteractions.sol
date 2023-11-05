@@ -14,24 +14,14 @@ interface IInteractions {
         uint256 starkKey
     ) external;
 
+    function startCancelETHDeposit(uint256 starkKey) external;
+
     function getPendingDepositAmount(
         uint256 starkKey,
         address tokenAddress
     ) external view returns (uint256);
 
-    // Withdrawals
-
-    function makeWithdrawal(address tokenAddress) external;
-
-    function getWithdrawableAmount(
-        address userAddress,
-        address tokenAddress
+    function getPendingETHDepositAmount(
+        uint256 starkKey
     ) external view returns (uint256);
-
-    function getETHWithdrawableAmount(
-        address depositor
-    ) external view returns (uint256);
-
-    // txBatchUpdates
-    function updateStateAfterTxBatch(uint256[] calldata programOutput) external;
 }

@@ -5,15 +5,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "forge-std/console.sol";
 
-import "../helpers/tokenInfo.sol";
-// import "../vaults/VaultManager.sol";
-
 import "../helpers/parseProgramOutput.sol";
 import "../helpers/programOutputStructs.sol";
 
-// Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-abstract contract MMRegistry {
+abstract contract MMRegistry is OwnableUpgradeable {
     // address public s_admin;
 
     event newSpotMMRegistration(
@@ -61,16 +58,6 @@ abstract contract MMRegistry {
     mapping(uint256 => SpotMMRegistration) public s_spotRegistrations; // tabAddress => SpotMMRegistration
     uint32 public s_pendingPerpMMCount = 0;
     mapping(uint256 => PerpMMRegistration) public s_perpRegistrations; // posAddress => PerpMMRegistration
-
-    constructor(address _admin) {
-        // s_admin = _admin;
-    }
-
-    modifier onlyAdmin() {
-        // require(msg.sender == s_admin, "Only admin");
-        // TODO: Make a global contract that sets permissions for all contracts
-        _;
-    }
 
     function updatePendingRegistrations(
         MMRegistrationOutput[] memory registrations,
@@ -120,7 +107,7 @@ abstract contract MMRegistry {
         uint32[] memory baseAssets,
         uint32[] memory quoteAssets,
         uint32[] memory syntheticAssets
-    ) public onlyAdmin {
+    ) public onlyOwner {
         require(baseAssets.length == quoteAssets.length, "Invalid input");
 
         for (uint256 i = 0; i < baseAssets.length; i++) {
@@ -141,7 +128,7 @@ abstract contract MMRegistry {
         bool isPerp,
         address mmOwner,
         uint256 tabPosAddress
-    ) public onlyAdmin {
+    ) public onlyOwner {
         if (isPerp) {
             s_approvedPerpMMs[mmOwner][tabPosAddress] = true;
         } else {

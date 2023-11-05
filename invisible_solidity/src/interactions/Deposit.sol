@@ -3,9 +3,6 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "../interfaces/IVaults.sol";
-
-import "../helpers/tokenInfo.sol";
 import "../helpers/parseProgramOutput.sol";
 import "../vaults/VaultManager.sol";
 
@@ -13,7 +10,7 @@ import "forge-std/console.sol";
 
 // Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
 
-abstract contract Deposit is TokenInfo, VaultManager {
+abstract contract Deposit is VaultManager {
     // make depositId indexed
     event DepositEvent(
         uint64 depositId,

@@ -1,3 +1,4 @@
 forge-std/=invisible_solidity/lib/forge-std/src/
 @openzeppelin/=invisible_solidity/node_modules/@openzeppelin/
 src/=invisible_solidity/src/
+@openzeppelin/contracts-upgradeable/=invisible_solidity/lib/openzeppelin-contracts-upgradeable/contracts/

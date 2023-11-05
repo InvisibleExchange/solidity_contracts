@@ -3,25 +3,37 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+import "../helpers/TokenInfo.sol";
 import "../helpers/FlashLender.sol";
 
-abstract contract VaultManager is FlashLender {
+abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
     event VaultRegisteredEvent(address tokenAddress);
 
-    address payable public immutable s_gasFeeCollector;
+    address payable public s_gasFeeCollector;
     mapping(address => bool) s_vaults; // maps token address to vault
 
     address[] public addresses;
 
-    constructor(address payable _gasCollector) {
+    function __VaultManager_init(address payable _gasCollector) internal {
         s_gasFeeCollector = _gasCollector;
+
+        __tokenInfo_init();
     }
 
-    receive() external payable {
-        // This is needed to receive ETH from the flash loan
+    // ---------------------------------------------------------
+
+    function registerToken(
+        address tokenAddress,
+        uint32 tokenId,
+        uint8 offchainDecimals
+    ) external onlyOwner {
+        _registerToken(tokenAddress, tokenId, offchainDecimals);
+        _registerNewAssetVault(tokenAddress);
     }
 
-    function registerNewAssetVault(address tokenAddress) internal {
+    function _registerNewAssetVault(address tokenAddress) private {
         require(!s_vaults[tokenAddress], "Vault already registered");
         require(tokenAddress != address(0), "Token address cannot be 0");
 
@@ -29,14 +41,12 @@ abstract contract VaultManager is FlashLender {
         emit VaultRegisteredEvent(tokenAddress);
     }
 
-    // ---------------------------------------------------------
-
     // TODO : THIS CONTRACT SHOULD BE THE ONLY ONE TO INTERACT WITH THE FUNDS
     // TODO: ALL THESE FUNCTIONS SHOULD BE NON-REENTRANT
 
     function isVaultRegistered(
         address tokenAddress
-    ) public view returns (bool) {
+    ) external view returns (bool) {
         return s_vaults[tokenAddress];
     }
 
@@ -101,4 +111,6 @@ abstract contract VaultManager is FlashLender {
         (bool sent2, ) = recipient.call{value: withdrawalAmount}("");
         require(sent2, "Failed to send Ether");
     }
+
+    // ---------------------------------------------------------
 }

@@ -7,9 +7,6 @@ import "forge-std/Vm.sol";
 
 import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
-import "src/helpers/PedersenHash/PedersenHash.sol";
-import "src/helpers/PedersenHash/PedersenHashNaive.sol";
-
 import "src/interfaces/IPedersenHash.sol";
 
 address constant PEDERSEN_HASH_ADDRESS = address(

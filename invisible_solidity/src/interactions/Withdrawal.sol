@@ -5,11 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "forge-std/console.sol";
 
-import "../helpers/tokenInfo.sol";
 import "../helpers/parseProgramOutput.sol";
 import "../vaults/VaultManager.sol";
 
-abstract contract Withdrawal is TokenInfo, VaultManager {
+abstract contract Withdrawal is VaultManager {
     event WithdrawalEvent(
         address withdrawer,
         address tokenAddress,

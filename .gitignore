@@ -7,8 +7,6 @@ relay_server/napi.txt
 
 cache
 
-test/test_jubjub.js
-test/testFirebase.js
 
 invisible_backend/target
 invisible_backend/storage
@@ -58,3 +56,14 @@ deprecated
 
 todos.txt
 .env
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Hardhat files
+cache
+artifacts
+
