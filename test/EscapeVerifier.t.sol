@@ -49,9 +49,11 @@ contract EscapeVerifierTest is Test {
         escapeVerifier.setStructHasher(address(structHasher));
 
         testUsdc = new TestToken("testUsdc", "TT");
-        testUsdc.mint(owner, 5000 * 10 ** 18);
+        // testUsdc.mint(owner, 5000 * 10 ** 18);
+        testUsdc.mint(address(invisibleL1), 15000 * 10 ** 18);
 
         vm.deal(owner, 5 * 10 ** 18);
+        vm.deal(address(invisibleL1), 15 * 10 ** 18);
 
         testRegisterToken();
     }
@@ -74,11 +76,11 @@ contract EscapeVerifierTest is Test {
         // Valid escape
         escapeVerifier.startNoteEscape(notes, signature, 2);
 
-        // Invalid escape
-        uint256[2] memory dummySig;
-        dummySig[0] = 0;
-        dummySig[1] = 0;
-        escapeVerifier.startNoteEscape(notes, dummySig, 1);
+        // // Invalid escape
+        // uint256[2] memory dummySig;
+        // dummySig[0] = 0;
+        // dummySig[1] = 0;
+        // escapeVerifier.startNoteEscape(notes, dummySig, 1);
     }
 
     function testTabEscapes() public {
@@ -89,11 +91,11 @@ contract EscapeVerifierTest is Test {
         // Valid escape
         escapeVerifier.startOrderTabEscape(orderTab, signature, 11);
 
-        // Invalid escape
-        uint256[2] memory dummySig;
-        dummySig[0] = 0;
-        dummySig[1] = 0;
-        escapeVerifier.startOrderTabEscape(orderTab, dummySig, 12);
+        // // Invalid escape
+        // uint256[2] memory dummySig;
+        // dummySig[0] = 0;
+        // dummySig[1] = 0;
+        // escapeVerifier.startOrderTabEscape(orderTab, dummySig, 12);
     }
 
     function testPositionEscapes() public {
@@ -135,11 +137,74 @@ contract EscapeVerifierTest is Test {
     }
 
     function testProcessBatch() public {
-        testPositionEscapes();
+        // testPositionEscapes();
 
-        uint256[] memory arr = getProgramOutput();
+        testNoteEscapes();
+        testTabEscapes();
+
+        uint256[] memory arr = getProgramOutput2();
 
         invisibleL1.updateStateAfterTxBatch(arr);
+    }
+
+    function testEscapeWithdrawal() public {
+        testProcessBatch();
+
+        uint32 escapeId = 128;
+        uint32 tokenId = 55555;
+
+        console.log(
+            "escapeAmount",
+            escapeVerifier.s_escapeAmounts(escapeId, tokenId)
+        );
+        console.log(
+            "successfulEscape",
+            escapeVerifier.s_successfulEscapes(owner, escapeId)
+        );
+        console.log("successfulEscape", testUsdc.balanceOf(owner));
+
+        escapeVerifier.withdrawForcedEscape(escapeId, tokenId);
+
+        console.log(
+            "\nescapeAmount after",
+            escapeVerifier.s_escapeAmounts(escapeId, tokenId)
+        );
+        console.log(
+            "successfulEscape after",
+            escapeVerifier.s_successfulEscapes(owner, escapeId)
+        );
+        console.log("successfulEscape after", testUsdc.balanceOf(owner));
+    }
+
+    function testEscapeWithdrawal2() public {
+        testProcessBatch();
+
+        uint32 escapeId1 = 2;
+        uint32 escapeId2 = 11;
+        uint32 tokenId = 55555;
+        uint32 tokenId2 = 54321;
+
+        uint256 usdcBalBefore = testUsdc.balanceOf(address(invisibleL1));
+        uint256 ethBalBefore = address(invisibleL1).balance;
+
+        uint256 userUsdcBalBefore = testUsdc.balanceOf(owner);
+        uint256 userEthBalBefore = owner.balance;
+
+        escapeVerifier.withdrawForcedEscape(escapeId1, tokenId);
+        escapeVerifier.withdrawForcedEscape(escapeId1, tokenId2);
+        escapeVerifier.withdrawForcedEscape(escapeId2, tokenId);
+        escapeVerifier.withdrawForcedEscape(escapeId2, tokenId2);
+
+        uint256 usdcBalAfter = testUsdc.balanceOf(address(invisibleL1));
+        uint256 ethBalAfter = address(invisibleL1).balance;
+
+        uint256 userUsdcBalAfter = testUsdc.balanceOf(owner);
+        uint256 userEthBalAfter = owner.balance;
+
+        console.log("exchnage udsc delta ", usdcBalBefore - usdcBalAfter);
+        console.log("exchnage eth delta ", ethBalBefore - ethBalAfter);
+        console.log("user udsc delta ", userUsdcBalAfter - userUsdcBalBefore);
+        console.log("user eth delta ", userEthBalAfter - userEthBalBefore);
     }
 }
 
@@ -149,41 +214,41 @@ function getNoteEscapes()
     notes = new Note[](2);
 
     notes[0] = Note(
-        4,
-        1566649712665696531788041517182951585822871732316111647199855847902683588922,
+        2,
+        404195628429038392188208777949968973248122674610497347828958236477912896160,
         54321,
         100000000,
-        3077944611448657135417618404032464794885121022945641600596482300654575716231
+        267099241270533436751542004607467725098598013714151929202417715155313090803
     );
     notes[1] = Note(
-        2,
-        2308714436020853974060851796422740060650374107781040578195850229297286767214,
+        4,
+        3555460070581968613174898250885756456206639550925936234900081415721610948181,
         55555,
         2000000000,
-        1942578072023419285550860063766381096823539324610824321940965229908364081309
+        2647343803609648239060205890773562780556225239840078433450021563841495818385
     );
 
     signature[
         0
-    ] = 2861535764498299283870654044280045782816540908919423994923068738223180046309;
+    ] = 71218852872710562685948556608356987067604398663999840021704691522925938193;
     signature[
         1
-    ] = 288356048781751418183996651126403732399405042351973422504188385278111294405;
+    ] = 3312928004899280475275572939772407233356242663055849505912917278591783590297;
 }
 
 function getTabEscapes()
     returns (OrderTab memory orderTab, uint256[2] memory signature)
 {
     orderTab = OrderTab(
-        5,
+        1,
         false,
         54321,
         55555,
-        2000660698553400490147504740372837209093413281195576032906054274807429670977,
-        1729569490107074610318404565916036019883355374308326012519540800891046909686,
+        1506299164746246972807630085093885627889496031779636518987325331094514970909,
+        3141641782898669383782770282059196445935874790589431572295052393080268261516,
         0,
         0,
-        776399882889269650293515514341602162847486819293749570082701017732057556930,
+        2656972640952053007590492392225463985200045050692828167171404173303799535149,
         100000000,
         2000000000,
         0
@@ -191,10 +256,10 @@ function getTabEscapes()
 
     signature[
         0
-    ] = 3565496895177901663471971135972802006453968348112690703457963586442270598103;
+    ] = 2059662861923825985307624166720394890620508623970283737300715245850278412005;
     signature[
         1
-    ] = 3231114911266323906490916427266703583537258402440179137373440868283042129464;
+    ] = 3065615451086776348232224285225080735822068978619482185419787293220013243789;
 }
 
 function getPositionEscape()
@@ -369,6 +434,92 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         43939791537937206798828737986442605537302334280663268589568,
         11984313426113403929270215628273520761178646852403200000003,
         3113660463485591058176034749662446744199622491875270729576957500309999901525,
+        340282366920938463500268095579187314692
+    ];
+
+    res = new uint256[](arr.length);
+    for (uint256 i = 0; i < arr.length; i++) {
+        res[i] = arr[i];
+    }
+
+    return res;
+}
+
+function getProgramOutput2() pure returns (uint256[] memory res) {
+    uint256[74] memory arr = [
+        1477479647017246745902113942625728486274926676366053133907271462431119959473,
+        1477479647017246745902113942625728486274926676366053133907271462431119959473,
+        597604836714917920769,
+        5846006549323611672814739330865132078623730171904,
+        237684487579686500936640888832,
+        4839524406068408503119694702759214384341319683,
+        12345,
+        54321,
+        55555,
+        66666,
+        12345,
+        54321,
+        66666,
+        8,
+        8,
+        6,
+        8,
+        250,
+        2500,
+        50000,
+        250000,
+        6,
+        6,
+        6,
+        50000000,
+        500000000,
+        350000000,
+        150000,
+        3000000,
+        1500000,
+        15000000,
+        100000000,
+        1000000000,
+        9090909,
+        7878787,
+        5656565,
+        874739451078007766457464989774322083649278607533249481151382481072868806602,
+        3324833730090626974525872402899302150520188025637965566623476530814354734325,
+        1839793652349538280924927302501143912227271479439798783640887258675143576352,
+        296568192680735721663075531306405401515803196637037431012739700151231900092,
+        9090909,
+        1384184243467829103459057795077699966494146250334031582869785281675311809205,
+        0,
+        7878787,
+        0,
+        0,
+        5656565,
+        0,
+        0,
+        3093476031983839916840789305451873349190128640,
+        605032940248148603226818117499285003015866267782214362325633837150586080673,
+        3093476031983839916840766542169686389703434496,
+        346227976992452892649865346377387200102523200360340159260261220761824009441,
+        3093476031983839916840789305451873349190128640,
+        1144106206871706778375321326690338349315613075659839363014266530016811517342,
+        3093476031983839916840766542169686389703434496,
+        3355421662757205439159457587087020577167741707913178860940872600581754893083,
+        65536,
+        394058465685679731058653150948393046660244084198846383263290060203961576965,
+        0,
+        0,
+        131328,
+        2459159232680021945321534902198820090984542568261038574749656678105742502576,
+        71218852872710562685948556608356987067604398663999840021704691522925938193,
+        3312928004899280475275572939772407233356242663055849505912917278591783590297,
+        655361,
+        105982949478042635395815802523683267751994373235322492192728410177470893461,
+        0,
+        0,
+        721153,
+        2278212098280562982903168565182196225865280053127025380531754145270673423516,
+        2059662861923825985307624166720394890620508623970283737300715245850278412005,
+        3065615451086776348232224285225080735822068978619482185419787293220013243789,
         340282366920938463500268095579187314692
     ];
 

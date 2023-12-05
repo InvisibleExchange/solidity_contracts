@@ -5,24 +5,31 @@ import "../interactions/Deposit.sol";
 import "../interactions/Withdrawal.sol";
 import "../interactions/MMRegistry.sol";
 
-abstract contract Interactions is Deposit, Withdrawal, MMRegistry {
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
+abstract contract Interactions is
+    Deposit,
+    Withdrawal,
+    MMRegistry,
+    ReentrancyGuardUpgradeable
+{
     // Deposits
     function makeDeposit(
         address tokenAddress,
         uint256 amount,
         uint256 starkKey
-    ) external payable returns (uint64 newAmountDeposited) {
+    ) external payable nonReentrant returns (uint64 newAmountDeposited) {
         return _makeDeposit(tokenAddress, amount, starkKey);
     }
 
     function startCancelDeposit(
         address tokenAddress,
         uint256 starkKey
-    ) external {
+    ) external nonReentrant {
         return _startCancelDeposit(tokenAddress, starkKey);
     }
 
-    function startCancelETHDeposit(uint256 starkKey) external {
+    function startCancelETHDeposit(uint256 starkKey) external nonReentrant {
         return _startCancelDeposit(address(0), starkKey);
     }
 

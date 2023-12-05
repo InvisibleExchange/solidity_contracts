@@ -12,10 +12,16 @@ import "../interfaces/IPedersenHash.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import "forge-std/console.sol";
 
-contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+contract EscapeVerifier is
+    Initializable,
+    OwnableUpgradeable,
+    UUPSUpgradeable,
+    ReentrancyGuardUpgradeable
+{
     struct ForcedEscape {
         uint32 escapeId;
         uint32 timestamp;
@@ -70,8 +76,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => mapping(uint32 => bool)) public s_successfulEscapes; //   owner => escapeId => isValid
 
     // TODO: This should be set in an initializer not the code itself
-    address constant PEDERSEN_HASH_ADDRESS =
-        address(0x1a1eB562D2caB99959352E40a03B52C00ba7a5b1);
     address constant ELIPTIC_CURVE_ADDRESS = address(0x00);
 
     uint32 constant EXCHNAGE_VERIFICATION_TIME = 7 days;
@@ -142,10 +146,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             s_escapeAmounts[escapeId][notes[i].token] += notes[i].amount;
         }
 
-        console.log("escape hash ", s_forcedEscapes[escapeId].escapeHash);
-        console.log("usdc escape amount ", s_escapeAmounts[escapeId][55555]);
-        console.log("eth escape amount ", s_escapeAmounts[escapeId][54321]);
-
         emit NoteEscapeEvent(escapeId, timestamp, notes, signature);
     }
 
@@ -200,7 +200,11 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         // s_escapeCount++;
         uint32 escapeId = _escapeId;
 
-        uint256 escapeHash = IStructHasher(structHasher).hashOrderTab(orderTab);
+        uint256 tabHash = IStructHasher(structHasher).hashOrderTab(orderTab);
+        uint256 escapeHash = IStructHasher(structHasher).hash2(
+            tabHash,
+            escapeId
+        );
 
         s_forcedEscapes[escapeId] = ForcedEscape(
             escapeId,
@@ -214,10 +218,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         s_escapeAmounts[escapeId][orderTab.base_token] += orderTab.base_amount;
         s_escapeAmounts[escapeId][orderTab.quote_token] += orderTab
             .quote_amount;
-
-        console.log("escape hash ", s_forcedEscapes[escapeId].escapeHash);
-        console.log("usdc escape amount ", s_escapeAmounts[escapeId][55555]);
-        console.log("eth escape amount ", s_escapeAmounts[escapeId][54321]);
 
         emit OrderTabEscapeEvent(escapeId, timestamp, orderTab, signature);
     }
@@ -300,8 +300,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             signature_b
         );
 
-        console.log("escape hash ", s_forcedEscapes[escapeId].escapeHash);
-
         emit PositionEscapeEvent(
             escapeId,
             closePrice,
@@ -333,7 +331,7 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         uint32 timestamp = uint32(block.timestamp);
 
-        // TODO: We shouldnt used msg.sender here but rather a recipient value so that either party can initiate the escape
+        // TODO: We shouldnt use msg.sender here but rather a recipient value so that either party can initiate the escape
         s_forcedEscapes[escapeId] = ForcedEscape(
             escapeId,
             timestamp,
@@ -362,12 +360,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 positionEscapeHash = IStructHasher(structHasher).hashArr(
             inputArr
         );
-
-        console.log("escapeId ", escapeId);
-        console.log("positionHash ", posHash);
-        console.log("closePrice ", closePrice);
-        console.log("hashInp4 ", hashInp4);
-        console.log("positionEscapeHash ", positionEscapeHash);
 
         return positionEscapeHash;
     }
@@ -468,8 +460,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             "Only invisible contract can call this function"
         );
 
-        console.log("escapeOutputs.length ", escapeOutputs.length);
-
         for (uint i = 0; i < escapeOutputs.length; i++) {
             (
                 bool is_valid,
@@ -481,10 +471,6 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 uint256 signature_b_r,
                 uint256 signature_b_s
             ) = ProgramOutputParser.uncompressEscapeOutput(escapeOutputs[i]);
-
-            console.log("escape id ", escape_id);
-            console.log("escape value ", escape_value);
-            console.log("escape message hash ", escape_message_hash);
 
             ForcedEscape storage escape = s_forcedEscapes[escape_id];
 
@@ -505,7 +491,10 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // * ====================================================================
     // * Withdrawals
 
-    function withdrawForcedEscape(uint32 escapeId, uint32 tokenId) external {
+    function withdrawForcedEscape(
+        uint32 escapeId,
+        uint32 tokenId
+    ) external nonReentrant {
         uint32 timestamp = uint32(block.timestamp);
 
         require(
@@ -514,7 +503,7 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         );
 
         uint64 amount = s_escapeAmounts[escapeId][tokenId];
-        require(amount > 0, "No escaped notes");
+        require(amount > 0, "No escaped amount to claim");
 
         s_escapeAmounts[escapeId][tokenId] = 0;
 
@@ -541,6 +530,8 @@ contract EscapeVerifier is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             msg.sender
         );
     }
+
+    // * ====================================================================
 
     function forceEscapeAfterTimeout(
         Note[] calldata notes,

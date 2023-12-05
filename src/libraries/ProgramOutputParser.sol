@@ -226,16 +226,16 @@ library ProgramOutputParser {
     function parseEscapesArray(
         uint256[] calldata escapeArr
     ) private pure returns (EscapeOutput[] memory) {
-        uint256 nEscapes = escapeArr.length / 2;
+        uint256 nEscapes = escapeArr.length / 4;
         EscapeOutput[] memory escapes = new EscapeOutput[](nEscapes);
 
-        for (uint256 i = 0; i < escapeArr.length; i += 2) {
+        for (uint256 i = 0; i < escapeArr.length; i += 4) {
             uint256 batchedEscapeInfo = escapeArr[i];
             uint256 escapeMessageHash = escapeArr[i + 1];
             uint256 signatureR = escapeArr[i + 2];
             uint256 signatureS = escapeArr[i + 3];
 
-            escapes[i / 2] = EscapeOutput(
+            escapes[i / 4] = EscapeOutput(
                 batchedEscapeInfo,
                 escapeMessageHash,
                 signatureR,

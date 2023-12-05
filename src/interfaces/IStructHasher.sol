@@ -19,4 +19,6 @@ interface IStructHasher {
     ) external view returns (uint256);
 
     function hashArr(uint256[] memory arr) external view returns (uint256);
+
+    function hash2(uint256 a, uint256 b) external view returns (uint256);
 }

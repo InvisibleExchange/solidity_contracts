@@ -16,9 +16,7 @@ contract StructHasher {
             return 0;
         }
 
-        uint256 commitment = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked([note.amount, note.blinding])
-        )[0];
+        uint256 commitment = hash2(note.amount, note.blinding);
 
         uint256[] memory inputArr = new uint256[](3);
         inputArr[0] = note.addressX;
@@ -72,32 +70,43 @@ contract StructHasher {
         headerArr[5] = orderTab.pub_key;
         uint256 headerHash = hashArr(headerArr);
 
-        uint256 baseCommitment = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked([orderTab.base_amount, orderTab.base_blinding])
-        )[0];
+        uint256 baseCommitment = hash2(
+            orderTab.base_amount,
+            orderTab.base_blinding
+        );
 
-        uint256 quoteCommitment = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked([orderTab.quote_amount, orderTab.quote_blinding])
-        )[0];
+        uint256 quoteCommitment = hash2(
+            orderTab.quote_amount,
+            orderTab.quote_blinding
+        );
 
-        uint256[] memory vlpCommitmentArr = new uint256[](2);
-        vlpCommitmentArr[0] = orderTab.vlp_supply;
-        vlpCommitmentArr[1] =
-            (orderTab.base_blinding % 2 ** 128) +
-            (orderTab.quote_blinding % 2 ** 128);
-        uint256 vlpCommitment = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked(vlpCommitmentArr)
-        )[0];
+        if (orderTab.vlp_supply <= 0) {
+            // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
+            uint256[] memory orderTabArr = new uint256[](4);
+            orderTabArr[0] = headerHash;
+            orderTabArr[1] = baseCommitment;
+            orderTabArr[2] = quoteCommitment;
+            orderTabArr[3] = 0;
+            uint256 orderTabHash = hashArr(orderTabArr);
 
-        // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
-        uint256[] memory orderTabArr = new uint256[](4);
-        orderTabArr[0] = headerHash;
-        orderTabArr[1] = baseCommitment;
-        orderTabArr[2] = quoteCommitment;
-        orderTabArr[3] = vlpCommitment;
-        uint256 orderTabHash = hashArr(headerArr);
+            return orderTabHash;
+        } else {
+            uint256 vlpCommitment = hash2(
+                orderTab.vlp_supply,
+                (orderTab.base_blinding % 2 ** 128) +
+                    (orderTab.quote_blinding % 2 ** 128)
+            );
 
-        return orderTabHash;
+            // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
+            uint256[] memory orderTabArr = new uint256[](4);
+            orderTabArr[0] = headerHash;
+            orderTabArr[1] = baseCommitment;
+            orderTabArr[2] = quoteCommitment;
+            orderTabArr[3] = vlpCommitment;
+            uint256 orderTabHash = hashArr(orderTabArr);
+
+            return orderTabHash;
+        }
     }
 
     function hashOpenOrderFields(
@@ -129,6 +138,12 @@ contract StructHasher {
         uint256 fieldsHash = hashArr(inputArr);
 
         return fieldsHash;
+    }
+
+    function hash2(uint256 a, uint256 b) public view returns (uint256 hash_) {
+        hash_ = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
+            abi.encodePacked([a, b])
+        )[0];
     }
 
     function hashArr(uint256[] memory arr) public view returns (uint256) {

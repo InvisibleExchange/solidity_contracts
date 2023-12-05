@@ -24,7 +24,12 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
 
         __tokenInfo_init();
 
+        s_vaults[address(0)] = true; // Eth vault
         chainId = 9090909;
+    }
+
+    function _VMsetEscapeVerifier(address newVerirfier) internal {
+        escapeVerifier = newVerirfier;
     }
 
     // ---------------------------------------------------------

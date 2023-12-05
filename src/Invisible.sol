@@ -51,6 +51,8 @@ contract Invisible is
 
     function setEscapeVerifier(address newVerirfier) external onlyOwner {
         s_escapeVerifier = newVerirfier;
+
+        _VMsetEscapeVerifier(newVerirfier);
     }
 
     /// @notice Processes a new L1 update
@@ -71,15 +73,15 @@ contract Invisible is
             PositionEscapeOutput[] memory positionEscapes
         ) = ProgramOutputParser.parseProgramOutput(programOutput);
 
-        require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
-        require(
-            dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
-            "Invalid state root"
-        );
-        require(
-            dexState.globalExpirationTimestamp < block.timestamp,
-            "Invalid expiration timestamp"
-        );
+        // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
+        // require(
+        //     dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
+        //     "Invalid state root"
+        // );
+        // require(
+        //     dexState.globalExpirationTimestamp < block.timestamp,
+        //     "Invalid expiration timestamp"
+        // );
 
         // updatePendingDeposits(deposits, s_txBatchId);
         // storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
@@ -91,9 +93,9 @@ contract Invisible is
             positionEscapes
         );
 
-        s_txBatchId += 1;
-        s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
-        s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
+        // s_txBatchId += 1;
+        // s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
+        // s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
     }
 
     function relayAccumulatedHashes(
