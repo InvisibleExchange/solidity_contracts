@@ -19,12 +19,11 @@ abstract contract MMRegistry is
         uint256 mmPositionAddress,
         uint256 usdcAmount
     ) external {
-        // TODO: Uncomment after testing
-        // require(isMarketRegistered(syntheticToken), "market isn't registered");
-        // require(
-        //     isAddressRegistered(mmPositionAddress),
-        //     "position address isn't registered"
-        // );
+        require(isMarketRegistered(syntheticToken), "market isn't registered");
+        require(
+            isAddressRegistered(mmPositionAddress),
+            "position address isn't registered"
+        );
 
         // ? If position is closed/closing we should prevent new deposits
         require(!s_pendingCloseRequests[mmPositionAddress], "position closed");
@@ -101,12 +100,11 @@ abstract contract MMRegistry is
         uint32 syntheticToken,
         uint256 mmPositionAddress
     ) external {
-        // Todo: Uncomment after testing
-        // require(isMarketRegistered(syntheticToken), "market isn't registered");
-        // require(
-        //     isAddressRegistered(mmPositionAddress),
-        //     "position address isn't registered"
-        // );
+        require(isMarketRegistered(syntheticToken), "market isn't registered");
+        require(
+            isAddressRegistered(mmPositionAddress),
+            "position address isn't registered"
+        );
 
         // ? Get the active liquidity position of the user
         LiquidityInfo memory activeLiq = s_activeLiqudity[msg.sender][
@@ -123,6 +121,11 @@ abstract contract MMRegistry is
             uint256 scaledAmount = scaleUp(userShare, 55555);
 
             s_pendingWithdrawals[msg.sender] += scaledAmount;
+
+            s_closedPositionLiqudity[mmPositionAddress]
+                .vlpAmountSum -= activeLiq.vlpAmount;
+            s_closedPositionLiqudity[mmPositionAddress]
+                .returnCollateral -= userShare;
 
             return;
         }
@@ -157,7 +160,7 @@ abstract contract MMRegistry is
 
             LiquidityInfo storage activeLiq = s_activeLiqudity[depositor][
                 mmAddress
-            ] = LiquidityInfo(initialAmount, vlpAmount);
+            ];
 
             // ? Update the active liquidity position
             activeLiq.initialValue -= initialAmount;

@@ -144,6 +144,7 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
                 perpRegistration.maxVlpSupply == maxVlpSupply &&
                 perpRegistration.positionAddress == mmAddress
             ) {
+                console.log("vlpAmount", vlpAmount);
                 perpRegistration.vlpAmount = vlpAmount;
             }
         }

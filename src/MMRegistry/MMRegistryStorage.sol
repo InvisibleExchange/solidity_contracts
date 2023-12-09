@@ -81,17 +81,19 @@ abstract contract MMRegistryStorage is OwnableUpgradeable {
 
     Cancelation[] s_pendingCancellations;
 
-    mapping(address => mapping(uint256 => LiquidityInfo)) s_activeLiqudity; // depositor => mm_position_address => LiquidityInfo
+    mapping(address => mapping(uint256 => LiquidityInfo))
+        public s_activeLiqudity; // depositor => mm_position_address => LiquidityInfo
 
     mapping(uint256 => uint64) s_providedUsdcLiquidity; // mm_position_address => usdc_amount
     mapping(uint256 => uint64) s_aggregateVlpIssued; // mm_position_address => vlp issued
 
     mapping(bytes32 => bool) s_pendingRemoveLiqudityRequests; // H(depositor, value) => isPending
 
-    mapping(address => uint256) s_pendingWithdrawals; // depositor => amount
+    mapping(address => uint256) public s_pendingWithdrawals; // depositor => amount
     mapping(uint256 => uint64) s_mmFees; // mm_address => amount
 
-    mapping(uint256 => ClosedPositionLiquidityInfo) s_closedPositionLiqudity; // mm_position_address => ClosedPositionLiquidityInfo
+    mapping(uint256 => ClosedPositionLiquidityInfo)
+        public s_closedPositionLiqudity; // mm_position_address => ClosedPositionLiquidityInfo
 
     // -------------------------------------------------------
 

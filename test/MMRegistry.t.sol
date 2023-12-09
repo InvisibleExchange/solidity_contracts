@@ -10,6 +10,8 @@ import "src/TestToken.sol";
 import "src/core/Interactions.sol";
 import "src/Invisible.sol";
 
+import "../src/MMRegistry/MMRegistryStorage.sol";
+
 //
 
 // import "src/interactions/Deposit.sol";
@@ -76,9 +78,9 @@ contract MMRegistryTest is Test {
         );
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
-        for (uint i = 0; i < entries[0].topics.length; i++) {
-            console.log(uint256(entries[0].topics[i]));
-        }
+        // for (uint i = 0; i < entries[0].topics.length; i++) {
+        //     console.log(uint256(entries[0].topics[i]));
+        // }
     }
 
     function testAddLiquidity() public {
@@ -96,9 +98,9 @@ contract MMRegistryTest is Test {
         );
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
-        for (uint i = 0; i < entries[0].topics.length; i++) {
-            console.log(uint256(entries[0].topics[i]));
-        }
+        // for (uint i = 0; i < entries[0].topics.length; i++) {
+        //     console.log(uint256(entries[0].topics[i]));
+        // }
     }
 
     function testRemoveLiquidity() public {
@@ -111,9 +113,9 @@ contract MMRegistryTest is Test {
         invisibleL1.removeLiquidity(syntheticAsset, mmAddress);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
-        for (uint i = 0; i < entries[0].topics.length; i++) {
-            console.log(uint256(entries[0].topics[i]));
-        }
+        // for (uint i = 0; i < entries[0].topics.length; i++) {
+        //     console.log(uint256(entries[0].topics[i]));
+        // }
     }
 
     function testCloseMM() public {
@@ -125,28 +127,118 @@ contract MMRegistryTest is Test {
         invisibleL1.closePerpMarketMaker(mmAddress);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
-        for (uint i = 0; i < entries[0].topics.length; i++) {
-            console.log(uint256(entries[0].topics[i]));
-        }
+        // for (uint i = 0; i < entries[0].topics.length; i++) {
+        //     console.log(uint256(entries[0].topics[i]));
+        // }
     }
 
-    function testUpdatingTxBatch() public {
+    function testMMRegiterUpdateBatch() public {
         // =================================================
 
-        // bool isRegistered1 = invisibleL1.isAddressRegistered(
-        //     3610252171009957135751225199721183378446742326108970414989791262578932735751
-        // );
-        // console.log("isRegistered: %s", isRegistered1);
+        bool isRegistered1 = invisibleL1.isAddressRegistered(
+            2555939808869746381652107679103753944317105711864612294672051588088957237575
+        );
+        console.log("isRegistered: %s", isRegistered1);
 
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
         invisibleL1.updateStateAfterTxBatch(programOutput);
 
-        // bool isRegistered2 = invisibleL1.isAddressRegistered(
-        //     3610252171009957135751225199721183378446742326108970414989791262578932735751
+        bool isRegistered2 = invisibleL1.isAddressRegistered(
+            2555939808869746381652107679103753944317105711864612294672051588088957237575
+        );
+        console.log("isRegistered: %s", isRegistered2);
+    }
+
+    function testMMRegiterUpdateBatch2() public {
+        testMMRegiterUpdateBatch();
+
+        // =================================================
+        testAddLiquidity();
+        testAddLiquidity();
+        testAddLiquidity();
+
+        // (uint64 initialValue, uint64 vlpAmount) = invisibleL1.s_activeLiqudity(
+        //     depositor,
+        //     2555939808869746381652107679103753944317105711864612294672051588088957237575
         // );
-        // console.log("isRegistered: %s", isRegistered2);
+        // console.log("vlpAmount: %s", vlpAmount);
+
+        // =================================================
+        uint256[] memory programOutput = getProgramOutput();
+
+        invisibleL1.updateStateAfterTxBatch2(programOutput);
+
+        // (uint64 initialValue2, uint64 vlpAmount2) = invisibleL1
+        //     .s_activeLiqudity(
+        //         depositor,
+        //         2555939808869746381652107679103753944317105711864612294672051588088957237575
+        //     );
+        // console.log("vlpAmount: %s", vlpAmount2);
+    }
+
+    function testMMRegiterUpdateBatch3() public {
+        testMMRegiterUpdateBatch2();
+
+        // =================================================
+        testRemoveLiquidity();
+        testRemoveLiquidity();
+
+        (uint64 initialValue, uint64 vlpAmount) = invisibleL1.s_activeLiqudity(
+            depositor,
+            2555939808869746381652107679103753944317105711864612294672051588088957237575
+        );
+        console.log("-->vlpAmount: %s", vlpAmount);
+
+        // =================================================
+        uint256[] memory programOutput = getProgramOutput();
+
+        invisibleL1.updateStateAfterTxBatch3(programOutput);
+
+        (uint64 initialValue2, uint64 vlpAmount2) = invisibleL1
+            .s_activeLiqudity(
+                depositor,
+                2555939808869746381652107679103753944317105711864612294672051588088957237575
+            );
+        console.log("vlpAmount: %s", vlpAmount2);
+    }
+
+    function testMMRegiterUpdateBatch4() public {
+        testMMRegiterUpdateBatch3();
+
+        // =================================================
+        testCloseMM();
+
+        (uint64 vlpAmountSum, uint64 returnCollateral) = invisibleL1
+            .s_closedPositionLiqudity(
+                2555939808869746381652107679103753944317105711864612294672051588088957237575
+            );
+        console.log("-->returnCollateral: %s", returnCollateral);
+
+        // =================================================
+        uint256[] memory programOutput = getProgramOutput();
+
+        invisibleL1.updateStateAfterTxBatch4(programOutput);
+
+        (uint64 vlpAmountSum2, uint64 returnCollateral2) = invisibleL1
+            .s_closedPositionLiqudity(
+                2555939808869746381652107679103753944317105711864612294672051588088957237575
+            );
+        console.log("-->returnCollateral: %s", returnCollateral2);
+
+        testRemoveLiquidity();
+
+        uint256 pendingWithdrawal = invisibleL1.s_pendingWithdrawals(depositor);
+        console.log("-->pendingWithdrawal: %s", pendingWithdrawal);
+
+        vm.startPrank(depositor);
+        invisibleL1.withdrawalLiquidity();
+
+        uint256 pendingWithdrawal2 = invisibleL1.s_pendingWithdrawals(
+            depositor
+        );
+        console.log("-->pendingWithdrawal2: %s", pendingWithdrawal2);
     }
 }
 

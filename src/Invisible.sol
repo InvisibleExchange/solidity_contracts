@@ -79,32 +79,32 @@ contract Invisible is
             PositionEscapeOutput[] memory positionEscapes
         ) = ProgramOutputParser.parseProgramOutput(programOutput);
 
-        // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
-        // require(
-        //     dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
-        //     "Invalid state root"
-        // );
-        // require(
-        //     dexState.globalExpirationTimestamp < block.timestamp,
-        //     "Invalid expiration timestamp"
-        // );
+        require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
+        require(
+            dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
+            "Invalid state root"
+        );
+        require(
+            dexState.globalExpirationTimestamp < block.timestamp,
+            "Invalid expiration timestamp"
+        );
 
-        // updatePendingDeposits(deposits, s_txBatchId);
-        // storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
+        updatePendingDeposits(deposits, s_txBatchId);
+        storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
 
-        // updatePendingRegistrations(registrationsArr);
-        // // updatePendingAddLiquidityUpdates(addLiquidityArr);
-        // // updatePendingRemoveLiquidityUpdates(removeLiquidityArr);
-        // // updatePendingCloseMMUpdates(closeMMArr);
+        updatePendingRegistrations(registrationsArr);
+        updatePendingAddLiquidityUpdates(addLiquidityArr);
+        updatePendingRemoveLiquidityUpdates(removeLiquidityArr);
+        updatePendingCloseMMUpdates(closeMMArr);
 
-        // IEscapeVerifier(s_escapeVerifier).updatePendingEscapes(escapes);
-        // IEscapeVerifier(s_escapeVerifier).updatePendingPositionEscapes(
-        //     positionEscapes
-        // );
+        IEscapeVerifier(s_escapeVerifier).updatePendingEscapes(escapes);
+        IEscapeVerifier(s_escapeVerifier).updatePendingPositionEscapes(
+            positionEscapes
+        );
 
-        // s_txBatchId += 1;
-        // s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
-        // s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
+        s_txBatchId += 1;
+        s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
+        s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
     }
 
     function relayAccumulatedHashes(

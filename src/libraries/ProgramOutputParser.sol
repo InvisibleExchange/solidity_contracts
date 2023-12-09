@@ -3,14 +3,12 @@ pragma solidity ^0.8.20;
 
 import "../utils/ProgramOutputStructs.sol";
 
-import "forge-std/console.sol";
-
 library ProgramOutputParser {
     function parseProgramOutput(
         uint256[] calldata cairoProgramOutput
     )
         internal
-        view
+        pure
         returns (
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
@@ -63,11 +61,6 @@ library ProgramOutputParser {
             cairoProgramOutput[:dexState.nOnchainMMActions * 3]
         );
 
-        console.log("registrationsArr: ", registrationsArr.length);
-        console.log("addLiquidityArr: ", addLiquidityArr.length);
-        console.log("removeLiquidityArr: ", removeLiquidityArr.length);
-        console.log("closeMMArr: ", closeMMArr.length);
-
         cairoProgramOutput = cairoProgramOutput[dexState.nOnchainMMActions *
             3:];
         escapes = parseEscapesArray(
@@ -85,7 +78,7 @@ library ProgramOutputParser {
     // * ===========================================================================================================
     function parseDexState(
         uint256[] calldata dexStateArr
-    ) private view returns (GlobalDexState memory) {
+    ) private pure returns (GlobalDexState memory) {
         uint256 initStateRoot = dexStateArr[0];
         uint256 finalStateRoot = dexStateArr[1];
 
@@ -219,7 +212,7 @@ library ProgramOutputParser {
         uint256[] calldata mmActionOutputs
     )
         private
-        view
+        pure
         returns (
             OnChainMMActionOutput[] memory registrationsArr,
             OnChainMMActionOutput[] memory addLiquidityArr,
@@ -227,26 +220,33 @@ library ProgramOutputParser {
             OnChainMMActionOutput[] memory closeMMArr
         )
     {
-        uint32 i = 0;
-        uint32 j = 0;
-        uint32 k = 0;
-        uint32 l = 0;
+        uint32 nRegistrations = 0;
+        uint32 nAddLiq = 0;
+        uint32 nRemoveLiq = 0;
+        uint32 nCloseMm = 0;
+        for (uint256 idx = 0; idx < mmActionOutputs.length; idx += 3) {
+            uint8 actionType = uint8(mmActionOutputs[idx + 2]);
 
-        registrationsArr = new OnChainMMActionOutput[](
-            mmActionOutputs.length / 3
-        );
-        addLiquidityArr = new OnChainMMActionOutput[](
-            mmActionOutputs.length / 3
-        );
-        removeLiquidityArr = new OnChainMMActionOutput[](
-            mmActionOutputs.length / 3
-        );
-        closeMMArr = new OnChainMMActionOutput[](mmActionOutputs.length / 3);
+            if (actionType == 0) {
+                nRegistrations += 1;
+            } else if (actionType == 1) {
+                nAddLiq += 1;
+            } else if (actionType == 2) {
+                nRemoveLiq += 1;
+            } else if (actionType == 3) {
+                nCloseMm += 1;
+            }
+        }
 
-        for (uint256 i = 0; i < mmActionOutputs.length; i += 3) {
-            uint256 mmPositionAddress = mmActionOutputs[i * 3];
-            uint256 depositor = mmActionOutputs[i * 3 + 1];
-            uint256 batchedActionInfo = uint256(mmActionOutputs[i * 3 + 2]);
+        registrationsArr = new OnChainMMActionOutput[](nRegistrations);
+        addLiquidityArr = new OnChainMMActionOutput[](nAddLiq);
+        removeLiquidityArr = new OnChainMMActionOutput[](nRemoveLiq);
+        closeMMArr = new OnChainMMActionOutput[](nCloseMm);
+
+        for (uint256 idx = 0; idx < mmActionOutputs.length; idx += 3) {
+            uint256 mmPositionAddress = mmActionOutputs[idx];
+            uint256 depositor = mmActionOutputs[idx + 1];
+            uint256 batchedActionInfo = uint256(mmActionOutputs[idx + 2]);
 
             OnChainMMActionOutput memory actionOutput = OnChainMMActionOutput({
                 mmPositionAddress: mmPositionAddress,
@@ -256,20 +256,24 @@ library ProgramOutputParser {
 
             uint8 actionType = uint8(batchedActionInfo);
 
-            console.log("actionType: ", actionType);
-
             if (actionType == 0) {
-                registrationsArr[i] = actionOutput;
-                i++;
+                registrationsArr[
+                    registrationsArr.length - nRegistrations
+                ] = actionOutput;
+                nRegistrations -= 1;
             } else if (actionType == 1) {
-                addLiquidityArr[j] = actionOutput;
-                j++;
+                addLiquidityArr[
+                    addLiquidityArr.length - nAddLiq
+                ] = actionOutput;
+                nAddLiq -= 1;
             } else if (actionType == 2) {
-                removeLiquidityArr[k] = actionOutput;
-                k++;
+                removeLiquidityArr[
+                    removeLiquidityArr.length - nRemoveLiq
+                ] = actionOutput;
+                nRemoveLiq -= 1;
             } else if (actionType == 3) {
-                closeMMArr[l] = actionOutput;
-                l++;
+                closeMMArr[closeMMArr.length - nCloseMm] = actionOutput;
+                nCloseMm -= 1;
             }
         }
     }
@@ -429,7 +433,7 @@ library ProgramOutputParser {
         returnCollateral = uint64(removeLiq.batchedActionInfo >> 8);
 
         depositor = address(uint160(removeLiq.depositor));
-        mmAddress = removeLiq.batchedActionInfo;
+        mmAddress = removeLiq.mmPositionAddress;
     }
 
     function uncompressCloseMMOutput(
