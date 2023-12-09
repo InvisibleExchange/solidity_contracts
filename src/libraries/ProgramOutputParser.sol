@@ -54,7 +54,6 @@ library ProgramOutputParser {
         );
 
         cairoProgramOutput = cairoProgramOutput[dexState.nWithdrawals * 2:];
-        console.log("dexState.nOnchainMMActions: ", dexState.nOnchainMMActions);
         (
             registrationsArr,
             addLiquidityArr,
