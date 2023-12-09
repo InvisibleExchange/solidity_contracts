@@ -3,14 +3,13 @@ pragma solidity ^0.8.20;
 
 import "../interactions/Deposit.sol";
 import "../interactions/Withdrawal.sol";
-import "../interactions/MMRegistry.sol";
+import "../MMRegistry/MMRegistry.sol";
 
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 abstract contract Interactions is
     Deposit,
     Withdrawal,
-    MMRegistry,
     ReentrancyGuardUpgradeable
 {
     // Deposits

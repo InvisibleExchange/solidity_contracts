@@ -10,6 +10,8 @@ import "./core/VaultManager.sol";
 import "./core/Interactions.sol";
 import "./core/EscapeVerifier.sol";
 
+import "./MMRegistry/MMRegistry.sol";
+
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -19,7 +21,8 @@ contract Invisible is
     OwnableUpgradeable,
     UUPSUpgradeable,
     VaultManager,
-    Interactions
+    Interactions,
+    MMRegistry
 {
     uint64 s_txBatchId;
 
@@ -68,7 +71,10 @@ contract Invisible is
             AccumulatedHashesOutput[] memory hashes,
             DepositTransactionOutput[] memory deposits,
             WithdrawalTransactionOutput[] memory withdrawals,
-            MMRegistrationOutput[] memory registrations,
+            OnChainMMActionOutput[] memory registrationsArr,
+            OnChainMMActionOutput[] memory addLiquidityArr,
+            OnChainMMActionOutput[] memory removeLiquidityArr,
+            OnChainMMActionOutput[] memory closeMMArr,
             EscapeOutput[] memory escapes,
             PositionEscapeOutput[] memory positionEscapes
         ) = ProgramOutputParser.parseProgramOutput(programOutput);
@@ -86,12 +92,15 @@ contract Invisible is
         // updatePendingDeposits(deposits, s_txBatchId);
         // storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
 
-        // updatePendingRegistrations(registrations, s_txBatchId);
+        // updatePendingRegistrations(registrationsArr);
+        // // updatePendingAddLiquidityUpdates(addLiquidityArr);
+        // // updatePendingRemoveLiquidityUpdates(removeLiquidityArr);
+        // // updatePendingCloseMMUpdates(closeMMArr);
 
-        IEscapeVerifier(s_escapeVerifier).updatePendingEscapes(escapes);
-        IEscapeVerifier(s_escapeVerifier).updatePendingPositionEscapes(
-            positionEscapes
-        );
+        // IEscapeVerifier(s_escapeVerifier).updatePendingEscapes(escapes);
+        // IEscapeVerifier(s_escapeVerifier).updatePendingPositionEscapes(
+        //     positionEscapes
+        // );
 
         // s_txBatchId += 1;
         // s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;

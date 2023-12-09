@@ -14,103 +14,139 @@ import "src/Invisible.sol";
 
 // import "src/interactions/Deposit.sol";
 
-contract InteractionsTest is Test {
+contract MMRegistryTest is Test {
     Invisible invisibleL1;
-    TestToken testToken;
-
-    address owner = address(8953626958234137847422389523978938749873);
+    TestToken testUsdc;
+    TestToken testWbtc;
 
     uint256 constant EthStarkKey =
         2292025268456116477323356083246651802150462734710453904748677715907532488444;
     uint256 constant UsdcStarkKey =
         2166840471905619448909926965843998034165267473744647928190851627614183386065;
 
+    address constant owner = address(8953626958234137847422389523978938749873);
+    address constant depositor =
+        address(61872278164781256322784325782984327823785);
+
     function setUp() public {
         vm.startPrank(owner);
 
         invisibleL1 = new Invisible();
+
         invisibleL1.initialize(owner);
 
-        testToken = new TestToken("TestToken", "TT");
-
-        testToken.mint(owner, 5000 * 10 ** 18);
+        testUsdc = new TestToken("testUsdc", "TT");
+        // testUsdc.mint(owner, 5000 * 10 ** 18);
+        testUsdc.mint(address(invisibleL1), 15000 * 10 ** 18);
+        testUsdc.mint(depositor, 10000 * 10 ** 18);
 
         vm.deal(owner, 5 * 10 ** 18);
+        vm.deal(address(invisibleL1), 15 * 10 ** 18);
+        vm.deal(depositor, 1 * 10 ** 18);
 
         testRegisterToken();
 
-        testRegisterNewMarkets();
+        testRegisterMM();
     }
 
     function testRegisterToken() public {
-        address tokenAddress = address(testToken);
+        address tokenAddress = address(testUsdc);
 
         uint32 tokenId = 55555;
         invisibleL1.registerToken(tokenAddress, tokenId, 6);
 
-        require(invisibleL1.getTokenId(tokenAddress) != 0, "Token ID not set");
-        require(invisibleL1.ETH_ID() != 54321, "Token ID not set");
+        uint32[] memory syntheticTokens = new uint32[](2);
+        syntheticTokens[0] = 12345;
+        syntheticTokens[1] = 54321;
+        invisibleL1.registerNewMarkets(syntheticTokens);
     }
 
-    function testUpdatingTxBatch2() public {
-        testRegisterMM();
+    function testRegisterMM() public {
+        uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
+        uint64 maxVlpSupply = 1000000000000;
+        uint32 syntheticAsset = 12345;
 
+        invisibleL1.approveMMRegistration(owner, mmAddress);
+
+        vm.recordLogs();
+        invisibleL1.registerPerpMarketMaker(
+            syntheticAsset,
+            mmAddress,
+            maxVlpSupply
+        );
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        for (uint i = 0; i < entries[0].topics.length; i++) {
+            console.log(uint256(entries[0].topics[i]));
+        }
+    }
+
+    function testAddLiquidity() public {
+        vm.startPrank(depositor);
+
+        uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
+        uint32 syntheticAsset = 12345;
+
+        vm.recordLogs();
+        testUsdc.approve(address(invisibleL1), 2000 * 10 ** 18);
+        invisibleL1.provideLiquidity(
+            syntheticAsset,
+            mmAddress,
+            2000 * 10 ** 18
+        );
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        for (uint i = 0; i < entries[0].topics.length; i++) {
+            console.log(uint256(entries[0].topics[i]));
+        }
+    }
+
+    function testRemoveLiquidity() public {
+        vm.startPrank(depositor);
+
+        uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
+        uint32 syntheticAsset = 12345;
+
+        vm.recordLogs();
+        invisibleL1.removeLiquidity(syntheticAsset, mmAddress);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        for (uint i = 0; i < entries[0].topics.length; i++) {
+            console.log(uint256(entries[0].topics[i]));
+        }
+    }
+
+    function testCloseMM() public {
+        vm.startPrank(owner);
+
+        uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
+
+        vm.recordLogs();
+        invisibleL1.closePerpMarketMaker(mmAddress);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        for (uint i = 0; i < entries[0].topics.length; i++) {
+            console.log(uint256(entries[0].topics[i]));
+        }
+    }
+
+    function testUpdatingTxBatch() public {
         // =================================================
 
-        bool isRegistered1 = invisibleL1.isAddressRegistered(
-            3610252171009957135751225199721183378446742326108970414989791262578932735751
-        );
-        console.log("isRegistered: %s", isRegistered1);
+        // bool isRegistered1 = invisibleL1.isAddressRegistered(
+        //     3610252171009957135751225199721183378446742326108970414989791262578932735751
+        // );
+        // console.log("isRegistered: %s", isRegistered1);
 
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
         invisibleL1.updateStateAfterTxBatch(programOutput);
 
-        bool isRegistered2 = invisibleL1.isAddressRegistered(
-            3610252171009957135751225199721183378446742326108970414989791262578932735751
-        );
-        console.log("isRegistered: %s", isRegistered2);
-    }
-
-    function testRegisterNewMarkets() public {
-        uint32[] memory baseAssets = new uint32[](2);
-        baseAssets[0] = 12345;
-        baseAssets[1] = 54321;
-
-        uint32[] memory quoteAssets = new uint32[](2);
-        quoteAssets[0] = 55555;
-        quoteAssets[1] = 55555;
-
-        uint32[] memory syntheticAssets = new uint32[](3);
-        baseAssets[0] = 12345;
-        baseAssets[1] = 54321;
-        baseAssets[2] = 66666;
-
-        invisibleL1.registerNewMarkets(
-            baseAssets,
-            quoteAssets,
-            syntheticAssets
-        );
-    }
-
-    function testRegisterMM() public {
-        vm.startPrank(owner);
-
-        uint256 mmAddress = 3610252171009957135751225199721183378446742326108970414989791262578932735751;
-        uint64 maxVlpSupply = 1000000 * 10 ** 6;
-
-        uint32 baseAsset = 12345;
-        uint32 quoteAsset = 55555;
-
-        invisibleL1.approveMMRegistration(false, owner, mmAddress);
-
-        invisibleL1.registerSpotMarketMaker(
-            baseAsset,
-            quoteAsset,
-            mmAddress,
-            maxVlpSupply
-        );
+        // bool isRegistered2 = invisibleL1.isAddressRegistered(
+        //     3610252171009957135751225199721183378446742326108970414989791262578932735751
+        // );
+        // console.log("isRegistered: %s", isRegistered2);
     }
 }
 
@@ -139,11 +175,11 @@ function bytesToBytes32Array(
 }
 
 function getProgramOutput() pure returns (uint256[] memory res) {
-    uint256[59] memory arr = [
-        1681714975540286446064826179733025259025830596163312715622600677991254276136,
-        1942169278408866985100966193432472349192882635042713816468080752951867678865,
-        597580416694809001986,
-        340282367000166625977638945029607129088,
+    uint256[86] memory arr = [
+        2450644354998405982022115704618884006901283874365176806194200773707121413423,
+        3142695053653597095586708733570803848021265084277238215438641777587575625287,
+        597606316000438910976,
+        2923047876152202897812111479749281210805151334400,
         4839524406068408503119694702759214384341319683,
         12345,
         54321,
@@ -152,17 +188,17 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         12345,
         54321,
         66666,
-        9,
-        9,
+        8,
+        8,
         6,
-        0,
+        8,
+        250,
         2500,
-        25000,
         50000,
-        50000,
+        250000,
         6,
         6,
-        10,
+        6,
         50000000,
         500000000,
         350000000,
@@ -170,8 +206,8 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         3000000,
         1500000,
         15000000,
-        100000000000000,
-        14000000204800000,
+        100000000,
+        1000000000,
         9090909,
         7878787,
         5656565,
@@ -180,25 +216,52 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         1839793652349538280924927302501143912227271479439798783640887258675143576352,
         296568192680735721663075531306405401515803196637037431012739700151231900092,
         9090909,
-        0,
+        1166260320567678569074286927415518331832071223798029965790371363666066427203,
         0,
         7878787,
-        0,
+        985387061409897285031411378697247401257340098622853134207444831726099316521,
         0,
         5656565,
         0,
         0,
-        20703416456491290441237729280,
-        3610252171009957135751225199721183378446742326108970414989791262578932735751,
-        381910624860573789248581695129117664103119192065,
-        9856732629625703539098952454285200176020062844859158785080014647278814545,
-        2290920952232220448527736559373559381585407513725991428947467440279587605219,
-        1361138075189787778177397299397205303297,
-        25289090813440523962054569164799521261759807542017161434515644970743,
-        2167668079050922025726930092564445435996017186294382461127463662289194574336,
-        2504248300409688044280013972424585137451279189037418493421050935174055288734,
-        3488528698316931683898207226290741495305671586547254558192171399990534171115,
-        3610252171009957135751225199721183378446742326108970414989791262578932735751
+        2681012288826897986174311721013788427095758336,
+        1155560327560595810277547796632773459017238673296569489024397323316334105299,
+        3093476031983839916840789305451873367190128640,
+        1959539234350891128453293007249544042004006583703848438236600344801093982078,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        0,
+        1182897730672094755697375576558587019100422400,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        61872278164781256322784325782984327823785,
+        9444732965739290427904000000001,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        61872278164781256322784325782984327823785,
+        174224571863520493302692531970804614693376000000002,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        61872278164781256322784325782984327823785,
+        9444732965739290427904000000001,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        61872278164781256322784325782984327823785,
+        174224571863520493302692531970804614693376000000002,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        61872278164781256322784325782984327823785,
+        9444732965739290427904000000001,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        0,
+        174224571863520493302692531970804614693376000000003,
+        18904435007848367023936622422249802341285890,
+        2420567746039753872347707779858556187693979327293525121346425299860792850911,
+        885386392038643549624427689518434212767149919132657342127470828943773935401,
+        18904435007848598848320947164437737461776389,
+        2363656273888911179077967994623956970132158940719838918180884037242340125903,
+        885386392038643549624427689518434212767149919132657342127470828943773935401,
+        18831384596390483743485184152799368555499912079055450551563,
+        13562735194430779080930195247607106422407053998817280000003,
+        2555939808869746381652107679103753944317105711864612294672051588088957237575,
+        25108486331777164507320973576007034967307300227519485050880,
+        13738115390910487432560743694746788568019920645985952333825,
+        1571518249481932923260906299462758204245944960281784438868661894750375958570,
+        1
     ];
 
     res = new uint256[](arr.length);

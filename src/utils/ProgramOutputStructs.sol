@@ -7,16 +7,16 @@ struct GlobalDexState {
     uint256 finalStateRoot;
     uint32 stateTreeDepth;
     uint32 globalExpirationTimestamp;
-    uint32 nDeposits;
-    uint32 nWithdrawals;
-    uint32 nMMRegistrations;
+    uint16 nDeposits;
+    uint16 nWithdrawals;
+    uint16 nOnchainMMActions;
+    uint16 nNoteEscapes;
+    uint16 nPositionEscapes;
+    uint16 nTabEscapes;
     // uint32 nOutputPositions;
     // uint32 nEmptyPositions;
     // uint32 nOutputNotes;
     // uint32 nZeroIndexes;
-    uint32 nNoteEscapes;
-    uint32 nPositionEscapes;
-    uint32 nTabEscapes;
 }
 
 struct GlobalConfig {
@@ -43,10 +43,14 @@ struct WithdrawalTransactionOutput {
     address recipient;
 }
 
-struct MMRegistrationOutput {
-    // & batched_registration_info format: | is_perp (1 bits) | vlp_token (32 bits) | max_vlp_supply (64 bits) |
-    uint256 batchedRegistrationInfo;
-    uint256 mmAddress;
+struct OnChainMMActionOutput {
+    // & batched_registration_info format: | vlp_token (32 bits) | max_vlp_supply (64 bits) | vlp_amount (64 bits) | action_type (8 bits) |
+    // & batched_add_liq_info format:  usdcAmount (64 bits) | vlp_amount (64 bits) | action_type (8 bits) |
+    // & batched_remove_liq_info format:  | initialValue (64 bits) | vlpAmount (64 bits) | returnAmount (64 bits) | action_type (8 bits) |
+    // & batched_close_mm_info format:  | initialValueSum (64 bits) | vlpAmountSum (64 bits) | returnAmount (64 bits) | action_type (8 bits) |
+    uint256 mmPositionAddress;
+    uint256 depositor;
+    uint256 batchedActionInfo;
 }
 
 struct AccumulatedHashesOutput {

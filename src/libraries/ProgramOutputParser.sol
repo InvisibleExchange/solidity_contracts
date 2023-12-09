@@ -16,14 +16,17 @@ library ProgramOutputParser {
             AccumulatedHashesOutput[] memory hashes,
             DepositTransactionOutput[] memory deposits,
             WithdrawalTransactionOutput[] memory withdrawals,
-            MMRegistrationOutput[] memory registrations,
+            OnChainMMActionOutput[] memory registrationsArr,
+            OnChainMMActionOutput[] memory addLiquidityArr,
+            OnChainMMActionOutput[] memory removeLiquidityArr,
+            OnChainMMActionOutput[] memory closeMMArr,
             EscapeOutput[] memory escapes,
             PositionEscapeOutput[] memory positionEscapes
         )
     {
-        dexState = parseDexState(cairoProgramOutput[:5]);
+        dexState = parseDexState(cairoProgramOutput[:4]);
 
-        cairoProgramOutput = cairoProgramOutput[5:];
+        cairoProgramOutput = cairoProgramOutput[4:];
         GlobalConfig memory config = parseGlobalConfig(cairoProgramOutput);
 
         // ? 1 + 3*assets_len + 5*synthetic_assets_len + observers_len + chain_ids_len
@@ -51,11 +54,23 @@ library ProgramOutputParser {
         );
 
         cairoProgramOutput = cairoProgramOutput[dexState.nWithdrawals * 2:];
-        registrations = parseMMRegistrationsArray(
-            cairoProgramOutput[:dexState.nMMRegistrations * 2]
+        console.log("dexState.nOnchainMMActions: ", dexState.nOnchainMMActions);
+        (
+            registrationsArr,
+            addLiquidityArr,
+            removeLiquidityArr,
+            closeMMArr
+        ) = parseOnchainMMActionsArray(
+            cairoProgramOutput[:dexState.nOnchainMMActions * 3]
         );
 
-        cairoProgramOutput = cairoProgramOutput[dexState.nMMRegistrations * 2:];
+        console.log("registrationsArr: ", registrationsArr.length);
+        console.log("addLiquidityArr: ", addLiquidityArr.length);
+        console.log("removeLiquidityArr: ", removeLiquidityArr.length);
+        console.log("closeMMArr: ", closeMMArr.length);
+
+        cairoProgramOutput = cairoProgramOutput[dexState.nOnchainMMActions *
+            3:];
         escapes = parseEscapesArray(
             cairoProgramOutput[:(dexState.nNoteEscapes + dexState.nTabEscapes) *
                 4]
@@ -68,10 +83,10 @@ library ProgramOutputParser {
         );
     }
 
-    // * ------------------------------------------------------
+    // * ===========================================================================================================
     function parseDexState(
         uint256[] calldata dexStateArr
-    ) private pure returns (GlobalDexState memory) {
+    ) private view returns (GlobalDexState memory) {
         uint256 initStateRoot = dexStateArr[0];
         uint256 finalStateRoot = dexStateArr[1];
 
@@ -80,16 +95,15 @@ library ProgramOutputParser {
         uint32 globalExpirationTimestamp = uint32(batchedInfo >> 32);
         uint32 txBatchId = uint32(batchedInfo);
 
+        // & n_output_notes (32 bits) | n_output_positions (16 bits) | n_output_tabs (16 bits) | n_zero_indexes (32 bits) | n_deposits (16 bits) | n_withdrawals (16 bits) |
+        // & n_onchain_mm_actions (16 bits) | n_note_escapes (16 bits) | n_position_escapes (16 bits) | n_tab_escapes (16 bits) |
         batchedInfo = dexStateArr[3];
-        uint32 nDeposits = uint32(batchedInfo >> 192);
-        uint32 nWithdrawals = uint32(batchedInfo >> 160);
-        uint32 nMMRegistrations = uint32(batchedInfo >> 128);
-
-        // & 3: | n_zero_indexes (32 bits) | n_note_escape_outputs (32 bits) | n_tab_escape_outputs (32 bits) |  n_position_escape_outputs (32 bits) |
-        batchedInfo = dexStateArr[4];
-        uint32 nNoteEscapes = uint32(batchedInfo >> 64);
-        uint32 nTabEscapes = uint32(batchedInfo >> 32);
-        uint32 nPositionEscapes = uint32(batchedInfo);
+        uint16 nDeposits = uint16(batchedInfo >> 80);
+        uint16 nWithdrawals = uint16(batchedInfo >> 64);
+        uint16 nOnchainMMActions = uint16(batchedInfo >> 48);
+        uint16 nNoteEscapes = uint16(batchedInfo >> 32);
+        uint16 nTabEscapes = uint16(batchedInfo >> 16);
+        uint16 nPositionEscapes = uint16(batchedInfo);
 
         GlobalDexState memory dexState = GlobalDexState({
             txBatchId: txBatchId,
@@ -99,7 +113,7 @@ library ProgramOutputParser {
             globalExpirationTimestamp: globalExpirationTimestamp,
             nDeposits: nDeposits,
             nWithdrawals: nWithdrawals,
-            nMMRegistrations: nMMRegistrations,
+            nOnchainMMActions: nOnchainMMActions,
             nNoteEscapes: nNoteEscapes,
             nPositionEscapes: nPositionEscapes,
             nTabEscapes: nTabEscapes
@@ -202,24 +216,63 @@ library ProgramOutputParser {
     }
 
     // * ------------------------------------------------------
-    function parseMMRegistrationsArray(
-        uint256[] calldata registrationsArr
-    ) private pure returns (MMRegistrationOutput[] memory) {
-        uint256 nRegistrations = registrationsArr.length / 2;
-        MMRegistrationOutput[]
-            memory registrations = new MMRegistrationOutput[](nRegistrations);
+    function parseOnchainMMActionsArray(
+        uint256[] calldata mmActionOutputs
+    )
+        private
+        view
+        returns (
+            OnChainMMActionOutput[] memory registrationsArr,
+            OnChainMMActionOutput[] memory addLiquidityArr,
+            OnChainMMActionOutput[] memory removeLiquidityArr,
+            OnChainMMActionOutput[] memory closeMMArr
+        )
+    {
+        uint32 i = 0;
+        uint32 j = 0;
+        uint32 k = 0;
+        uint32 l = 0;
 
-        for (uint256 i = 0; i < registrationsArr.length; i += 2) {
-            uint256 registrationInfo = registrationsArr[i];
-            uint256 mmAddress = uint256(registrationsArr[i + 1]);
+        registrationsArr = new OnChainMMActionOutput[](
+            mmActionOutputs.length / 3
+        );
+        addLiquidityArr = new OnChainMMActionOutput[](
+            mmActionOutputs.length / 3
+        );
+        removeLiquidityArr = new OnChainMMActionOutput[](
+            mmActionOutputs.length / 3
+        );
+        closeMMArr = new OnChainMMActionOutput[](mmActionOutputs.length / 3);
 
-            registrations[i / 2] = MMRegistrationOutput({
-                batchedRegistrationInfo: registrationInfo,
-                mmAddress: mmAddress
+        for (uint256 i = 0; i < mmActionOutputs.length; i += 3) {
+            uint256 mmPositionAddress = mmActionOutputs[i * 3];
+            uint256 depositor = mmActionOutputs[i * 3 + 1];
+            uint256 batchedActionInfo = uint256(mmActionOutputs[i * 3 + 2]);
+
+            OnChainMMActionOutput memory actionOutput = OnChainMMActionOutput({
+                mmPositionAddress: mmPositionAddress,
+                depositor: depositor,
+                batchedActionInfo: batchedActionInfo
             });
-        }
 
-        return registrations;
+            uint8 actionType = uint8(batchedActionInfo);
+
+            console.log("actionType: ", actionType);
+
+            if (actionType == 0) {
+                registrationsArr[i] = actionOutput;
+                i++;
+            } else if (actionType == 1) {
+                addLiquidityArr[j] = actionOutput;
+                j++;
+            } else if (actionType == 2) {
+                removeLiquidityArr[k] = actionOutput;
+                k++;
+            } else if (actionType == 3) {
+                closeMMArr[l] = actionOutput;
+                l++;
+            }
+        }
     }
 
     // * ------------------------------------------------------
@@ -315,25 +368,93 @@ library ProgramOutputParser {
         recipient = withdrawal.recipient;
     }
 
+    // * ------------------------------------------------------
+
     function uncompressRegistrationOutput(
-        MMRegistrationOutput memory registration
+        OnChainMMActionOutput memory output
     )
         internal
         pure
         returns (
-            bool isPerp,
             uint32 vlpToken,
             uint64 maxVlpSupply,
+            uint64 vlpAmount,
             uint256 mmAddress
         )
     {
-        // & batched_registration_info format: | is_perp (1 bits) | vlp_token (32 bits) | max_vlp_supply (64 bits) |
+        // & batched_registration_info format: | vlp_token (32 bits) | max_vlp_supply (64 bits) | vlp_amount (64 bits) | action_type (8 bits) |
 
-        isPerp = registration.batchedRegistrationInfo >> 96 == 1;
-        vlpToken = uint32(registration.batchedRegistrationInfo >> 64);
-        maxVlpSupply = uint64(registration.batchedRegistrationInfo);
-        mmAddress = registration.mmAddress;
+        vlpToken = uint32(output.batchedActionInfo >> 136);
+        maxVlpSupply = uint64(output.batchedActionInfo >> 72);
+        vlpAmount = uint64(output.batchedActionInfo >> 8);
+        mmAddress = output.mmPositionAddress;
     }
+
+    function uncompressAddLiquidityOutput(
+        OnChainMMActionOutput memory addLiq
+    )
+        internal
+        pure
+        returns (
+            uint64 initialAmount,
+            uint64 vlpAmount,
+            uint256 mmAddress,
+            address depositor
+        )
+    {
+        // & batched_add_liq_info format: | usdcAmount (64 bits) | vlp_amount (64 bits) | action_type (8 bits) |
+
+        initialAmount = uint64(addLiq.batchedActionInfo >> 72);
+        vlpAmount = uint64(addLiq.batchedActionInfo >> 8);
+        depositor = address(uint160(addLiq.depositor));
+        mmAddress = addLiq.mmPositionAddress;
+    }
+
+    function uncompressRemoveLiquidityOutput(
+        OnChainMMActionOutput memory removeLiq
+    )
+        internal
+        pure
+        returns (
+            uint64 initialAmount,
+            uint64 vlpAmount,
+            uint64 returnCollateral,
+            uint256 mmAddress,
+            address depositor
+        )
+    {
+        // & batched_remove_liq_info format:  | initialValue (64 bits) | vlpAmount (64 bits) | returnAmount (64 bits) | action_type (8 bits) |
+
+        initialAmount = uint64(removeLiq.batchedActionInfo >> 136);
+        vlpAmount = uint64(removeLiq.batchedActionInfo >> 72);
+        returnCollateral = uint64(removeLiq.batchedActionInfo >> 8);
+
+        depositor = address(uint160(removeLiq.depositor));
+        mmAddress = removeLiq.batchedActionInfo;
+    }
+
+    function uncompressCloseMMOutput(
+        OnChainMMActionOutput memory closeMM
+    )
+        internal
+        pure
+        returns (
+            uint64 initialValueSum,
+            uint64 vlpAmountSum,
+            uint64 returnCollateral,
+            uint256 mmAddress
+        )
+    {
+        // & batched_remove_liq_info format:  | initialValue (64 bits) | vlpAmount (64 bits) | returnAmount (64 bits) | action_type (8 bits) |
+
+        initialValueSum = uint64(closeMM.batchedActionInfo >> 136);
+        vlpAmountSum = uint64(closeMM.batchedActionInfo >> 72);
+        returnCollateral = uint64(closeMM.batchedActionInfo >> 8);
+
+        mmAddress = closeMM.mmPositionAddress;
+    }
+
+    // * ------------------------------------------------------
 
     function uncompressEscapeOutput(
         EscapeOutput memory escapeOutput
