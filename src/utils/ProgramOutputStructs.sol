@@ -94,6 +94,7 @@ struct EscapeOutput {
 struct PositionEscapeOutput {
     // & escape_value (64 bits) | escape_id (32 bits) | is_valid (8 bits) |
     uint256 batched_escape_info;
+    address recipient;
     uint256 escape_message_hash;
     uint256 signature_a_r;
     uint256 signature_a_s;

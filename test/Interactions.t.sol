@@ -50,6 +50,28 @@ contract InteractionsTest is Test {
         testRegisterToken();
     }
 
+    function testKeccak() public {
+        uint256[5] memory arr = [
+            uint256(1),
+            uint256(2),
+            uint256(3),
+            uint256(4),
+            uint256(5)
+        ];
+
+        bytes memory data = abi.encodePacked(
+            uint256(1),
+            uint256(2),
+            uint256(3),
+            uint256(4),
+            uint256(5)
+        );
+
+        bytes32 hash = keccak256(data);
+
+        console.log("hash: ", uint256(hash));
+    }
+
     function testRegisterToken() public {
         address tokenAddress = address(testUsdc);
 

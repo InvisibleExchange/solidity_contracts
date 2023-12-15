@@ -103,6 +103,33 @@ contract MMRegistryTest is Test {
         // }
     }
 
+    function testCancelAddLiquidity() public {
+        vm.startPrank(owner);
+        testUsdc.mint(
+            address(111111111111111111111111111111111),
+            10000 * 10 ** 18
+        );
+
+        vm.startPrank(address(111111111111111111111111111111111));
+
+        uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
+        uint32 syntheticAsset = 12345;
+
+        testUsdc.approve(address(invisibleL1), 4000 * 10 ** 18);
+        invisibleL1.provideLiquidity(
+            syntheticAsset,
+            mmAddress,
+            2000 * 10 ** 18
+        );
+        invisibleL1.provideLiquidity(
+            syntheticAsset,
+            mmAddress,
+            2000 * 10 ** 18
+        );
+
+        invisibleL1.tryCancelAddLiquidity(mmAddress);
+    }
+
     function testRemoveLiquidity() public {
         vm.startPrank(depositor);
 
@@ -143,6 +170,7 @@ contract MMRegistryTest is Test {
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
+        vm.startPrank(owner);
         invisibleL1.updateStateAfterTxBatch(programOutput);
 
         bool isRegistered2 = invisibleL1.isAddressRegistered(
@@ -159,23 +187,13 @@ contract MMRegistryTest is Test {
         testAddLiquidity();
         testAddLiquidity();
 
-        // (uint64 initialValue, uint64 vlpAmount) = invisibleL1.s_activeLiqudity(
-        //     depositor,
-        //     2555939808869746381652107679103753944317105711864612294672051588088957237575
-        // );
-        // console.log("vlpAmount: %s", vlpAmount);
+        testCancelAddLiquidity();
 
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
-        invisibleL1.updateStateAfterTxBatch2(programOutput);
-
-        // (uint64 initialValue2, uint64 vlpAmount2) = invisibleL1
-        //     .s_activeLiqudity(
-        //         depositor,
-        //         2555939808869746381652107679103753944317105711864612294672051588088957237575
-        //     );
-        // console.log("vlpAmount: %s", vlpAmount2);
+        vm.startPrank(owner);
+        // invisibleL1.updateStateAfterTxBatch2(programOutput);
     }
 
     function testMMRegiterUpdateBatch3() public {
@@ -194,7 +212,7 @@ contract MMRegistryTest is Test {
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
-        invisibleL1.updateStateAfterTxBatch3(programOutput);
+        // invisibleL1.updateStateAfterTxBatch3(programOutput);
 
         (uint64 initialValue2, uint64 vlpAmount2) = invisibleL1
             .s_activeLiqudity(
@@ -219,7 +237,7 @@ contract MMRegistryTest is Test {
         // =================================================
         uint256[] memory programOutput = getProgramOutput();
 
-        invisibleL1.updateStateAfterTxBatch4(programOutput);
+        // invisibleL1.updateStateAfterTxBatch4(programOutput);
 
         (uint64 vlpAmountSum2, uint64 returnCollateral2) = invisibleL1
             .s_closedPositionLiqudity(

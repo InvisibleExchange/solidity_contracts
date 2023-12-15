@@ -7,9 +7,13 @@ import "./MMRegistryManager.sol";
 import "../core/VaultManager.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
+import "forge-std/console.sol";
 
 abstract contract MMRegistry is
     OwnableUpgradeable,
+    ReentrancyGuardUpgradeable,
     MMRegistryManager,
     VaultManager
 {
@@ -30,11 +34,9 @@ abstract contract MMRegistry is
 
         uint32 usdcTokenId = 55555;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
-        bool success = IERC20(usdcTokenAddress).transfer(
-            address(this),
-            usdcAmount
-        );
-        require(success, "Transfer failed");
+
+        // ? Transfer the usdc from the user to the vault
+        VaultManager.makeErc20VaultDeposit(usdcTokenAddress, usdcAmount);
 
         // ? Store the pending request in the contract
         uint64 scaledAmount = scaleDown(usdcAmount, usdcTokenId);
@@ -85,11 +87,23 @@ abstract contract MMRegistry is
         for (uint i = s_pendingCancellations.length; i > 0; i--) {
             Cancelation memory cancelation = s_pendingCancellations[i - 1];
 
+            console.log("cancelation depositor", cancelation.depositor);
+            console.log("cancelation mmAddress", cancelation.mmAddress);
+
+            console.log(
+                "before: ",
+                s_pendingWithdrawals[cancelation.depositor]
+            );
+
             uint64 pendingAmount = s_pendingAddLiqudityRequests[
                 cancelation.depositor
             ][cancelation.mmAddress];
             uint256 scaledAmount = scaleUp(pendingAmount, 55555);
             s_pendingWithdrawals[cancelation.depositor] += scaledAmount;
+
+            console.log("pendingAmount", pendingAmount);
+
+            console.log("after: ", s_pendingWithdrawals[cancelation.depositor]);
 
             s_pendingCancellations.pop();
         }
@@ -177,7 +191,9 @@ abstract contract MMRegistry is
             } else {
                 mmFee = 0;
             }
-            s_mmFees[mmAddress] += mmFee;
+            uint256 scaledFee = scaleUp(mmFee, 55555);
+            address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
+            s_pendingWithdrawals[mmOwner] += scaledFee;
 
             // ? The user can than call withdrawalLiquidity to withdraw the funds
             uint256 scaledAmount = scaleUp(returnCollateral - mmFee, 55555);
@@ -233,7 +249,9 @@ abstract contract MMRegistry is
             } else {
                 mmFee = 0;
             }
-            s_mmFees[mmAddress] += mmFee;
+            uint256 scaledFee = scaleUp(mmFee, 55555);
+            address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
+            s_pendingWithdrawals[mmOwner] += scaledFee;
 
             // ? Store the liquidity info of the LPs
             // ? The LPs  can then claim by calling remove liquidity
@@ -245,8 +263,7 @@ abstract contract MMRegistry is
     }
 
     // * WITHDRAW FUNDS --------------------------------------------
-    // TODO: NONREENTRANT
-    function withdrawalLiquidity() external {
+    function withdrawalLiquidity() external nonReentrant {
         // We send the event {depositor, amount} to the depositor
         uint256 amount = s_pendingWithdrawals[msg.sender];
 
@@ -258,7 +275,13 @@ abstract contract MMRegistry is
 
         uint32 usdcTokenId = 55555;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
-        bool success = IERC20(usdcTokenAddress).transfer(msg.sender, amount);
-        require(success, "Transfer failed");
+
+        // ? Make withdrawal from the vault
+        VaultManager.makeErc20VaultWithdrawal(
+            usdcTokenAddress,
+            msg.sender,
+            amount,
+            0
+        );
     }
 }

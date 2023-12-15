@@ -10,6 +10,8 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
     // address public s_admin;
 
+    uint32 constant MAX_VLP_ID = 100_000;
+
     function registerNewMarkets(
         uint32[] memory syntheticAssets
     ) external onlyOwner {
@@ -55,8 +57,9 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
     //         "already registered"
     //     );
 
-    //     // TODO: Get random vlpTokenId
-    //     uint32 vlpTokenId = 1122334455;
+    //     uint32 vlpTokenId = s_vlpTokenIdCount;
+    //     require(vlpTokenId < MAX_VLP_ID);
+    //     s_vlpTokenIdCount += 1;
 
     //     SpotMMRegistration memory registration = SpotMMRegistration(
     //         msg.sender,
@@ -96,8 +99,9 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
             "already registered"
         );
 
-        // TODO: Get random vlpTokenId
-        uint32 vlpTokenId = 13579;
+        uint32 vlpTokenId = s_vlpTokenIdCount + 1;
+        require(vlpTokenId < MAX_VLP_ID);
+        s_vlpTokenIdCount += 1;
 
         PerpMMRegistration memory registration = PerpMMRegistration(
             msg.sender,
@@ -144,7 +148,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
                 perpRegistration.maxVlpSupply == maxVlpSupply &&
                 perpRegistration.positionAddress == mmAddress
             ) {
-                console.log("vlpAmount", vlpAmount);
                 perpRegistration.vlpAmount = vlpAmount;
             }
         }

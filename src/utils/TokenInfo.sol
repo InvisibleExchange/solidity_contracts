@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import "../interfaces/ICLAggregator.sol";
+
 abstract contract TokenInfo {
     event NewTokenRegisteredEvent(
         address tokenAddress,
@@ -10,12 +12,15 @@ abstract contract TokenInfo {
         uint8 scaleFactor
     );
 
-    uint32 public constant ETH_ID = 54321; // todo: this is random for now
+    uint32 public constant ETH_ID = 54321; // TODO
+    uint32 constant MIN_TOKEN_ID = 100_000;
 
     mapping(uint32 => bool) public s_tokenIdIsRegistered;
     mapping(address => uint32) public s_tokenAddress2Id;
     mapping(uint32 => address) public s_tokenId2Address;
     mapping(uint32 => uint8) public s_tokenId2ScaleFactor;
+
+    mapping(address => address) public s_clAggregators; // tokenAddress => ChainLink Aggregator Address
 
     function __tokenInfo_init() internal {
         // ETH
@@ -23,6 +28,13 @@ abstract contract TokenInfo {
         s_tokenId2Address[ETH_ID] = address(0);
         s_tokenId2ScaleFactor[ETH_ID] = 18 - 8;
         s_tokenIdIsRegistered[ETH_ID] = true;
+    }
+
+    function _setClAggregator(
+        address tokenAddress,
+        address aggregatorAddress
+    ) internal {
+        s_clAggregators[tokenAddress] = aggregatorAddress;
     }
 
     //
@@ -35,8 +47,6 @@ abstract contract TokenInfo {
         uint32 tokenId,
         uint8 offchainDecimals
     ) internal {
-        // Todo: registering a token should also deploy a new vault contract for that tokendeee
-
         require(tokenAddress != address(0), "Token address Should not be 0");
         require(tokenId != 0, "Token ID Should not be 0");
 
@@ -48,6 +58,7 @@ abstract contract TokenInfo {
             s_tokenId2Address[tokenId] == address(0),
             "Token already registered"
         );
+        require(tokenId > MIN_TOKEN_ID);
 
         IERC20Metadata token = IERC20Metadata(tokenAddress);
         uint8 tokenDecimals = token.decimals();
@@ -94,10 +105,21 @@ abstract contract TokenInfo {
         return amountScaled;
     }
 
-    function getTokenPrice(address tokenAddress) public view returns (uint256) {
-        // TODO: Get the tokenPrice from somewhere like chainlink
+    function getTokenPrice(
+        address tokenAddress
+    ) public view returns (uint8, uint256) {
+        if (s_tokenAddress2Id[tokenAddress] == 55555) {
+            return (8, 10 ** 8);
+        }
 
-        return 100000000;
+        address clAggregator = s_clAggregators[tokenAddress];
+
+        uint8 decimals = ICLAggregator(clAggregator).decimals();
+        uint256 latestPrice = uint256(
+            ICLAggregator(clAggregator).latestAnswer()
+        );
+
+        return (decimals, latestPrice);
     }
 
     function getTokenAddress(uint32 tokenId) public view returns (address) {

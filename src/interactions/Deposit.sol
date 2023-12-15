@@ -6,8 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../libraries/ProgramOutputParser.sol";
 import "../core/VaultManager.sol";
 
-// Todo: instead of providing the starkKey, we could just provide the initial Ko from the off-chain state
-
 abstract contract Deposit is VaultManager {
     // make depositId indexed
     event DepositEvent(
@@ -26,9 +24,6 @@ abstract contract Deposit is VaultManager {
     event UpdatedPendingDepositsEvent(uint256 timestamp, uint64 txBatchId);
 
     mapping(uint256 => mapping(uint32 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
-
-    // Todo: figure this out
-    mapping(address => uint256) public s_address2PubKey;
 
     uint64 private s_depositCount;
 

@@ -313,14 +313,16 @@ library ProgramOutputParser {
 
         for (uint256 i = 0; i < escapeArr.length; i += 6) {
             uint256 batchedEscapeInfo = escapeArr[i];
-            uint256 escapeMessageHash = escapeArr[i + 1];
-            uint256 signature_AR = escapeArr[i + 2];
-            uint256 signature_AS = escapeArr[i + 3];
-            uint256 signature_BR = escapeArr[i + 4];
-            uint256 signature_BS = escapeArr[i + 5];
+            address recipient = address(uint160(escapeArr[i + 1]));
+            uint256 escapeMessageHash = escapeArr[i + 2];
+            uint256 signature_AR = escapeArr[i + 3];
+            uint256 signature_AS = escapeArr[i + 4];
+            uint256 signature_BR = escapeArr[i + 5];
+            uint256 signature_BS = escapeArr[i + 6];
 
-            escapes[i / 6] = PositionEscapeOutput(
+            escapes[i / 7] = PositionEscapeOutput(
                 batchedEscapeInfo,
+                recipient,
                 escapeMessageHash,
                 signature_AR,
                 signature_AS,
@@ -499,6 +501,7 @@ library ProgramOutputParser {
             bool is_valid,
             uint32 escape_id,
             uint64 escape_value,
+            address recipient,
             uint256 escape_message_hash,
             uint256 signature_a_r,
             uint256 signature_a_s,
@@ -512,6 +515,7 @@ library ProgramOutputParser {
         escape_id = uint32(escapeOutput.batched_escape_info >> 8);
         escape_value = uint64(escapeOutput.batched_escape_info >> 40);
 
+        recipient = escapeOutput.recipient;
         escape_message_hash = escapeOutput.escape_message_hash;
         signature_a_r = escapeOutput.signature_a_r;
         signature_a_s = escapeOutput.signature_a_s;

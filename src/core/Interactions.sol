@@ -8,9 +8,9 @@ import "../MMRegistry/MMRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 abstract contract Interactions is
+    ReentrancyGuardUpgradeable,
     Deposit,
-    Withdrawal,
-    ReentrancyGuardUpgradeable
+    Withdrawal
 {
     // Deposits
     function makeDeposit(

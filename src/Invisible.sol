@@ -15,10 +15,12 @@ import "./MMRegistry/MMRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 contract Invisible is
     Initializable,
     OwnableUpgradeable,
+    ReentrancyGuardUpgradeable,
     UUPSUpgradeable,
     VaultManager,
     Interactions,
@@ -31,7 +33,6 @@ contract Invisible is
 
     mapping(uint64 => bool) public s_accumulatedHashesRelayed; // txBatchId => wasRelayed
 
-    address s_admin;
     address s_L1MessageRelay; // The contract that passes messages from the L1 contract
     address s_escapeVerifier; // The contract that verifies the escape proofs
 
@@ -64,8 +65,7 @@ contract Invisible is
     /// @param programOutput the output of the cairo program
     function updateStateAfterTxBatch(
         uint256[] calldata programOutput
-    ) external {
-        // Todo: only privileged address can call this function (or can anyone call it?)
+    ) external onlyOwner nonReentrant {
         (
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
@@ -90,7 +90,7 @@ contract Invisible is
         );
 
         updatePendingDeposits(deposits, s_txBatchId);
-        storeNewBatchWithdrawalOutputs(withdrawals, s_txBatchId);
+        processBatchWithdrawalOutputs(withdrawals, s_txBatchId);
 
         updatePendingRegistrations(registrationsArr);
         updatePendingAddLiquidityUpdates(addLiquidityArr);
@@ -110,7 +110,7 @@ contract Invisible is
     function relayAccumulatedHashes(
         uint64 txBatchId,
         AccumulatedHashesOutput[] memory accumulatedHashOutputs
-    ) external {
+    ) internal {
         require(
             !s_accumulatedHashesRelayed[txBatchId],
             "Hashes Already Relayed"

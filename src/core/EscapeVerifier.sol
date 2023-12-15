@@ -7,7 +7,6 @@ import "../libraries/ElipticCurve.sol";
 
 import "../interfaces/IVaultManager.sol";
 import "../interfaces/IStructHasher.sol";
-import "../interfaces/IPedersenHash.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -50,6 +49,7 @@ contract EscapeVerifier is
         uint64 closePrice,
         Position position_a,
         OpenOrderFields openOrderFields_b,
+        address recipient,
         uint256[2] signature_a,
         uint256[2] signature_b
     );
@@ -58,6 +58,7 @@ contract EscapeVerifier is
         uint64 closePrice,
         Position position_a,
         Position position_b,
+        address recipient,
         uint256[2] signature_a,
         uint256[2] signature_b
     );
@@ -75,16 +76,14 @@ contract EscapeVerifier is
     mapping(uint32 => mapping(uint32 => uint64)) public s_escapeAmounts; // escapeId => tokenId => amount
     mapping(address => mapping(uint32 => bool)) public s_successfulEscapes; //   owner => escapeId => isValid
 
-    // TODO: This should be set in an initializer not the code itself
-    address constant ELIPTIC_CURVE_ADDRESS = address(0x00);
-
     uint32 constant EXCHNAGE_VERIFICATION_TIME = 7 days;
     uint32 constant COLLATERAL_TOKEN = 55555;
 
-    uint256 constant alpha = 1;
-    uint256 constant beta =
-        3141592653589793238462643383279502884197169399375105820974944592307816406665;
     uint256 constant P = 2 ** 251 + 17 * 2 ** 192 + 1;
+
+    // uint256 constant alpha = 1;
+    // uint256 constant beta =
+    //     3141592653589793238462643383279502884197169399375105820974944592307816406665;
 
     uint256 public version;
     address invisibleAddr;
@@ -169,8 +168,7 @@ contract EscapeVerifier is
     // * Order Tabs
     function startOrderTabEscape(
         OrderTab calldata orderTab,
-        uint256[2] calldata signature,
-        uint32 _escapeId // TODO: ONLY FOR TESTING
+        uint256[2] calldata signature
     ) external {
         require(
             IVaultManager(invisibleAddr).isTokenRegistered(orderTab.base_token),
@@ -196,9 +194,8 @@ contract EscapeVerifier is
 
         uint32 timestamp = uint32(block.timestamp);
 
-        // uint32 escapeId = s_escapeCount;
-        // s_escapeCount++;
-        uint32 escapeId = _escapeId;
+        uint32 escapeId = s_escapeCount;
+        s_escapeCount++;
 
         uint256 tabHash = IStructHasher(structHasher).hashOrderTab(orderTab);
         uint256 escapeHash = IStructHasher(structHasher).hash2(
@@ -228,6 +225,7 @@ contract EscapeVerifier is
         Position calldata position_a,
         uint64 closePrice,
         Position calldata position_b,
+        address recipient,
         uint256[2] calldata signature_a,
         uint256[2] calldata signature_b
     ) external {
@@ -243,12 +241,14 @@ contract EscapeVerifier is
             escapeId,
             position_a,
             closePrice,
-            positionHash
+            positionHash,
+            recipient
         );
 
         escapePositionInner(
             position_a,
             closePrice,
+            recipient,
             escapeId,
             escapeHash,
             signature_a,
@@ -260,6 +260,7 @@ contract EscapeVerifier is
             closePrice,
             position_a,
             position_b,
+            recipient,
             signature_a,
             signature_b
         );
@@ -269,15 +270,14 @@ contract EscapeVerifier is
         Position calldata position_a,
         uint64 closePrice,
         OpenOrderFields calldata openOrderFields_b,
+        address recipient,
         uint256[2] calldata signature_a,
-        uint256[2] calldata signature_b,
-        uint32 _escapeId // TODO: ONLY FOR TESTING
+        uint256[2] calldata signature_b
     ) external {
         //
 
-        // uint32 escapeId = s_escapeCount;
-        // s_escapeCount++;
-        uint32 escapeId = _escapeId;
+        uint32 escapeId = s_escapeCount;
+        s_escapeCount++;
 
         _verifyOrderFields(openOrderFields_b);
 
@@ -288,12 +288,14 @@ contract EscapeVerifier is
             escapeId,
             position_a,
             closePrice,
-            fields_hash
+            fields_hash,
+            recipient
         );
 
         escapePositionInner(
             position_a,
             closePrice,
+            recipient,
             escapeId,
             escapeHash,
             signature_a,
@@ -305,6 +307,7 @@ contract EscapeVerifier is
             closePrice,
             position_a,
             openOrderFields_b,
+            recipient,
             signature_a,
             signature_b
         );
@@ -313,6 +316,7 @@ contract EscapeVerifier is
     function escapePositionInner(
         Position calldata position_a,
         uint64 closePrice,
+        address recipient,
         uint32 escapeId,
         uint256 escapeHash,
         uint256[2] calldata signature_a,
@@ -331,14 +335,13 @@ contract EscapeVerifier is
 
         uint32 timestamp = uint32(block.timestamp);
 
-        // TODO: We shouldnt use msg.sender here but rather a recipient value so that either party can initiate the escape
         s_forcedEscapes[escapeId] = ForcedEscape(
             escapeId,
             timestamp,
             escapeHash,
             signature_a,
             signature_b,
-            msg.sender
+            recipient
         );
     }
 
@@ -346,16 +349,18 @@ contract EscapeVerifier is
         uint32 escapeId,
         Position calldata position_a,
         uint64 closePrice,
-        uint256 hashInp4
+        uint256 hashInp4,
+        address recipient
     ) public view returns (uint256) {
-        // & H = (escape_id, position_a.hash, close_price, open_order_fields_b.hash)
+        // & H = (escape_id, position_a.hash, close_price, open_order_fields_b.hash, recipient)
 
-        uint256[] memory inputArr = new uint256[](4);
+        uint256[] memory inputArr = new uint256[](5);
         inputArr[0] = escapeId;
         uint256 posHash = IStructHasher(structHasher).hashPosition(position_a);
         inputArr[1] = posHash;
         inputArr[2] = closePrice;
         inputArr[3] = hashInp4;
+        inputArr[4] = uint256(uint160(recipient));
 
         uint256 positionEscapeHash = IStructHasher(structHasher).hashArr(
             inputArr
@@ -465,6 +470,7 @@ contract EscapeVerifier is
                 bool is_valid,
                 uint32 escape_id,
                 uint64 escape_value,
+                address recipient,
                 uint256 escape_message_hash,
                 uint256 signature_a_r,
                 uint256 signature_a_s,
@@ -479,9 +485,10 @@ contract EscapeVerifier is
             if (escape.signature_a[1] != signature_a_s) continue;
             if (escape.signature_b[0] != signature_b_r) continue;
             if (escape.signature_b[1] != signature_b_s) continue;
+            if (escape.caller != recipient) continue;
             if (is_valid) {
                 s_escapeAmounts[escape_id][COLLATERAL_TOKEN] += escape_value;
-                s_successfulEscapes[escape.caller][escape_id] = true;
+                s_successfulEscapes[recipient][escape_id] = true;
             }
 
             delete s_forcedEscapes[escape_id];
@@ -533,107 +540,108 @@ contract EscapeVerifier is
 
     // * ====================================================================
 
-    function forceEscapeAfterTimeout(
-        Note[] calldata notes,
-        uint256[2][] calldata noteAddresses,
-        OrderTab[] calldata orderTabs,
-        uint256[2][] calldata orderTabAddresses,
-        Position[] calldata positions,
-        uint256[2][] calldata positionAddresses
-    ) external {
-        // verify that all the notes/tabs/positions exist in the state and verify the signatures
+    // // TODO: Make a proof with circom?
+    // function forceEscapeAfterTimeout(
+    //     Note[] calldata notes,
+    //     uint256[2][] calldata noteAddresses,
+    //     OrderTab[] calldata orderTabs,
+    //     uint256[2][] calldata orderTabAddresses,
+    //     Position[] calldata positions,
+    //     uint256[2][] calldata positionAddresses
+    // ) external nonReentrant {
+    //     // verify that all the notes/tabs/positions exist in the state and verify the signatures
 
-        uint32 escapeId = s_escapeCount;
-        s_escapeCount++;
+    //     uint32 escapeId = s_escapeCount;
+    //     s_escapeCount++;
 
-        uint256[] memory pubKeySum = new uint256[](2);
-        pubKeySum[0] = 0;
-        pubKeySum[1] = 0;
+    //     uint256[] memory pubKeySum = new uint256[](2);
+    //     pubKeySum[0] = 0;
+    //     pubKeySum[1] = 0;
 
-        for (uint i = 0; i < notes.length; i++) {
-            Note calldata note = notes[i];
-            uint256[2] calldata addr = noteAddresses[i];
+    //     for (uint i = 0; i < notes.length; i++) {
+    //         Note calldata note = notes[i];
+    //         uint256[2] calldata addr = noteAddresses[i];
 
-            // TODO: Verify the merkle proof!
+    //         // TODO: Verify the merkle proof!
 
-            require(note.addressX == addr[0], "Invalid address");
-            require(
-                EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
-                "Invalid address"
-            );
+    //         require(note.addressX == addr[0], "Invalid address");
+    //         require(
+    //             EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
+    //             "Invalid address"
+    //         );
 
-            (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
-                pubKeySum[0],
-                pubKeySum[1],
-                addr[0],
-                addr[1],
-                alpha,
-                P
-            );
-            pubKeySum[0] = pkSumX;
-            pubKeySum[1] = pkSumY;
+    //         (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
+    //             pubKeySum[0],
+    //             pubKeySum[1],
+    //             addr[0],
+    //             addr[1],
+    //             alpha,
+    //             P
+    //         );
+    //         pubKeySum[0] = pkSumX;
+    //         pubKeySum[1] = pkSumY;
 
-            s_escapeAmounts[escapeId][note.token] += note.amount;
-        }
+    //         s_escapeAmounts[escapeId][note.token] += note.amount;
+    //     }
 
-        for (uint i = 0; i < orderTabs.length; i++) {
-            OrderTab calldata orderTab = orderTabs[i];
-            uint256[2] calldata addr = orderTabAddresses[i];
+    //     for (uint i = 0; i < orderTabs.length; i++) {
+    //         OrderTab calldata orderTab = orderTabs[i];
+    //         uint256[2] calldata addr = orderTabAddresses[i];
 
-            // TODO: Verify the merkle proof!
+    //         // TODO: Verify the merkle proof!
 
-            require(orderTab.pub_key == addr[0], "Invalid address");
-            require(
-                EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
-                "Invalid address"
-            );
+    //         require(orderTab.pub_key == addr[0], "Invalid address");
+    //         require(
+    //             EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
+    //             "Invalid address"
+    //         );
 
-            (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
-                pubKeySum[0],
-                pubKeySum[1],
-                addr[0],
-                addr[1],
-                alpha,
-                P
-            );
-            pubKeySum[0] = pkSumX;
-            pubKeySum[1] = pkSumY;
+    //         (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
+    //             pubKeySum[0],
+    //             pubKeySum[1],
+    //             addr[0],
+    //             addr[1],
+    //             alpha,
+    //             P
+    //         );
+    //         pubKeySum[0] = pkSumX;
+    //         pubKeySum[1] = pkSumY;
 
-            s_escapeAmounts[escapeId][orderTab.base_token] += orderTab
-                .base_amount;
-            s_escapeAmounts[escapeId][orderTab.quote_token] += orderTab
-                .quote_amount;
-        }
+    //         s_escapeAmounts[escapeId][orderTab.base_token] += orderTab
+    //             .base_amount;
+    //         s_escapeAmounts[escapeId][orderTab.quote_token] += orderTab
+    //             .quote_amount;
+    //     }
 
-        for (uint i = 0; i < positions.length; i++) {
-            Position calldata position = positions[i];
-            uint256[2] calldata addr = orderTabAddresses[i];
+    //     for (uint i = 0; i < positions.length; i++) {
+    //         Position calldata position = positions[i];
+    //         uint256[2] calldata addr = positionAddresses[i];
 
-            // TODO: Verify the merkle proof!
+    //         // TODO: Verify the merkle proof!
 
-            require(position.position_address == addr[0], "Invalid address");
-            require(
-                EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
-                "Invalid address"
-            );
+    //         require(position.position_address == addr[0], "Invalid address");
+    //         require(
+    //             EllipticCurve.isOnCurve(addr[0], addr[1], alpha, beta, P),
+    //             "Invalid address"
+    //         );
 
-            (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
-                pubKeySum[0],
-                pubKeySum[1],
-                addr[0],
-                addr[1],
-                alpha,
-                P
-            );
-            pubKeySum[0] = pkSumX;
-            pubKeySum[1] = pkSumY;
+    //         (uint256 pkSumX, uint256 pkSumY) = EllipticCurve.ecAdd(
+    //             pubKeySum[0],
+    //             pubKeySum[1],
+    //             addr[0],
+    //             addr[1],
+    //             alpha,
+    //             P
+    //         );
+    //         pubKeySum[0] = pkSumX;
+    //         pubKeySum[1] = pkSumY;
 
-            s_escapeAmounts[escapeId][position.synthetic_token] += position
-                .position_size;
-        }
+    //         s_escapeAmounts[escapeId][position.synthetic_token] += position
+    //             .position_size;
+    //     }
 
-        // TODO: Verify the signature
+    //     // TODO: Verify the signature
 
-        s_successfulEscapes[msg.sender][escapeId] = true;
-    }
+    //     s_successfulEscapes[msg.sender][escapeId] = true;
+    // }
 }

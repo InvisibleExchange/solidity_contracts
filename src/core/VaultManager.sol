@@ -4,11 +4,17 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import "../utils/TokenInfo.sol";
 import "../utils/FlashLender.sol";
 
-abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
+abstract contract VaultManager is
+    FlashLender,
+    TokenInfo,
+    OwnableUpgradeable,
+    ReentrancyGuardUpgradeable
+{
     event VaultRegisteredEvent(address tokenAddress);
 
     address public escapeVerifier;
@@ -32,6 +38,15 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         escapeVerifier = newVerirfier;
     }
 
+    function setClAggregators(
+        address[] calldata tokenAddress,
+        address[] calldata aggregatorAddresses
+    ) external onlyOwner {
+        for (uint256 i = 0; i < tokenAddress.length; i++) {
+            _setClAggregator(tokenAddress[i], aggregatorAddresses[i]);
+        }
+    }
+
     // ---------------------------------------------------------
 
     function registerToken(
@@ -51,8 +66,7 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         emit VaultRegisteredEvent(tokenAddress);
     }
 
-    // TODO : THIS CONTRACT SHOULD BE THE ONLY ONE TO INTERACT WITH THE FUNDS
-    // TODO: ALL THESE FUNCTIONS SHOULD BE NON-REENTRANT
+
 
     function isVaultRegistered(
         address tokenAddress
@@ -81,12 +95,12 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         address recipient,
         uint256 totalAmount,
         uint256 gasFee
-    ) internal {
-        require(s_vaults[tokenAddress], "Vault is not registered");
+    ) internal returns (bool) {
+        if (!s_vaults[tokenAddress]) return true;
 
         // ? Get the withdrawable amount pending for the recipient
         uint256 withdrawalAmount = totalAmount - gasFee;
-        require(withdrawalAmount > 0, "No pending withdrawals");
+        if (withdrawalAmount <= 0) return true;
 
         IERC20 token = IERC20(tokenAddress);
 
@@ -97,7 +111,7 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         }
 
         bool success2 = token.transfer(recipient, withdrawalAmount);
-        require(success2, "Transfer failed");
+        return success2;
     }
 
     // ---------------------------------------------------------
@@ -106,10 +120,10 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         address payable recipient,
         uint256 totalAmount,
         uint256 gasFee
-    ) internal {
+    ) internal returns (bool) {
         // ? Get the withdrawable amount pending for the recipient
         uint256 withdrawalAmount = totalAmount - gasFee;
-        require(withdrawalAmount > 0, "No pending withdrawals");
+        if (withdrawalAmount <= 0) return true;
 
         // ? Transfer the fee to the gasFeeCollector
         if (gasFee > 0) {
@@ -119,7 +133,7 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
 
         // ? Transfer the rest to the recipient
         (bool sent2, ) = recipient.call{value: withdrawalAmount}("");
-        require(sent2, "Failed to send Ether");
+        return sent2;
     }
 
     // ---------------------------------------------------------
@@ -127,7 +141,7 @@ abstract contract VaultManager is FlashLender, TokenInfo, OwnableUpgradeable {
         address tokenAddress,
         address payable recipient,
         uint256 escapeAmount
-    ) external {
+    ) external nonReentrant {
         require(s_vaults[tokenAddress], "Vault is not registered");
         require(
             escapeVerifier == msg.sender,
