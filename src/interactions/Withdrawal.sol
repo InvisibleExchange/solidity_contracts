@@ -1,32 +1,33 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "../libraries/ProgramOutputParser.sol";
 import "../core/VaultManager.sol";
+import "../storage/InteractionsStorage.sol";
 
-abstract contract Withdrawal is VaultManager {
-    event WithdrawalEvent(
-        address withdrawer,
-        address tokenAddress,
-        uint256 withdrawalAmount,
-        uint256 timestamp
-    );
-    event StoredNewWithdrawalsEvent(uint256 timestamp, uint64 txBatchId);
-
-    mapping(address => mapping(address => uint256)) public s_failedWithdrawals; // recipient => tokenAddress => amount
-
+abstract contract Withdrawal is VaultManager, InteractionsStorage {
     // * Withdrawals --------------------------------------------------------------------
+
+    // make depositId indexed
+    event TestEvent(
+        uint32 tokenId,
+        uint64 amount,
+        uint256 gasFee,
+        address recipient
+    );
+
+    event TestAggEvent(address aggregator);
 
     function processBatchWithdrawalOutputs(
         WithdrawalTransactionOutput[] memory withdrawalOutputs,
         uint64 txBatchId
     ) internal {
-        // ? the deposits should be grouped by token to make it easier to process
+        // ? the withdrawals should be grouped by token to make it easier to process
 
         // ? cache the lates token info (token, address, gas fee, etc.) after
-        // ? each withdrawal to save on gas fees. (since the deposits are grouped by token)
+        // ? each withdrawal to save on gas fees. (since the withdrawals are grouped by token)
         uint32 currentToken;
         address currentTokenAddress;
         uint256 gasFee;
@@ -61,6 +62,8 @@ abstract contract Withdrawal is VaultManager {
                     gasFee = gasFeeForERCWithdrawal(currentTokenAddress);
                 }
             }
+
+            emit TestEvent(tokenId, amount, gasFee, recipient);
 
             uint256 amountScaled = scaleUp(amount, tokenId);
 
@@ -146,24 +149,16 @@ abstract contract Withdrawal is VaultManager {
         );
         (uint8 ethPriceDecimals, uint256 ethPrice) = getTokenPrice(address(0));
 
-        int8 ethDecimals = 18;
-        int8 tokenDecimals = int8(IERC20Metadata(tokenAddress).decimals());
+        uint8 ethDecimals = 18;
+        uint8 tokenDecimals = uint8(IERC20Metadata(tokenAddress).decimals());
 
-        int8 decimalConversion = tokenDecimals -
-            ethDecimals +
-            int8(tokenPriceDecimals) -
-            int8(ethPriceDecimals);
+        uint8 decimalConversion = ethDecimals +
+            ethPriceDecimals -
+            tokenDecimals -
+            tokenPriceDecimals;
 
-        uint256 ercGasFee;
-        if (decimalConversion < 0) {
-            ercGasFee =
-                (gasFee * ethPrice) /
-                (tokenPrice * 10 ** uint256(uint8(-decimalConversion)));
-        } else if (decimalConversion > 0) {
-            ercGasFee =
-                (gasFee * ethPrice * 10 ** uint256(uint8(decimalConversion))) /
-                tokenPrice;
-        }
+        uint256 ercGasFee = (gasFee * ethPrice) /
+            (tokenPrice * 10 ** decimalConversion);
 
         return ercGasFee;
     }

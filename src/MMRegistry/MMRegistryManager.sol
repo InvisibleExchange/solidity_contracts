@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "../libraries/ProgramOutputParser.sol";
-
-import "./MMRegistryStorage.sol";
+import "./MMRegistryUpdates.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
+abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     // address public s_admin;
 
     uint32 constant MAX_VLP_ID = 100_000;
@@ -122,35 +121,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryStorage {
             maxVlpSupply,
             vlpTokenId
         );
-    }
-
-    // * UPDATE PENDING * //
-    function updatePendingRegistrations(
-        OnChainMMActionOutput[] memory registrations
-    ) internal {
-        for (uint256 i = 0; i < registrations.length; i++) {
-            OnChainMMActionOutput memory registration = registrations[i];
-
-            (
-                uint32 vlpToken,
-                uint64 maxVlpSupply,
-                uint64 vlpAmount,
-                uint256 mmAddress
-            ) = ProgramOutputParser.uncompressRegistrationOutput(registration);
-
-            // ? isPerp
-            PerpMMRegistration storage perpRegistration = s_perpRegistrations[
-                mmAddress
-            ];
-
-            if (
-                perpRegistration.vlpTokenId == vlpToken &&
-                perpRegistration.maxVlpSupply == maxVlpSupply &&
-                perpRegistration.positionAddress == mmAddress
-            ) {
-                perpRegistration.vlpAmount = vlpAmount;
-            }
-        }
     }
 
     // * VIEW FUNCTIONS * //

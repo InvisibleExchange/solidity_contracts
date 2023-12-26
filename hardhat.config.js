@@ -2,10 +2,14 @@ require("@nomicfoundation/hardhat-toolbox");
 
 require("@openzeppelin/hardhat-upgrades");
 
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: path.join(__dirname, ".env") });
+
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.22",
     settings: {
       outputSelection: {
         "*": {
@@ -16,10 +20,11 @@ module.exports = {
         enabled: true,
         runs: 1000,
       },
+      viaIR: true,
     },
 
     overrides: {
-      "contracts/**/*.sol": {
+      "src/**/*.sol": {
         viaIR: true,
       },
     },
@@ -29,5 +34,15 @@ module.exports = {
     sources: "./src",
     tests: "./test/hardhat",
     artifacts: "./artifacts",
+  },
+  networks: {
+    sepolia: {
+      url: `https://ethereum-sepolia.publicnode.com`,
+      accounts: [process.env.PRIVATE_KEY],
+    },
+  },
+
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY,
   },
 };

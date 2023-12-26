@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "../interfaces/IPedersenHash.sol";
 
-import "forge-std/console.sol";
 
 contract StructHasher {
-    address constant PEDERSEN_HASH_ADDRESS =
-        address(0x1a1eB562D2caB99959352E40a03B52C00ba7a5b1);
+    uint256 constant P = 2 ** 251 + 17 * 2 ** 192 + 1;
 
-    function hashNote(Note calldata note) public view returns (uint256) {
+    function hashNote(Note calldata note) public pure returns (uint256) {
         //
 
         if (note.amount == 0) {
             return 0;
         }
 
-        uint256 commitment = hash2(note.amount, note.blinding);
-
-        uint256[] memory inputArr = new uint256[](3);
+        // & H = H({address, token, amount, blinding})
+        uint256[] memory inputArr = new uint256[](4);
         inputArr[0] = note.addressX;
         inputArr[1] = note.token;
-        inputArr[2] = commitment;
+        inputArr[2] = note.amount;
+        inputArr[3] = note.blinding;
         uint256 noteHash = hashArr(inputArr);
 
         return noteHash;
@@ -29,26 +27,22 @@ contract StructHasher {
 
     function hashPosition(
         Position memory position
-    ) external view returns (uint256) {
+    ) external pure returns (uint256) {
         //
 
-        // & hash = H({allow_partial_liquidations, synthetic_token, position_address,  vlp_token * 2**32 + max_vlp_supply})
-        uint256[] memory headerArr = new uint256[](4);
-        headerArr[0] = position.allow_partial_liquidations ? 1 : 0;
-        headerArr[1] = uint256(position.synthetic_token);
-        headerArr[2] = uint256(position.position_address);
-        headerArr[3] = position.vlp_token * 2 ** 32 + position.max_vlp_supply;
-        uint256 headerHash = hashArr(headerArr);
-
-        // & hash = H({header_hash, order_side, position_size, entry_price, liquidation_price, current_funding_idx, vlp_supply})
-        uint256[] memory positionArr = new uint256[](7);
-        positionArr[0] = headerHash;
-        positionArr[1] = position.order_side ? 1 : 0;
-        positionArr[2] = position.position_size;
-        positionArr[3] = position.entry_price;
-        positionArr[4] = position.liquidation_price;
-        positionArr[5] = position.last_funding_idx;
-        positionArr[6] = position.vlp_supply;
+        // & hash = H({allow_partial_liquidations, synthetic_token, position_address, vlp_token, max_vlp_supply, order_side, position_size, entry_price, liquidation_price, last_funding_idx, vlp_supply})
+        uint256[] memory positionArr = new uint256[](4);
+        positionArr[0] = position.allow_partial_liquidations ? 1 : 0;
+        positionArr[1] = uint256(position.synthetic_token);
+        positionArr[2] = uint256(position.position_address);
+        positionArr[3] = position.vlp_token;
+        positionArr[3] = position.max_vlp_supply;
+        positionArr[4] = position.order_side ? 1 : 0;
+        positionArr[5] = position.position_size;
+        positionArr[6] = position.entry_price;
+        positionArr[7] = position.liquidation_price;
+        positionArr[8] = position.last_funding_idx;
+        positionArr[9] = position.vlp_supply;
         uint256 positionHash = hashArr(positionArr);
 
         return positionHash;
@@ -56,65 +50,27 @@ contract StructHasher {
 
     function hashOrderTab(
         OrderTab memory orderTab
-    ) external view returns (uint256) {
+    ) external pure returns (uint256) {
         //
 
-        // & header_hash = H({ is_smart_contract, base_token, quote_token, vlp_token, max_vlp_supply, pub_key})
-
-        uint256[] memory headerArr = new uint256[](6);
-        headerArr[0] = orderTab.is_smart_contract ? 1 : 0;
-        headerArr[1] = orderTab.base_token;
-        headerArr[2] = orderTab.quote_token;
-        headerArr[3] = orderTab.vlp_token;
-        headerArr[4] = orderTab.max_vlp_supply;
-        headerArr[5] = orderTab.pub_key;
+        // & H({base_token, quote_token, pub_key, base_amount, quote_amount})
+        uint256[] memory headerArr = new uint256[](5);
+        headerArr[0] = orderTab.base_token;
+        headerArr[1] = orderTab.quote_token;
+        headerArr[2] = orderTab.pub_key;
+        headerArr[3] = orderTab.base_amount;
+        headerArr[4] = orderTab.quote_amount;
         uint256 headerHash = hashArr(headerArr);
 
-        uint256 baseCommitment = hash2(
-            orderTab.base_amount,
-            orderTab.base_blinding
-        );
-
-        uint256 quoteCommitment = hash2(
-            orderTab.quote_amount,
-            orderTab.quote_blinding
-        );
-
-        if (orderTab.vlp_supply <= 0) {
-            // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
-            uint256[] memory orderTabArr = new uint256[](4);
-            orderTabArr[0] = headerHash;
-            orderTabArr[1] = baseCommitment;
-            orderTabArr[2] = quoteCommitment;
-            orderTabArr[3] = 0;
-            uint256 orderTabHash = hashArr(orderTabArr);
-
-            return orderTabHash;
-        } else {
-            uint256 vlpCommitment = hash2(
-                orderTab.vlp_supply,
-                (orderTab.base_blinding % 2 ** 128) +
-                    (orderTab.quote_blinding % 2 ** 128)
-            );
-
-            // & H({header_hash, base_commitment, quote_commitment, vlp_supply_commitment})
-            uint256[] memory orderTabArr = new uint256[](4);
-            orderTabArr[0] = headerHash;
-            orderTabArr[1] = baseCommitment;
-            orderTabArr[2] = quoteCommitment;
-            orderTabArr[3] = vlpCommitment;
-            uint256 orderTabHash = hashArr(orderTabArr);
-
-            return orderTabHash;
-        }
+        return headerHash;
     }
 
     function hashOpenOrderFields(
         OpenOrderFields calldata openOrderFields
-    ) external view returns (uint256) {
+    ) external pure returns (uint256) {
         //
-        // & H = (note_hashes, refund_note_hash, initial_margin, collateral_token, position_address, allow_partial_liquidations)
 
+        // & H = (note_hashes, refund_note_hash, initial_margin, collateral_token, position_address, allow_partial_liquidations)
         uint256[] memory inputArr = new uint256[](
             openOrderFields.notes_in.length + 5
         );
@@ -140,26 +96,20 @@ contract StructHasher {
         return fieldsHash;
     }
 
-    function hash2(uint256 a, uint256 b) public view returns (uint256 hash_) {
-        hash_ = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked([a, b])
-        )[0];
+    function hash2(uint256 a, uint256 b) public pure returns (uint256 hash_) {
+        bytes memory data = abi.encodePacked(a, b);
+
+        bytes32 h = keccak256(data);
+
+        return uint256(h) % P;
     }
 
-    function hashArr(uint256[] memory arr) public view returns (uint256) {
-        uint256 hash_ = 0;
-        for (uint256 i = 0; i < arr.length; i++) {
-            hash_ = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-                abi.encodePacked([hash_, arr[i]])
-            )[0];
-        }
+    function hashArr(uint256[] memory arr) public pure returns (uint256) {
+        bytes memory data = abi.encodePacked(arr);
 
-        uint256[2] memory hashInp = [hash_, arr.length];
-        hash_ = IPedersenHash(PEDERSEN_HASH_ADDRESS).hash(
-            abi.encodePacked(hashInp)
-        )[0];
+        bytes32 h = keccak256(data);
 
-        return hash_;
+        return uint256(h) % P;
     }
 }
 
@@ -194,18 +144,14 @@ struct Position {
 struct OrderTab {
     uint64 tab_idx;
     //
-    bool is_smart_contract;
     uint32 base_token;
     uint32 quote_token;
     uint256 base_blinding;
     uint256 quote_blinding;
-    uint32 vlp_token;
-    uint64 max_vlp_supply;
     uint256 pub_key;
     //
     uint64 base_amount;
     uint64 quote_amount;
-    uint64 vlp_supply;
 }
 
 //

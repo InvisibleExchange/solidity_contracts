@@ -1,27 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+import "../storage/VaultManagerStorage.sol";
 import "../interfaces/ICLAggregator.sol";
 
-abstract contract TokenInfo {
-    event NewTokenRegisteredEvent(
-        address tokenAddress,
-        uint32 tokenId,
-        uint8 scaleFactor
-    );
-
-    uint32 public constant ETH_ID = 54321; // TODO
-    uint32 constant MIN_TOKEN_ID = 100_000;
-
-    mapping(uint32 => bool) public s_tokenIdIsRegistered;
-    mapping(address => uint32) public s_tokenAddress2Id;
-    mapping(uint32 => address) public s_tokenId2Address;
-    mapping(uint32 => uint8) public s_tokenId2ScaleFactor;
-
-    mapping(address => address) public s_clAggregators; // tokenAddress => ChainLink Aggregator Address
-
+abstract contract TokenInfo is VaultManagerStorage {
     function __tokenInfo_init() internal {
         // ETH
         s_tokenAddress2Id[address(0)] = ETH_ID;
@@ -108,16 +93,22 @@ abstract contract TokenInfo {
     function getTokenPrice(
         address tokenAddress
     ) public view returns (uint8, uint256) {
-        if (s_tokenAddress2Id[tokenAddress] == 55555) {
-            return (8, 10 ** 8);
-        }
+        require(s_tokenAddress2Id[tokenAddress] != 0, "Token not registered");
 
         address clAggregator = s_clAggregators[tokenAddress];
+
+        if (clAggregator == address(0)) {
+            // ? This is a stablecoin
+            return (8, 10 ** 8);
+        }
 
         uint8 decimals = ICLAggregator(clAggregator).decimals();
         uint256 latestPrice = uint256(
             ICLAggregator(clAggregator).latestAnswer()
         );
+
+        // uint8 decimals = 8;
+        // uint256 latestPrice = 10 ** 8;
 
         return (decimals, latestPrice);
     }

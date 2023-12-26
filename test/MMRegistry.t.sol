@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.22;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
@@ -10,7 +10,7 @@ import "src/TestToken.sol";
 import "src/core/Interactions.sol";
 import "src/Invisible.sol";
 
-import "../src/MMRegistry/MMRegistryStorage.sol";
+import "../src/storage/MMRegistryStorage.sol";
 
 //
 
@@ -54,19 +54,19 @@ contract MMRegistryTest is Test {
     function testRegisterToken() public {
         address tokenAddress = address(testUsdc);
 
-        uint32 tokenId = 55555;
+        uint32 tokenId = 2413654107;
         invisibleL1.registerToken(tokenAddress, tokenId, 6);
 
         uint32[] memory syntheticTokens = new uint32[](2);
-        syntheticTokens[0] = 12345;
-        syntheticTokens[1] = 54321;
+        syntheticTokens[0] = 3592681469;
+        syntheticTokens[1] = 453755560;
         invisibleL1.registerNewMarkets(syntheticTokens);
     }
 
     function testRegisterMM() public {
         uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
         uint64 maxVlpSupply = 1000000000000;
-        uint32 syntheticAsset = 12345;
+        uint32 syntheticAsset = 3592681469;
 
         invisibleL1.approveMMRegistration(owner, mmAddress);
 
@@ -87,7 +87,7 @@ contract MMRegistryTest is Test {
         vm.startPrank(depositor);
 
         uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
-        uint32 syntheticAsset = 12345;
+        uint32 syntheticAsset = 3592681469;
 
         vm.recordLogs();
         testUsdc.approve(address(invisibleL1), 2000 * 10 ** 18);
@@ -113,7 +113,7 @@ contract MMRegistryTest is Test {
         vm.startPrank(address(111111111111111111111111111111111));
 
         uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
-        uint32 syntheticAsset = 12345;
+        uint32 syntheticAsset = 3592681469;
 
         testUsdc.approve(address(invisibleL1), 4000 * 10 ** 18);
         invisibleL1.provideLiquidity(
@@ -134,7 +134,7 @@ contract MMRegistryTest is Test {
         vm.startPrank(depositor);
 
         uint256 mmAddress = 2555939808869746381652107679103753944317105711864612294672051588088957237575;
-        uint32 syntheticAsset = 12345;
+        uint32 syntheticAsset = 3592681469;
 
         vm.recordLogs();
         invisibleL1.removeLiquidity(syntheticAsset, mmAddress);
@@ -291,13 +291,13 @@ function getProgramOutput() pure returns (uint256[] memory res) {
         597606316000438910976,
         2923047876152202897812111479749281210805151334400,
         4839524406068408503119694702759214384341319683,
-        12345,
-        54321,
-        55555,
-        66666,
-        12345,
-        54321,
-        66666,
+        3592681469,
+        453755560,
+        2413654107,
+        277158171,
+        3592681469,
+        453755560,
+        277158171,
         8,
         8,
         6,

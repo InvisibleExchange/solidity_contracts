@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "./interfaces/IPedersenHash.sol";
 import "./interfaces/IEscapeVerifier.sol";
@@ -10,7 +10,7 @@ import "./core/VaultManager.sol";
 import "./core/Interactions.sol";
 import "./core/EscapeVerifier.sol";
 
-import "./MMRegistry/MMRegistry.sol";
+import "./core/MMRegistry.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";

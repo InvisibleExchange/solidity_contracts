@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "../libraries/ProgramOutputParser.sol";
-import "./MMRegistryManager.sol";
+import "../MMRegistry/MMRegistryManager.sol";
+import "../MMRegistry/MMRegistryUpdates.sol";
 
 import "../core/VaultManager.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import "forge-std/console.sol";
-
 abstract contract MMRegistry is
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
-    MMRegistryManager,
-    VaultManager
+    MMRegistryManager
 {
     // * ADD LIQUIDITY --------------------------------------------
     function provideLiquidity(
@@ -56,57 +54,6 @@ abstract contract MMRegistry is
         // ? store the cancellation request that will cancel the
         // ? add liquidity request if it hasn't been processed yet
         s_pendingCancellations.push(Cancelation(msg.sender, mmPositionAddress));
-    }
-
-    function updatePendingAddLiquidityUpdates(
-        OnChainMMActionOutput[] memory addLiqOutputs
-    ) internal {
-        for (uint i = 0; i < addLiqOutputs.length; i++) {
-            (
-                uint64 initialAmount,
-                uint64 vlpAmount,
-                uint256 mmAddress,
-                address depositor
-            ) = ProgramOutputParser.uncompressAddLiquidityOutput(
-                    addLiqOutputs[i]
-                );
-
-            // ? Update the pending request that was just processed
-            s_pendingAddLiqudityRequests[depositor][mmAddress] -= vlpAmount;
-
-            // ? Update the active liquidity position
-            s_activeLiqudity[depositor][mmAddress]
-                .initialValue += initialAmount;
-            s_activeLiqudity[depositor][mmAddress].vlpAmount += vlpAmount;
-
-            // ? Keep track of the total liquidity provided to the mm (used when closing position)
-            s_providedUsdcLiquidity[mmAddress] += initialAmount;
-            s_aggregateVlpIssued[mmAddress] += vlpAmount;
-        }
-
-        for (uint i = s_pendingCancellations.length; i > 0; i--) {
-            Cancelation memory cancelation = s_pendingCancellations[i - 1];
-
-            console.log("cancelation depositor", cancelation.depositor);
-            console.log("cancelation mmAddress", cancelation.mmAddress);
-
-            console.log(
-                "before: ",
-                s_pendingWithdrawals[cancelation.depositor]
-            );
-
-            uint64 pendingAmount = s_pendingAddLiqudityRequests[
-                cancelation.depositor
-            ][cancelation.mmAddress];
-            uint256 scaledAmount = scaleUp(pendingAmount, 55555);
-            s_pendingWithdrawals[cancelation.depositor] += scaledAmount;
-
-            console.log("pendingAmount", pendingAmount);
-
-            console.log("after: ", s_pendingWithdrawals[cancelation.depositor]);
-
-            s_pendingCancellations.pop();
-        }
     }
 
     // * REMOVE LIQUIDITY --------------------------------------------
@@ -158,49 +105,6 @@ abstract contract MMRegistry is
         );
     }
 
-    function updatePendingRemoveLiquidityUpdates(
-        OnChainMMActionOutput[] memory removeLiqOutputs
-    ) internal {
-        for (uint i = 0; i < removeLiqOutputs.length; i++) {
-            (
-                uint64 initialAmount,
-                uint64 vlpAmount,
-                uint64 returnCollateral,
-                uint256 mmAddress,
-                address depositor
-            ) = ProgramOutputParser.uncompressRemoveLiquidityOutput(
-                    removeLiqOutputs[i]
-                );
-
-            LiquidityInfo storage activeLiq = s_activeLiqudity[depositor][
-                mmAddress
-            ];
-
-            // ? Update the active liquidity position
-            activeLiq.initialValue -= initialAmount;
-            activeLiq.vlpAmount -= vlpAmount;
-
-            // ? Update the aggregate liquidity provided to the mm
-            s_providedUsdcLiquidity[mmAddress] -= initialAmount;
-            s_aggregateVlpIssued[mmAddress] -= vlpAmount;
-
-            // ? Take 20% of the profit as a fee
-            uint64 mmFee;
-            if (returnCollateral > initialAmount) {
-                mmFee = (returnCollateral - initialAmount) / 5;
-            } else {
-                mmFee = 0;
-            }
-            uint256 scaledFee = scaleUp(mmFee, 55555);
-            address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
-            s_pendingWithdrawals[mmOwner] += scaledFee;
-
-            // ? The user can than call withdrawalLiquidity to withdraw the funds
-            uint256 scaledAmount = scaleUp(returnCollateral - mmFee, 55555);
-            s_pendingWithdrawals[depositor] += scaledAmount;
-        }
-    }
-
     // * CLOSE MM POSITION --------------------------------------------
     function closePerpMarketMaker(uint256 mmPositionAddress) external {
         PerpMMRegistration memory registration = s_perpRegistrations[
@@ -225,41 +129,6 @@ abstract contract MMRegistry is
             initialValueSum,
             vlpAmountSum
         );
-    }
-
-    function updatePendingCloseMMUpdates(
-        OnChainMMActionOutput[] memory closeMMOutputs
-    ) internal {
-        for (uint i = 0; i < closeMMOutputs.length; i++) {
-            (
-                uint64 initialValueSum,
-                uint64 vlpAmountSum,
-                uint64 returnCollateral,
-                uint256 mmAddress
-            ) = ProgramOutputParser.uncompressCloseMMOutput(closeMMOutputs[i]);
-
-            // ? Update the aggregate liquidity provided to the mm
-            s_providedUsdcLiquidity[mmAddress] = 0;
-            s_aggregateVlpIssued[mmAddress] = 0;
-
-            // ? Take 20% of the profit as a fee
-            uint64 mmFee;
-            if (returnCollateral > initialValueSum) {
-                mmFee = (returnCollateral - initialValueSum) / 5;
-            } else {
-                mmFee = 0;
-            }
-            uint256 scaledFee = scaleUp(mmFee, 55555);
-            address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
-            s_pendingWithdrawals[mmOwner] += scaledFee;
-
-            // ? Store the liquidity info of the LPs
-            // ? The LPs  can then claim by calling remove liquidity
-            s_closedPositionLiqudity[mmAddress] = ClosedPositionLiquidityInfo(
-                vlpAmountSum,
-                returnCollateral - mmFee
-            );
-        }
     }
 
     // * WITHDRAW FUNDS --------------------------------------------

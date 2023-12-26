@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -9,22 +9,15 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "../utils/TokenInfo.sol";
 import "../utils/FlashLender.sol";
 
+import "../storage/VaultManagerStorage.sol";
+
 abstract contract VaultManager is
-    FlashLender,
-    TokenInfo,
     OwnableUpgradeable,
-    ReentrancyGuardUpgradeable
+    ReentrancyGuardUpgradeable,
+    VaultManagerStorage,
+    FlashLender,
+    TokenInfo
 {
-    event VaultRegisteredEvent(address tokenAddress);
-
-    address public escapeVerifier;
-    address payable public s_gasFeeCollector;
-    mapping(address => bool) s_vaults; // maps token address to vault
-
-    address[] public addresses;
-
-    uint64 chainId;
-
     function __VaultManager_init(address payable _gasCollector) internal {
         s_gasFeeCollector = _gasCollector;
 
@@ -65,8 +58,6 @@ abstract contract VaultManager is
         s_vaults[tokenAddress] = true;
         emit VaultRegisteredEvent(tokenAddress);
     }
-
-
 
     function isVaultRegistered(
         address tokenAddress

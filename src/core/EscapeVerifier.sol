@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "../libraries/StructHasher.sol";
 import "../libraries/ProgramOutputParser.sol";
-import "../libraries/ElipticCurve.sol";
+import "../storage/EscapeVerifierStorage.sol";
 
 import "../interfaces/IVaultManager.sol";
 import "../interfaces/IStructHasher.sol";
@@ -13,82 +13,13 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import "forge-std/console.sol";
-
 contract EscapeVerifier is
     Initializable,
     OwnableUpgradeable,
     UUPSUpgradeable,
-    ReentrancyGuardUpgradeable
+    ReentrancyGuardUpgradeable,
+    EscapeVerifierStorage
 {
-    struct ForcedEscape {
-        uint32 escapeId;
-        uint32 timestamp;
-        uint256 escapeHash;
-        uint256[2] signature_a;
-        uint256[2] signature_b; // Only for position escapes
-        address caller;
-    }
-
-    // * Events
-    event NoteEscapeEvent(
-        uint32 indexed escapeId,
-        uint32 indexed timestamp,
-        Note[] escape_notes,
-        uint256[2] indexed signature
-    );
-    event OrderTabEscapeEvent(
-        uint32 escapeId,
-        uint32 timestamp,
-        OrderTab orderTab,
-        uint256[2] signature
-    );
-
-    event PositionEscapeEvent(
-        uint32 escapeId,
-        uint64 closePrice,
-        Position position_a,
-        OpenOrderFields openOrderFields_b,
-        address recipient,
-        uint256[2] signature_a,
-        uint256[2] signature_b
-    );
-    event PositionEscapeEvent(
-        uint32 escapeId,
-        uint64 closePrice,
-        Position position_a,
-        Position position_b,
-        address recipient,
-        uint256[2] signature_a,
-        uint256[2] signature_b
-    );
-
-    event EscapeWithdrawalEvent(
-        uint32 escapeId,
-        uint32 timestamp,
-        uint32 tokenId,
-        uint64 amount,
-        address recipient
-    );
-
-    uint32 public s_escapeCount;
-    mapping(uint32 => ForcedEscape) public s_forcedEscapes; // escapeId => ForecdEscape
-    mapping(uint32 => mapping(uint32 => uint64)) public s_escapeAmounts; // escapeId => tokenId => amount
-    mapping(address => mapping(uint32 => bool)) public s_successfulEscapes; //   owner => escapeId => isValid
-
-    uint32 constant EXCHNAGE_VERIFICATION_TIME = 7 days;
-    uint32 constant COLLATERAL_TOKEN = 55555;
-
-    uint256 constant P = 2 ** 251 + 17 * 2 ** 192 + 1;
-
-    // uint256 constant alpha = 1;
-    // uint256 constant beta =
-    //     3141592653589793238462643383279502884197169399375105820974944592307816406665;
-
-    uint256 public version;
-    address invisibleAddr;
-    address structHasher;
-
     function initialize(address initialOwner) public initializer {
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
@@ -110,17 +41,15 @@ contract EscapeVerifier is
     // * Notes
     function startNoteEscape(
         Note[] calldata notes,
-        uint256[2] calldata signature,
-        uint32 _escapeId // TODO: ONLY FOR TESTING
+        uint256[2] calldata signature
     ) external {
         require(signature[0] < P, "number not in range");
         require(signature[1] < P, "number not in range");
 
         uint32 timestamp = uint32(block.timestamp);
 
-        // uint32 escapeId = s_escapeCount;
-        // s_escapeCount++;
-        uint32 escapeId = _escapeId;
+        uint32 escapeId = s_escapeCount;
+        s_escapeCount++;
 
         uint256 escapeHash = hashNoteEscapeMessage(escapeId, notes);
 
@@ -179,10 +108,6 @@ contract EscapeVerifier is
                 orderTab.quote_token
             ),
             "Quote Token not registered"
-        );
-        require(
-            !orderTab.is_smart_contract,
-            "Cannot force escape a smart contract inititated orderTab"
         );
 
         require(orderTab.base_blinding < P, "number not in range");

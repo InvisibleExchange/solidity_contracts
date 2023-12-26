@@ -1,47 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "../libraries/ProgramOutputParser.sol";
 import "../core/VaultManager.sol";
+import "../storage/InteractionsStorage.sol";
 
-abstract contract Deposit is VaultManager {
-    // make depositId indexed
-    event DepositEvent(
-        uint64 depositId,
-        uint256 pubKey,
-        uint32 tokenId,
-        uint64 depositAmountScaled,
-        uint256 timestamp
-    );
-    event DepositCancelEvent(
-        uint256 pubKey,
-        address tokenAddress,
-        uint256 timestamp
-    );
-
-    event UpdatedPendingDepositsEvent(uint256 timestamp, uint64 txBatchId);
-
-    mapping(uint256 => mapping(uint32 => uint64)) public s_pendingDeposits; // pubKey => tokenId => amountScaled
-
-    uint64 private s_depositCount;
-
-    struct DepositCancelation {
-        address depositor;
-        uint256 pubKey;
-        uint32 tokenId;
-    }
-
-    DepositCancelation[] public s_depositCencelations;
-
+abstract contract Deposit is VaultManager, InteractionsStorage {
     function updatePendingDeposits(
         DepositTransactionOutput[] memory depositOutputs,
         uint64 txBatchId
     ) internal {
         for (uint256 i = 0; i < depositOutputs.length; i++) {
             DepositTransactionOutput memory depositOutput = depositOutputs[i];
-
             (
                 uint64 depositId,
                 uint32 tokenId,
@@ -53,7 +25,6 @@ abstract contract Deposit is VaultManager {
                 s_pendingDeposits[depositPubKey][tokenId] >= depositAmount,
                 "An invalid deposit was executed offchain"
             );
-
             s_pendingDeposits[depositPubKey][tokenId] -= depositAmount;
         }
         emit UpdatedPendingDepositsEvent(block.timestamp, txBatchId);
@@ -72,7 +43,7 @@ abstract contract Deposit is VaultManager {
         require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark Key");
         require(starkKey > 0, "Invalid stark Key");
 
-        require(msg.sender != address(0), "Invalid depositior address");
+        require(msg.sender != address(0), "Invalid depositor address");
 
         if (msg.value > 0) {
             return _makeEthDeposit(starkKey);
@@ -86,10 +57,10 @@ abstract contract Deposit is VaultManager {
     ) private returns (uint64 newAmountDeposited) {
         //
 
-        uint64 depositAmountScaled = scaleDown(msg.value, TokenInfo.ETH_ID);
+        uint64 depositAmountScaled = scaleDown(msg.value, ETH_ID);
 
-        uint64 pendingAmount = s_pendingDeposits[starkKey][TokenInfo.ETH_ID];
-        s_pendingDeposits[starkKey][TokenInfo.ETH_ID] =
+        uint64 pendingAmount = s_pendingDeposits[starkKey][ETH_ID];
+        s_pendingDeposits[starkKey][ETH_ID] =
             pendingAmount +
             depositAmountScaled;
 
@@ -100,7 +71,7 @@ abstract contract Deposit is VaultManager {
         emit DepositEvent(
             depositId,
             starkKey,
-            TokenInfo.ETH_ID,
+            ETH_ID,
             depositAmountScaled,
             block.timestamp
         );
@@ -177,7 +148,7 @@ abstract contract Deposit is VaultManager {
 
             uint256 refundAmount = scaleUp(pendingAmount, cancelation.tokenId);
 
-            if (cancelation.tokenId == TokenInfo.ETH_ID) {} else {
+            if (cancelation.tokenId == ETH_ID) {} else {
                 address tokenAddress = getTokenAddress(cancelation.tokenId);
 
                 makeErc20VaultWithdrawal(

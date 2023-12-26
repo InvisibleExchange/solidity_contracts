@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-abstract contract MMRegistryStorage is OwnableUpgradeable {
+abstract contract MMRegistryStorage {
     // * EVENTS --------------------------------------------
     // event newSpotMMRegistration(
     //     address mmOwner,
