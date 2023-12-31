@@ -73,7 +73,7 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             uint64 pendingAmount = s_pendingAddLiqudityRequests[
                 cancelation.depositor
             ][cancelation.mmAddress];
-            uint256 scaledAmount = scaleUp(pendingAmount, 55555);
+            uint256 scaledAmount = scaleUp(pendingAmount, USDC_TOKEN_ID);
             s_pendingWithdrawals[cancelation.depositor] += scaledAmount;
 
             s_pendingCancellations.pop();
@@ -114,12 +114,15 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             } else {
                 mmFee = 0;
             }
-            uint256 scaledFee = scaleUp(mmFee, 55555);
+            uint256 scaledFee = scaleUp(mmFee, USDC_TOKEN_ID);
             address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
             s_pendingWithdrawals[mmOwner] += scaledFee;
 
             // ? The user can than call withdrawalLiquidity to withdraw the funds
-            uint256 scaledAmount = scaleUp(returnCollateral - mmFee, 55555);
+            uint256 scaledAmount = scaleUp(
+                returnCollateral - mmFee,
+                USDC_TOKEN_ID
+            );
             s_pendingWithdrawals[depositor] += scaledAmount;
         }
     }
@@ -147,7 +150,7 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             } else {
                 mmFee = 0;
             }
-            uint256 scaledFee = scaleUp(mmFee, 55555);
+            uint256 scaledFee = scaleUp(mmFee, USDC_TOKEN_ID);
             address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
             s_pendingWithdrawals[mmOwner] += scaledFee;
 

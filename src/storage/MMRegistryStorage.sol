@@ -14,30 +14,32 @@ abstract contract MMRegistryStorage {
     //     uint32 vlpTokenId
     // );
     event newPerpMMRegistration(
-        address indexed mmOwner,
-        uint32 syntheticAsset,
-        uint256 indexed positionAddress,
-        uint64 maxVlpSupply,
-        uint32 indexed vlpTokenId
-    );
-
-    event ClosePositionEvent(
-        uint256 indexed positionAddress,
         address mmOwner,
-        uint64 indexed initialValueSum,
-        uint64 indexed vlpAmountSum
+        uint32 syntheticAsset,
+        uint256 positionAddress,
+        uint64 maxVlpSupply,
+        uint32 vlpTokenId,
+        uint32 indexed mmActionId
     );
-
+    event ClosePositionEvent(
+        uint256 positionAddress,
+        address mmOwner,
+        uint64 initialValueSum,
+        uint64 vlpAmountSum,
+        uint32 indexed mmActionId
+    );
     event AddLiquidity(
-        address indexed depositor,
-        uint256 indexed mmPositionAddress,
-        uint64 indexed usdcAmount
+        address depositor,
+        uint256 mmPositionAddress,
+        uint64 usdcAmount,
+        uint32 indexed mmActionId
     );
     event RemoveLiquidity(
-        address indexed depositor,
+        address depositor,
         uint256 mmPositionAddress,
-        uint64 indexed initialValue,
-        uint64 indexed vlpAmount
+        uint64 initialValue,
+        uint64 vlpAmount,
+        uint32 indexed mmActionId
     );
 
     // * STRUCTS --------------------------------------------
@@ -76,6 +78,8 @@ abstract contract MMRegistryStorage {
 
     // * STORAGE --------------------------------------------
 
+    uint32 constant USDC_TOKEN_ID = 2413654107;
+
     // * Mm Add/Remove Liquidity
     mapping(address => mapping(uint256 => uint64)) s_pendingAddLiqudityRequests; // depositor => mm_position_address => scaled_amount
 
@@ -95,6 +99,7 @@ abstract contract MMRegistryStorage {
         public s_closedPositionLiqudity; // mm_position_address => ClosedPositionLiquidityInfo
 
     uint32 s_vlpTokenIdCount;
+    uint32 s_mmActionId; // used by the offchain indexer to distinguish between requests
 
     // -------------------------------------------------------
 

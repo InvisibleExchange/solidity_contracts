@@ -93,10 +93,10 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
             "Only approved perp market makers can register"
         );
         require(s_perpMarkets[syntheticAsset], "Perp market does not exist");
-        require(
-            s_perpRegistrations[syntheticAsset].positionAddress == 0,
-            "already registered"
-        );
+        // require(
+        //     s_perpRegistrations[positionAddress].positionAddress == 0,
+        //     "already registered"
+        // );
 
         uint32 vlpTokenId = s_vlpTokenIdCount + 1;
         require(vlpTokenId < MAX_VLP_ID);
@@ -114,12 +114,16 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
         // store the registration under pending registrations
         s_perpRegistrations[positionAddress] = registration;
 
+        uint32 mmActionId = s_mmActionId;
+        s_mmActionId++;
+
         emit newPerpMMRegistration(
             msg.sender,
             syntheticAsset,
             positionAddress,
             maxVlpSupply,
-            vlpTokenId
+            vlpTokenId,
+            mmActionId
         );
     }
 

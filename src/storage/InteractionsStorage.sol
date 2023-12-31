@@ -6,7 +6,6 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 abstract contract InteractionsStorage {
     // * DEPOSITS ----------------------------------------------
 
-    // make depositId indexed
     event DepositEvent(
         uint64 depositId,
         uint256 pubKey,

@@ -43,7 +43,6 @@ abstract contract Deposit is VaultManager, InteractionsStorage {
         require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark Key");
         require(starkKey > 0, "Invalid stark Key");
 
-        require(msg.sender != address(0), "Invalid depositor address");
 
         if (msg.value > 0) {
             return _makeEthDeposit(starkKey);

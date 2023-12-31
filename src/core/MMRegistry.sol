@@ -26,11 +26,10 @@ abstract contract MMRegistry is
             isAddressRegistered(mmPositionAddress),
             "position address isn't registered"
         );
-
         // ? If position is closed/closing we should prevent new deposits
         require(!s_pendingCloseRequests[mmPositionAddress], "position closed");
 
-        uint32 usdcTokenId = 55555;
+        uint32 usdcTokenId = USDC_TOKEN_ID;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
 
         // ? Transfer the usdc from the user to the vault
@@ -42,7 +41,15 @@ abstract contract MMRegistry is
             mmPositionAddress
         ] += scaledAmount;
 
-        emit AddLiquidity(msg.sender, mmPositionAddress, scaledAmount);
+        uint32 mmActionId = s_mmActionId;
+        s_mmActionId++;
+
+        emit AddLiquidity(
+            msg.sender,
+            mmPositionAddress,
+            scaledAmount,
+            mmActionId
+        );
     }
 
     function tryCancelAddLiquidity(uint256 mmPositionAddress) external {
@@ -79,7 +86,7 @@ abstract contract MMRegistry is
                 s_closedPositionLiqudity[mmPositionAddress].returnCollateral) /
                 s_closedPositionLiqudity[mmPositionAddress].vlpAmountSum;
 
-            uint256 scaledAmount = scaleUp(userShare, 55555);
+            uint256 scaledAmount = scaleUp(userShare, USDC_TOKEN_ID);
 
             s_pendingWithdrawals[msg.sender] += scaledAmount;
 
@@ -97,11 +104,15 @@ abstract contract MMRegistry is
         );
         s_pendingRemoveLiqudityRequests[removeReqHash] = true;
 
+        uint32 mmActionId = s_mmActionId;
+        s_mmActionId++;
+
         emit RemoveLiquidity(
             msg.sender,
             mmPositionAddress,
             activeLiq.initialValue,
-            activeLiq.vlpAmount
+            activeLiq.vlpAmount,
+            mmActionId
         );
     }
 
@@ -123,11 +134,15 @@ abstract contract MMRegistry is
         uint64 initialValueSum = s_providedUsdcLiquidity[mmPositionAddress];
         uint64 vlpAmountSum = s_aggregateVlpIssued[mmPositionAddress];
 
+        uint32 mmActionId = s_mmActionId;
+        s_mmActionId++;
+
         emit ClosePositionEvent(
             mmPositionAddress,
             msg.sender,
             initialValueSum,
-            vlpAmountSum
+            vlpAmountSum,
+            mmActionId
         );
     }
 
@@ -142,7 +157,7 @@ abstract contract MMRegistry is
 
         s_pendingWithdrawals[msg.sender] = 0;
 
-        uint32 usdcTokenId = 55555;
+        uint32 usdcTokenId = USDC_TOKEN_ID;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
 
         // ? Make withdrawal from the vault

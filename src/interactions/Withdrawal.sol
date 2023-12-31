@@ -10,16 +10,6 @@ import "../storage/InteractionsStorage.sol";
 abstract contract Withdrawal is VaultManager, InteractionsStorage {
     // * Withdrawals --------------------------------------------------------------------
 
-    // make depositId indexed
-    event TestEvent(
-        uint32 tokenId,
-        uint64 amount,
-        uint256 gasFee,
-        address recipient
-    );
-
-    event TestAggEvent(address aggregator);
-
     function processBatchWithdrawalOutputs(
         WithdrawalTransactionOutput[] memory withdrawalOutputs,
         uint64 txBatchId
@@ -62,8 +52,6 @@ abstract contract Withdrawal is VaultManager, InteractionsStorage {
                     gasFee = gasFeeForERCWithdrawal(currentTokenAddress);
                 }
             }
-
-            emit TestEvent(tokenId, amount, gasFee, recipient);
 
             uint256 amountScaled = scaleUp(amount, tokenId);
 

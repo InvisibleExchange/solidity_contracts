@@ -17,9 +17,9 @@ abstract contract EscapeVerifierStorage {
     // * Events
     event NoteEscapeEvent(
         uint32 indexed escapeId,
-        uint32 indexed timestamp,
+        uint32 timestamp,
         Note[] escape_notes,
-        uint256[2] indexed signature
+        uint256[2] signature
     );
     event OrderTabEscapeEvent(
         uint32 escapeId,
@@ -28,7 +28,7 @@ abstract contract EscapeVerifierStorage {
         uint256[2] signature
     );
 
-    event PositionEscapeEvent(
+    event PositionEscapeEventA(
         uint32 escapeId,
         uint64 closePrice,
         Position position_a,
@@ -37,7 +37,7 @@ abstract contract EscapeVerifierStorage {
         uint256[2] signature_a,
         uint256[2] signature_b
     );
-    event PositionEscapeEvent(
+    event PositionEscapeEventB(
         uint32 escapeId,
         uint64 closePrice,
         Position position_a,

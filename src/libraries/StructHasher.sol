@@ -3,7 +3,6 @@ pragma solidity ^0.8.22;
 
 import "../interfaces/IPedersenHash.sol";
 
-
 contract StructHasher {
     uint256 constant P = 2 ** 251 + 17 * 2 ** 192 + 1;
 
@@ -116,6 +115,7 @@ contract StructHasher {
 struct Note {
     uint64 index;
     uint256 addressX;
+    uint256 addressY;
     uint32 token;
     uint64 amount;
     uint256 blinding;

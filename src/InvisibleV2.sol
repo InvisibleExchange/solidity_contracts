@@ -5,6 +5,7 @@ import "./interfaces/IPedersenHash.sol";
 import "./interfaces/IEscapeVerifier.sol";
 
 import "./libraries/ProgramOutputParser.sol";
+import "./libraries/StructHasher.sol";
 
 import "./core/VaultManager.sol";
 import "./core/Interactions.sol";
@@ -26,7 +27,7 @@ contract InvisibleV2 is
     Interactions,
     MMRegistry
 {
-    uint64 s_txBatchId;
+    uint64 public s_txBatchId;
 
     mapping(uint64 => uint256) public s_txBatchId2StateRoot;
     mapping(uint64 => uint256) public s_txBatchId2Timestamp;
@@ -125,6 +126,57 @@ contract InvisibleV2 is
         }
 
         s_accumulatedHashesRelayed[txBatchId] = true;
+    }
+
+    function test(uint8 option) external {
+        if (option == 0) {
+            uint64 chainId = getChainId();
+            uint64 depositId = chainId * 2 ** 32 + s_depositCount;
+            uint256 pubKey = 1892652375893125298235632798523846235738495234623495782352345325;
+            uint32 tokenId = 3592681469;
+            uint64 depositAmountScaled = 1000000;
+            uint256 timestamp = 3794302;
+
+            emit DepositEvent(
+                depositId,
+                pubKey,
+                tokenId,
+                depositAmountScaled,
+                timestamp
+            );
+        } else if (option == 1) {
+            emit newPerpMMRegistration(
+                address(0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74),
+                3592681469,
+                1892652375893125298235632798523846235738495234623495782352345325,
+                100000000,
+                98765,
+                1000001
+            );
+        } else if (option == 2) {
+            emit AddLiquidity(
+                address(0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74),
+                1892652375893125298235632798523846235738495234623495782352345325,
+                100000000,
+                1000002
+            );
+        } else if (option == 3) {
+            emit RemoveLiquidity(
+                address(0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74),
+                1892652375893125298235632798523846235738495234623495782352345325,
+                100000000,
+                100000000,
+                1000003
+            );
+        } else if (option == 4) {
+            emit ClosePositionEvent(
+                1892652375893125298235632798523846235738495234623495782352345325,
+                address(0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74),
+                100000000,
+                100000000,
+                1000004
+            );
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
