@@ -45,6 +45,26 @@
       "address": "0x485caa427D245458D71674129A2340bDB69d8651",
       "txHash": "0x5788945177c30ed94c2761164149075c73c0eb1f2dabf42b8508acf12d7f8ffd",
       "kind": "uups"
+    },
+    {
+      "address": "0x259af6f31f545C606A7E56b9960CF69066b19F91",
+      "txHash": "0x720467d4949b841f86858814be08f5a0b8eaab8d6d609cf83deb0da884000d37",
+      "kind": "uups"
+    },
+    {
+      "address": "0xCB5e9CaA6bE7dF23d34961CbF4Ac594F17FAb5c2",
+      "txHash": "0x1bdfb56d99853c42958ce3d2f9647f2fb41fb0768f9aac99fa0e5248dfd7ced4",
+      "kind": "uups"
+    },
+    {
+      "address": "0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d",
+      "txHash": "0x21900f8628639f27ac021734a69be93197e17a077a1510316a0c4534d362b1fc",
+      "kind": "uups"
+    },
+    {
+      "address": "0x0931c3d86512aE7A38Ab870052657981bed5e01d",
+      "txHash": "0xdeec6bbe57b137da9c9f71742c4165726a1109759c3e7211a5a077688473c579",
+      "kind": "uups"
     }
   ],
   "impls": {
@@ -25446,6 +25466,2128 @@
             "numberOfBytes": "32"
           },
           "t_struct(PerpMMRegistration)8758_storage": {
+            "label": "struct MMRegistryStorage.PerpMMRegistration",
+            "members": [
+              {
+                "label": "mmOwner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "syntheticAsset",
+                "type": "t_uint32",
+                "offset": 20,
+                "slot": "0"
+              },
+              {
+                "label": "positionAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "maxVlpSupply",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "vlpTokenId",
+                "type": "t_uint32",
+                "offset": 8,
+                "slot": "2"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 12,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:40",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "ff5ca4cdaa9d5f74953f49ea65c06adf5314484a8d1f8a01181c55c66dca95bd": {
+      "address": "0x75eF3BEC3FBA9d7686dFb0144574c68112B55dA3",
+      "txHash": "0x2a2c93e8de05f3c7212b481116a54d75575852311ef7af0e6170e3837e715f2c",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "s_pendingAddLiqudityRequests",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_uint64))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:84"
+          },
+          {
+            "label": "s_pendingCancellations",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_struct(Cancelation)8763_storage)dyn_storage",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:87"
+          },
+          {
+            "label": "s_activeLiqudity",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8768_storage))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:89"
+          },
+          {
+            "label": "s_providedUsdcLiquidity",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:92"
+          },
+          {
+            "label": "s_aggregateVlpIssued",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:93"
+          },
+          {
+            "label": "s_pendingRemoveLiqudityRequests",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_bytes32,t_bool)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:95"
+          },
+          {
+            "label": "s_pendingWithdrawals",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:97"
+          },
+          {
+            "label": "s_closedPositionLiqudity",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8773_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:99"
+          },
+          {
+            "label": "s_vlpTokenIdCount",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:102"
+          },
+          {
+            "label": "s_mmActionId",
+            "offset": 4,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:103"
+          },
+          {
+            "label": "s_perpMarkets",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:109"
+          },
+          {
+            "label": "s_approvedPerpMMs",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_bool))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:112"
+          },
+          {
+            "label": "s_pendingPerpMMCount",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:116"
+          },
+          {
+            "label": "s_perpRegistrations",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_uint256,t_struct(PerpMMRegistration)8758_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:117"
+          },
+          {
+            "label": "s_pendingCloseRequests",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_mapping(t_uint256,t_bool)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:119"
+          },
+          {
+            "label": "escapeVerifier",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_address",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:11"
+          },
+          {
+            "label": "s_gasFeeCollector",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_address_payable",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:12"
+          },
+          {
+            "label": "s_vaults",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:13"
+          },
+          {
+            "label": "addresses",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_array(t_address)dyn_storage",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:15"
+          },
+          {
+            "label": "chainId",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_uint64",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:17"
+          },
+          {
+            "label": "s_tokenIdIsRegistered",
+            "offset": 0,
+            "slot": "19",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:30"
+          },
+          {
+            "label": "s_tokenAddress2Id",
+            "offset": 0,
+            "slot": "20",
+            "type": "t_mapping(t_address,t_uint32)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:31"
+          },
+          {
+            "label": "s_tokenId2Address",
+            "offset": 0,
+            "slot": "21",
+            "type": "t_mapping(t_uint32,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:32"
+          },
+          {
+            "label": "s_tokenId2ScaleFactor",
+            "offset": 0,
+            "slot": "22",
+            "type": "t_mapping(t_uint32,t_uint8)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:33"
+          },
+          {
+            "label": "s_clAggregators",
+            "offset": 0,
+            "slot": "23",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:35"
+          },
+          {
+            "label": "s_pendingDeposits",
+            "offset": 0,
+            "slot": "24",
+            "type": "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:24"
+          },
+          {
+            "label": "s_depositCount",
+            "offset": 0,
+            "slot": "25",
+            "type": "t_uint64",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:26"
+          },
+          {
+            "label": "s_depositCencelations",
+            "offset": 0,
+            "slot": "26",
+            "type": "t_array(t_struct(DepositCancelation)8667_storage)dyn_storage",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:34"
+          },
+          {
+            "label": "s_failedWithdrawals",
+            "offset": 0,
+            "slot": "27",
+            "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:46"
+          },
+          {
+            "label": "s_txBatchId",
+            "offset": 0,
+            "slot": "28",
+            "type": "t_uint64",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:30"
+          },
+          {
+            "label": "s_txBatchId2StateRoot",
+            "offset": 0,
+            "slot": "29",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:32"
+          },
+          {
+            "label": "s_txBatchId2Timestamp",
+            "offset": 0,
+            "slot": "30",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:33"
+          },
+          {
+            "label": "s_accumulatedHashesRelayed",
+            "offset": 0,
+            "slot": "31",
+            "type": "t_mapping(t_uint64,t_bool)",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:35"
+          },
+          {
+            "label": "s_L1MessageRelay",
+            "offset": 0,
+            "slot": "32",
+            "type": "t_address",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:37"
+          },
+          {
+            "label": "s_escapeVerifier",
+            "offset": 0,
+            "slot": "33",
+            "type": "t_address",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:38"
+          },
+          {
+            "label": "version",
+            "offset": 0,
+            "slot": "34",
+            "type": "t_uint256",
+            "contract": "InvisibleV2",
+            "src": "src/InvisibleV2.sol:43"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)45_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)14_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)101_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_address_payable": {
+            "label": "address payable",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(Cancelation)8763_storage)dyn_storage": {
+            "label": "struct MMRegistryStorage.Cancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(DepositCancelation)8667_storage)dyn_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_bool))": {
+            "label": "mapping(address => mapping(uint256 => bool))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8768_storage))": {
+            "label": "mapping(address => mapping(uint256 => struct MMRegistryStorage.LiquidityInfo))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_uint64))": {
+            "label": "mapping(address => mapping(uint256 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint32)": {
+            "label": "mapping(address => uint32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_bool)": {
+            "label": "mapping(bytes32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bool)": {
+            "label": "mapping(uint256 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))": {
+            "label": "mapping(uint256 => mapping(uint32 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8773_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.ClosedPositionLiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(LiquidityInfo)8768_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.LiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(PerpMMRegistration)8758_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.PerpMMRegistration)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint64)": {
+            "label": "mapping(uint256 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_address)": {
+            "label": "mapping(uint32 => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_bool)": {
+            "label": "mapping(uint32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint64)": {
+            "label": "mapping(uint32 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint8)": {
+            "label": "mapping(uint32 => uint8)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_bool)": {
+            "label": "mapping(uint64 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_uint256)": {
+            "label": "mapping(uint64 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Cancelation)8763_storage": {
+            "label": "struct MMRegistryStorage.Cancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "mmAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_struct(ClosedPositionLiquidityInfo)8773_storage": {
+            "label": "struct MMRegistryStorage.ClosedPositionLiquidityInfo",
+            "members": [
+              {
+                "label": "vlpAmountSum",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "returnCollateral",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(DepositCancelation)8667_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "pubKey",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "tokenId",
+                "type": "t_uint32",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_struct(LiquidityInfo)8768_storage": {
+            "label": "struct MMRegistryStorage.LiquidityInfo",
+            "members": [
+              {
+                "label": "initialValue",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(PerpMMRegistration)8758_storage": {
+            "label": "struct MMRegistryStorage.PerpMMRegistration",
+            "members": [
+              {
+                "label": "mmOwner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "syntheticAsset",
+                "type": "t_uint32",
+                "offset": 20,
+                "slot": "0"
+              },
+              {
+                "label": "positionAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "maxVlpSupply",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "vlpTokenId",
+                "type": "t_uint32",
+                "offset": 8,
+                "slot": "2"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 12,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:40",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "176e79e04f853664e80f1ef3d9a07ae1afe1777787e072ecbce0f654de536a26": {
+      "address": "0x89ceE31099d5f4e294C6BFE7Ee2e8E5871A3023d",
+      "txHash": "0x873e4bfee7677a5480f4e1476f4a1b1468dc6ddceef05633e4c24b1bf65bf3c4",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "s_pendingAddLiqudityRequests",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_uint64))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:84"
+          },
+          {
+            "label": "s_pendingCancellations",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_struct(Cancelation)8394_storage)dyn_storage",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:87"
+          },
+          {
+            "label": "s_activeLiqudity",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8399_storage))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:89"
+          },
+          {
+            "label": "s_providedUsdcLiquidity",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:92"
+          },
+          {
+            "label": "s_aggregateVlpIssued",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:93"
+          },
+          {
+            "label": "s_pendingRemoveLiqudityRequests",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_bytes32,t_uint256)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:95"
+          },
+          {
+            "label": "s_pendingWithdrawals",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:97"
+          },
+          {
+            "label": "s_closedPositionLiqudity",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8404_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:99"
+          },
+          {
+            "label": "s_vlpTokenIdCount",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:102"
+          },
+          {
+            "label": "s_mmActionId",
+            "offset": 4,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:103"
+          },
+          {
+            "label": "s_perpMarkets",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:109"
+          },
+          {
+            "label": "s_approvedPerpMMs",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_bool))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:112"
+          },
+          {
+            "label": "s_pendingPerpMMCount",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:116"
+          },
+          {
+            "label": "s_perpRegistrations",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_uint256,t_struct(PerpMMRegistration)8389_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:117"
+          },
+          {
+            "label": "s_pendingCloseRequests",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:119"
+          },
+          {
+            "label": "escapeVerifier",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_address",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:11"
+          },
+          {
+            "label": "s_gasFeeCollector",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_address_payable",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:12"
+          },
+          {
+            "label": "s_vaults",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:13"
+          },
+          {
+            "label": "addresses",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_array(t_address)dyn_storage",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:15"
+          },
+          {
+            "label": "chainId",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_uint64",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:17"
+          },
+          {
+            "label": "s_tokenIdIsRegistered",
+            "offset": 0,
+            "slot": "19",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:30"
+          },
+          {
+            "label": "s_tokenAddress2Id",
+            "offset": 0,
+            "slot": "20",
+            "type": "t_mapping(t_address,t_uint32)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:31"
+          },
+          {
+            "label": "s_tokenId2Address",
+            "offset": 0,
+            "slot": "21",
+            "type": "t_mapping(t_uint32,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:32"
+          },
+          {
+            "label": "s_tokenId2ScaleFactor",
+            "offset": 0,
+            "slot": "22",
+            "type": "t_mapping(t_uint32,t_uint8)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:33"
+          },
+          {
+            "label": "s_clAggregators",
+            "offset": 0,
+            "slot": "23",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:35"
+          },
+          {
+            "label": "s_pendingDeposits",
+            "offset": 0,
+            "slot": "24",
+            "type": "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:24"
+          },
+          {
+            "label": "s_depositCount",
+            "offset": 0,
+            "slot": "25",
+            "type": "t_uint64",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:26"
+          },
+          {
+            "label": "s_depositCencelations",
+            "offset": 0,
+            "slot": "26",
+            "type": "t_array(t_struct(DepositCancelation)8298_storage)dyn_storage",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:34"
+          },
+          {
+            "label": "s_failedWithdrawals",
+            "offset": 0,
+            "slot": "27",
+            "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:46"
+          },
+          {
+            "label": "s_txBatchId",
+            "offset": 0,
+            "slot": "28",
+            "type": "t_uint64",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:5"
+          },
+          {
+            "label": "s_txBatchId2StateRoot",
+            "offset": 0,
+            "slot": "29",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:7"
+          },
+          {
+            "label": "s_txBatchId2Timestamp",
+            "offset": 0,
+            "slot": "30",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:8"
+          },
+          {
+            "label": "s_accumulatedHashesRelayed",
+            "offset": 0,
+            "slot": "31",
+            "type": "t_mapping(t_uint64,t_bool)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:10"
+          },
+          {
+            "label": "s_L1MessageRelay",
+            "offset": 0,
+            "slot": "32",
+            "type": "t_address",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:12"
+          },
+          {
+            "label": "s_escapeVerifier",
+            "offset": 0,
+            "slot": "33",
+            "type": "t_address",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:13"
+          },
+          {
+            "label": "version",
+            "offset": 0,
+            "slot": "34",
+            "type": "t_uint256",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:18"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)45_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)14_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)101_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_address_payable": {
+            "label": "address payable",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(Cancelation)8394_storage)dyn_storage": {
+            "label": "struct MMRegistryStorage.Cancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(DepositCancelation)8298_storage)dyn_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_bool))": {
+            "label": "mapping(address => mapping(uint256 => bool))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8399_storage))": {
+            "label": "mapping(address => mapping(uint256 => struct MMRegistryStorage.LiquidityInfo))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_uint64))": {
+            "label": "mapping(address => mapping(uint256 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint32)": {
+            "label": "mapping(address => uint32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_uint256)": {
+            "label": "mapping(bytes32 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bool)": {
+            "label": "mapping(uint256 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))": {
+            "label": "mapping(uint256 => mapping(uint32 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8404_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.ClosedPositionLiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(LiquidityInfo)8399_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.LiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(PerpMMRegistration)8389_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.PerpMMRegistration)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint64)": {
+            "label": "mapping(uint256 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_address)": {
+            "label": "mapping(uint32 => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_bool)": {
+            "label": "mapping(uint32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint64)": {
+            "label": "mapping(uint32 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint8)": {
+            "label": "mapping(uint32 => uint8)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_bool)": {
+            "label": "mapping(uint64 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_uint256)": {
+            "label": "mapping(uint64 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Cancelation)8394_storage": {
+            "label": "struct MMRegistryStorage.Cancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "mmAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_struct(ClosedPositionLiquidityInfo)8404_storage": {
+            "label": "struct MMRegistryStorage.ClosedPositionLiquidityInfo",
+            "members": [
+              {
+                "label": "vlpAmountSum",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "returnCollateral",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(DepositCancelation)8298_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "pubKey",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "tokenId",
+                "type": "t_uint32",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_struct(LiquidityInfo)8399_storage": {
+            "label": "struct MMRegistryStorage.LiquidityInfo",
+            "members": [
+              {
+                "label": "initialValue",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(PerpMMRegistration)8389_storage": {
+            "label": "struct MMRegistryStorage.PerpMMRegistration",
+            "members": [
+              {
+                "label": "mmOwner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "syntheticAsset",
+                "type": "t_uint32",
+                "offset": 20,
+                "slot": "0"
+              },
+              {
+                "label": "positionAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "maxVlpSupply",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "vlpTokenId",
+                "type": "t_uint32",
+                "offset": 8,
+                "slot": "2"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 12,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:40",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "76d099ecd12e4a015e2c16e77e250a63c547dd7626fe4f685e2e5d1434b41acf": {
+      "address": "0xd156D67EBbE83F568304620AB0f27CadBFF2786e",
+      "txHash": "0xf627e629e61fbcee664cd69f094e16059d197b4fb068160f69e759fac2af4f3b",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "s_escapeCount",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint32",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:58"
+          },
+          {
+            "label": "s_forcedEscapes",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_uint32,t_struct(ForcedEscape)8216_storage)",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:59"
+          },
+          {
+            "label": "s_escapeAmounts",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_uint32,t_mapping(t_uint32,t_uint64))",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:60"
+          },
+          {
+            "label": "s_successfulEscapes",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_address,t_mapping(t_uint32,t_bool))",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:61"
+          },
+          {
+            "label": "invisibleAddr",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_address",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:72"
+          },
+          {
+            "label": "structHasher",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_address",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:73"
+          },
+          {
+            "label": "version",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256",
+            "contract": "EscapeVerifierStorage",
+            "src": "src/storage/EscapeVerifierStorage.sol:74"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)45_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)14_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)101_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_uint256)2_storage": {
+            "label": "uint256[2]",
+            "numberOfBytes": "64"
+          },
+          "t_mapping(t_address,t_mapping(t_uint32,t_bool))": {
+            "label": "mapping(address => mapping(uint32 => bool))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_bool)": {
+            "label": "mapping(uint32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_mapping(t_uint32,t_uint64))": {
+            "label": "mapping(uint32 => mapping(uint32 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_struct(ForcedEscape)8216_storage)": {
+            "label": "mapping(uint32 => struct EscapeVerifierStorage.ForcedEscape)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint64)": {
+            "label": "mapping(uint32 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(ForcedEscape)8216_storage": {
+            "label": "struct EscapeVerifierStorage.ForcedEscape",
+            "members": [
+              {
+                "label": "escapeId",
+                "type": "t_uint32",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "timestamp",
+                "type": "t_uint32",
+                "offset": 4,
+                "slot": "0"
+              },
+              {
+                "label": "escapeHash",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "signature_a",
+                "type": "t_array(t_uint256)2_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "signature_b",
+                "type": "t_array(t_uint256)2_storage",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "caller",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "6"
+              }
+            ],
+            "numberOfBytes": "224"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:40",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "a21f51883ac196339d4553b41ee9122fb70c1b18b31b959acd8da793711602b5": {
+      "address": "0x0710B299Ad9Fa0E762FC362b6CCBe05DF66DC01c",
+      "txHash": "0xfd318b4d543518780612699235d6a5f5eea3a5f0100473dba2c95aa1c493a9d8",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "s_pendingAddLiqudityRequests",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_uint64))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:84"
+          },
+          {
+            "label": "s_pendingCancellations",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_struct(Cancelation)8805_storage)dyn_storage",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:87"
+          },
+          {
+            "label": "s_activeLiqudity",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8810_storage))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:89"
+          },
+          {
+            "label": "s_providedUsdcLiquidity",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:92"
+          },
+          {
+            "label": "s_aggregateVlpIssued",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:93"
+          },
+          {
+            "label": "s_pendingRemoveLiqudityRequests",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_bytes32,t_uint256)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:95"
+          },
+          {
+            "label": "s_pendingWithdrawals",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:97"
+          },
+          {
+            "label": "s_closedPositionLiqudity",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8815_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:99"
+          },
+          {
+            "label": "s_vlpTokenIdCount",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:102"
+          },
+          {
+            "label": "s_mmActionId",
+            "offset": 4,
+            "slot": "8",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:103"
+          },
+          {
+            "label": "s_perpMarkets",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:109"
+          },
+          {
+            "label": "s_approvedPerpMMs",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_bool))",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:112"
+          },
+          {
+            "label": "s_pendingPerpMMCount",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint32",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:116"
+          },
+          {
+            "label": "s_perpRegistrations",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_uint256,t_struct(PerpMMRegistration)8800_storage)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:117"
+          },
+          {
+            "label": "s_pendingCloseRequests",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_mapping(t_uint256,t_uint64)",
+            "contract": "MMRegistryStorage",
+            "src": "src/storage/MMRegistryStorage.sol:119"
+          },
+          {
+            "label": "escapeVerifier",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_address",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:11"
+          },
+          {
+            "label": "s_gasFeeCollector",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_address_payable",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:12"
+          },
+          {
+            "label": "s_vaults",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:13"
+          },
+          {
+            "label": "addresses",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_array(t_address)dyn_storage",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:15"
+          },
+          {
+            "label": "chainId",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_uint64",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:17"
+          },
+          {
+            "label": "s_tokenIdIsRegistered",
+            "offset": 0,
+            "slot": "19",
+            "type": "t_mapping(t_uint32,t_bool)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:30"
+          },
+          {
+            "label": "s_tokenAddress2Id",
+            "offset": 0,
+            "slot": "20",
+            "type": "t_mapping(t_address,t_uint32)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:31"
+          },
+          {
+            "label": "s_tokenId2Address",
+            "offset": 0,
+            "slot": "21",
+            "type": "t_mapping(t_uint32,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:32"
+          },
+          {
+            "label": "s_tokenId2ScaleFactor",
+            "offset": 0,
+            "slot": "22",
+            "type": "t_mapping(t_uint32,t_uint8)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:33"
+          },
+          {
+            "label": "s_clAggregators",
+            "offset": 0,
+            "slot": "23",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "VaultManagerStorage",
+            "src": "src/storage/VaultManagerStorage.sol:35"
+          },
+          {
+            "label": "s_pendingDeposits",
+            "offset": 0,
+            "slot": "24",
+            "type": "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:24"
+          },
+          {
+            "label": "s_depositCount",
+            "offset": 0,
+            "slot": "25",
+            "type": "t_uint64",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:26"
+          },
+          {
+            "label": "s_depositCencelations",
+            "offset": 0,
+            "slot": "26",
+            "type": "t_array(t_struct(DepositCancelation)8709_storage)dyn_storage",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:34"
+          },
+          {
+            "label": "s_failedWithdrawals",
+            "offset": 0,
+            "slot": "27",
+            "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+            "contract": "InteractionsStorage",
+            "src": "src/storage/InteractionsStorage.sol:46"
+          },
+          {
+            "label": "s_txBatchId",
+            "offset": 0,
+            "slot": "28",
+            "type": "t_uint64",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:5"
+          },
+          {
+            "label": "s_txBatchId2StateRoot",
+            "offset": 0,
+            "slot": "29",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:7"
+          },
+          {
+            "label": "s_txBatchId2Timestamp",
+            "offset": 0,
+            "slot": "30",
+            "type": "t_mapping(t_uint64,t_uint256)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:8"
+          },
+          {
+            "label": "s_accumulatedHashesRelayed",
+            "offset": 0,
+            "slot": "31",
+            "type": "t_mapping(t_uint64,t_bool)",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:10"
+          },
+          {
+            "label": "s_L1MessageRelay",
+            "offset": 0,
+            "slot": "32",
+            "type": "t_address",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:12"
+          },
+          {
+            "label": "s_escapeVerifier",
+            "offset": 0,
+            "slot": "33",
+            "type": "t_address",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:13"
+          },
+          {
+            "label": "version",
+            "offset": 0,
+            "slot": "34",
+            "type": "t_uint256",
+            "contract": "MainStorage",
+            "src": "src/storage/MainStorage.sol:18"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)45_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)14_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)101_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_address_payable": {
+            "label": "address payable",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(Cancelation)8805_storage)dyn_storage": {
+            "label": "struct MMRegistryStorage.Cancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_struct(DepositCancelation)8709_storage)dyn_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_bool))": {
+            "label": "mapping(address => mapping(uint256 => bool))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_struct(LiquidityInfo)8810_storage))": {
+            "label": "mapping(address => mapping(uint256 => struct MMRegistryStorage.LiquidityInfo))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_uint64))": {
+            "label": "mapping(address => mapping(uint256 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint32)": {
+            "label": "mapping(address => uint32)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_uint256)": {
+            "label": "mapping(bytes32 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_bool)": {
+            "label": "mapping(uint256 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_mapping(t_uint32,t_uint64))": {
+            "label": "mapping(uint256 => mapping(uint32 => uint64))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(ClosedPositionLiquidityInfo)8815_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.ClosedPositionLiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(LiquidityInfo)8810_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.LiquidityInfo)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(PerpMMRegistration)8800_storage)": {
+            "label": "mapping(uint256 => struct MMRegistryStorage.PerpMMRegistration)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint64)": {
+            "label": "mapping(uint256 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_address)": {
+            "label": "mapping(uint32 => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_bool)": {
+            "label": "mapping(uint32 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint64)": {
+            "label": "mapping(uint32 => uint64)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint32,t_uint8)": {
+            "label": "mapping(uint32 => uint8)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_bool)": {
+            "label": "mapping(uint64 => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint64,t_uint256)": {
+            "label": "mapping(uint64 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Cancelation)8805_storage": {
+            "label": "struct MMRegistryStorage.Cancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "mmAddress",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_struct(ClosedPositionLiquidityInfo)8815_storage": {
+            "label": "struct MMRegistryStorage.ClosedPositionLiquidityInfo",
+            "members": [
+              {
+                "label": "vlpAmountSum",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "returnCollateral",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(DepositCancelation)8709_storage": {
+            "label": "struct InteractionsStorage.DepositCancelation",
+            "members": [
+              {
+                "label": "depositor",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "pubKey",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "tokenId",
+                "type": "t_uint32",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_struct(LiquidityInfo)8810_storage": {
+            "label": "struct MMRegistryStorage.LiquidityInfo",
+            "members": [
+              {
+                "label": "initialValue",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "vlpAmount",
+                "type": "t_uint64",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(PerpMMRegistration)8800_storage": {
             "label": "struct MMRegistryStorage.PerpMMRegistration",
             "members": [
               {

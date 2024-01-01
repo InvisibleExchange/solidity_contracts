@@ -8,11 +8,11 @@ abstract contract VaultManagerStorage {
 
     event VaultRegisteredEvent(address tokenAddress);
 
-    address public escapeVerifier;
-    address payable public s_gasFeeCollector;
+    address escapeVerifier;
+    address payable s_gasFeeCollector;
     mapping(address => bool) s_vaults; // maps token address to vault
 
-    address[] public addresses;
+    address[] addresses;
 
     uint64 chainId;
 
@@ -24,13 +24,13 @@ abstract contract VaultManagerStorage {
         uint8 scaleFactor
     );
 
-    uint32 public constant ETH_ID = 453755560;
+    uint32 constant ETH_ID = 453755560;
     uint32 constant MIN_TOKEN_ID = 100_000;
 
-    mapping(uint32 => bool) public s_tokenIdIsRegistered;
-    mapping(address => uint32) public s_tokenAddress2Id;
-    mapping(uint32 => address) public s_tokenId2Address;
-    mapping(uint32 => uint8) public s_tokenId2ScaleFactor;
+    mapping(uint32 => bool) s_tokenIdIsRegistered;
+    mapping(address => uint32) s_tokenAddress2Id;
+    mapping(uint32 => address) s_tokenId2Address;
+    mapping(uint32 => uint8) s_tokenId2ScaleFactor;
 
-    mapping(address => address) public s_clAggregators; // tokenAddress => ChainLink Aggregator Address
+    mapping(address => address) s_clAggregators; // tokenAddress => ChainLink Aggregator Address
 }

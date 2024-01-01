@@ -43,5 +43,5 @@ abstract contract InteractionsStorage {
     );
     event StoredNewWithdrawalsEvent(uint256 timestamp, uint64 txBatchId);
 
-    mapping(address => mapping(address => uint256)) public s_failedWithdrawals; // recipient => tokenAddress => amount
+    mapping(address => mapping(address => uint256)) s_failedWithdrawals; // recipient => tokenAddress => amount
 }

@@ -57,6 +57,16 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             // ? Update the pending request that was just processed
             s_pendingAddLiqudityRequests[depositor][mmAddress] -= vlpAmount;
 
+            // ? If position is closed/closing we should prevent new deposits
+            if (s_pendingCloseRequests[mmAddress] > 0) {
+                s_pendingWithdrawals[depositor] += scaleUp(
+                    initialAmount,
+                    USDC_TOKEN_ID
+                );
+
+                continue;
+            }
+
             // ? Update the active liquidity position
             s_activeLiqudity[depositor][mmAddress]
                 .initialValue += initialAmount;
@@ -160,6 +170,8 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
                 vlpAmountSum,
                 returnCollateral - mmFee
             );
+
+            delete s_perpRegistrations[mmAddress];
         }
     }
 }

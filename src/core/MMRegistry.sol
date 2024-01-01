@@ -7,13 +7,16 @@ import "../MMRegistry/MMRegistryUpdates.sol";
 
 import "../core/VaultManager.sol";
 
+import "../storage/MainStorage.sol";
+
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 abstract contract MMRegistry is
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
-    MMRegistryManager
+    MMRegistryManager,
+    MainStorage
 {
     // * ADD LIQUIDITY --------------------------------------------
     function provideLiquidity(
@@ -26,8 +29,10 @@ abstract contract MMRegistry is
             isAddressRegistered(mmPositionAddress),
             "position address isn't registered"
         );
-        // ? If position is closed/closing we should prevent new deposits
-        require(!s_pendingCloseRequests[mmPositionAddress], "position closed");
+        require(
+            s_pendingCloseRequests[mmPositionAddress] == 0,
+            "position closed"
+        );
 
         uint32 usdcTokenId = USDC_TOKEN_ID;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
@@ -73,6 +78,10 @@ abstract contract MMRegistry is
             isAddressRegistered(mmPositionAddress),
             "position address isn't registered"
         );
+        require(
+            s_pendingCloseRequests[mmPositionAddress] == 0,
+            "position closed"
+        );
 
         // ? Get the active liquidity position of the user
         LiquidityInfo memory activeLiq = s_activeLiqudity[msg.sender][
@@ -102,7 +111,11 @@ abstract contract MMRegistry is
         bytes32 removeReqHash = keccak256(
             abi.encodePacked(msg.sender, activeLiq.vlpAmount)
         );
-        s_pendingRemoveLiqudityRequests[removeReqHash] = true;
+        require(
+            s_pendingRemoveLiqudityRequests[removeReqHash] == 0,
+            "request already pending"
+        );
+        s_pendingRemoveLiqudityRequests[removeReqHash] = block.timestamp;
 
         uint32 mmActionId = s_mmActionId;
         s_mmActionId++;
@@ -117,7 +130,8 @@ abstract contract MMRegistry is
     }
 
     // * CLOSE MM POSITION --------------------------------------------
-    function closePerpMarketMaker(uint256 mmPositionAddress) external {
+
+    function initiateMMClose(uint256 mmPositionAddress) external {
         PerpMMRegistration memory registration = s_perpRegistrations[
             mmPositionAddress
         ];
@@ -128,7 +142,18 @@ abstract contract MMRegistry is
         );
 
         // ? Set the position as pending close
-        s_pendingCloseRequests[mmPositionAddress] = true;
+        s_pendingCloseRequests[mmPositionAddress] = s_txBatchId;
+    }
+
+    function closePerpMarketMaker(uint256 mmPositionAddress) external {
+        require(
+            s_pendingCloseRequests[mmPositionAddress] > 0,
+            "Initiate close first"
+        );
+        require(
+            s_txBatchId > s_pendingCloseRequests[mmPositionAddress],
+            "Wait for the next batch to close the position"
+        );
 
         // ? Get the aggregate value provided to the mm
         uint64 initialValueSum = s_providedUsdcLiquidity[mmPositionAddress];

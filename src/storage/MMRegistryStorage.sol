@@ -81,17 +81,18 @@ abstract contract MMRegistryStorage {
     uint32 constant USDC_TOKEN_ID = 2413654107;
 
     // * Mm Add/Remove Liquidity
-    mapping(address => mapping(uint256 => uint64)) s_pendingAddLiqudityRequests; // depositor => mm_position_address => scaled_amount
+    mapping(address => mapping(uint256 => uint64))
+        public s_pendingAddLiqudityRequests; // depositor => mm_position_address => scaled_amount
 
     Cancelation[] s_pendingCancellations;
 
     mapping(address => mapping(uint256 => LiquidityInfo))
         public s_activeLiqudity; // depositor => mm_position_address => LiquidityInfo
 
-    mapping(uint256 => uint64) s_providedUsdcLiquidity; // mm_position_address => usdc_amount
-    mapping(uint256 => uint64) s_aggregateVlpIssued; // mm_position_address => vlp issued
+    mapping(uint256 => uint64) public s_providedUsdcLiquidity; // mm_position_address => usdc_amount
+    mapping(uint256 => uint64) public s_aggregateVlpIssued; // mm_position_address => vlp issued
 
-    mapping(bytes32 => bool) s_pendingRemoveLiqudityRequests; // H(depositor, value) => isPending
+    mapping(bytes32 => uint256) public s_pendingRemoveLiqudityRequests; // keccak256(depositor, mm_position_address) => timestamp
 
     mapping(address => uint256) public s_pendingWithdrawals; // depositor => amount
 
@@ -105,15 +106,15 @@ abstract contract MMRegistryStorage {
 
     // * Mm Registrations
     // mapping(uint32 => mapping(uint32 => bool)) public s_spotMarkets; // baseAsset => quoteAsset => marketExists
-    mapping(uint32 => bool) public s_perpMarkets; // syntheticAsset => marketExists
+    mapping(uint32 => bool) s_perpMarkets; // syntheticAsset => marketExists
 
     // mapping(address => mapping(uint256 => bool)) public s_approvedSpotMMs; // user => tabAddress => isApproved
-    mapping(address => mapping(uint256 => bool)) public s_approvedPerpMMs; // user => positionAddress => isApproved
+    mapping(address => mapping(uint256 => bool)) s_approvedPerpMMs; // user => positionAddress => isApproved
 
     // uint32 public s_pendingSpotMMCount;
     // mapping(uint256 => SpotMMRegistration) public s_spotRegistrations; // tabAddress => SpotMMRegistration
-    uint32 public s_pendingPerpMMCount;
+    uint32 s_pendingPerpMMCount;
     mapping(uint256 => PerpMMRegistration) public s_perpRegistrations; // posAddress => PerpMMRegistration
 
-    mapping(uint256 => bool) s_pendingCloseRequests; // positionAddress => isPending
+    mapping(uint256 => uint64) s_pendingCloseRequests; // positionAddress => txBatchId
 }

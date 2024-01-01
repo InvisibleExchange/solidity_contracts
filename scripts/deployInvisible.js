@@ -25,5 +25,5 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 
-// * Deployed Invisible to 0x557d570c97E92b4A2C7fdfaE4DDCb9EF931d33C2
-// & Deployed StructHasher to 0xb19f3ADF9185C8b9122f4843a87bC51EE4FA15a2 and EscapeVerifier to 0x485caa427D245458D71674129A2340bDB69d8651
+//* Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
+//& Deployed StructHasher to 0x572EC9E81190bA3A8763C890ef9EE26f1b40A36C and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d

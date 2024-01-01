@@ -36,8 +36,8 @@ async function main2() {
   const testTokenAbi =
     require("../artifacts/src/TestToken.sol/TestToken.json").abi;
 
-  let usdcAddress = "0x42Ca0987Fd7D46B985907d376Bb222D1C6281a71";
-  let btcAddress = "0x72a35ECeE1eb4593E9eb780AA5a5D436AB3b3941";
+  let usdcAddress = "0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1";
+  let btcAddress = "0x71a46b7F3F971982304E48342C78B5460d8047d6";
 
   const usdcContract = new ethers.Contract(
     usdcAddress,
@@ -68,15 +68,15 @@ async function main2() {
   }
 }
 
-// main().catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
-main2().catch((error) => {
+main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+// main2().catch((error) => {
+//   console.error(error);
+//   process.exitCode = 1;
+// });
 
-// * Deployed Invisible to 0x557d570c97E92b4A2C7fdfaE4DDCb9EF931d33C2
-// & Deployed StructHasher to 0xb19f3ADF9185C8b9122f4843a87bC51EE4FA15a2 and EscapeVerifier to 0x485caa427D245458D71674129A2340bDB69d8651
-// ? Deployed TestUsdc to 0x42Ca0987Fd7D46B985907d376Bb222D1C6281a71 and TestWbtc to 0x72a35ECeE1eb4593E9eb780AA5a5D436AB3b3941
+// * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
+// & Deployed StructHasher to 0x572EC9E81190bA3A8763C890ef9EE26f1b40A36C and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
+// ? Deployed TestUsdc to 0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1 and TestWbtc to 0x71a46b7F3F971982304E48342C78B5460d8047d6

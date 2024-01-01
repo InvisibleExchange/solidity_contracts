@@ -48,6 +48,6 @@ UpgradeInvisible().catch((error) => {
 //   process.exitCode = 1;
 // });
 
-// * Deployed Invisible to 0x557d570c97E92b4A2C7fdfaE4DDCb9EF931d33C2
-// & Deployed StructHasher to 0xb19f3ADF9185C8b9122f4843a87bC51EE4FA15a2 and EscapeVerifier to 0x485caa427D245458D71674129A2340bDB69d8651
-// ? Deployed TestUsdc to 0x42Ca0987Fd7D46B985907d376Bb222D1C6281a71 and TestWbtc to 0x72a35ECeE1eb4593E9eb780AA5a5D436AB3b3941
+// * Deployed Invisible to 0x259af6f31f545C606A7E56b9960CF69066b19F91
+// & Deployed StructHasher to 0xc57d4F241f5AC60E6BFeA7CCCb75bFcCc3D75B7E and EscapeVerifier to 0xCB5e9CaA6bE7dF23d34961CbF4Ac594F17FAb5c2
+// ? Deployed TestUsdc to 0x22dff2e837e3F76CE2f3c193920ADb0A70878305 and TestWbtc to 0xaBC8E433D0308a41f67645cc8dCA56E4467e8Db4
