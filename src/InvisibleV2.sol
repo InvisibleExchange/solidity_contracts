@@ -44,6 +44,8 @@ contract InvisibleV2 is
         _VMsetEscapeVerifier(newVerirfier);
     }
 
+    event TestEvent(uint escapes, uint positionEscapes);
+
     /// @notice Processes a new L1 update
     /// @dev After the proof is verified on L1 this will be called to update the state and process deposits/withdrawals. The contract will
     /// then send the accumulated deposit/withdrawal hashes to the relevant L2s. This function is available only on the L1.

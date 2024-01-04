@@ -13,6 +13,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
+// TODO: Make sure the same escape cannot be submitted twice
+
 contract EscapeVerifier is
     Initializable,
     OwnableUpgradeable,
@@ -51,17 +53,6 @@ contract EscapeVerifier is
         uint32 escapeId = s_escapeCount;
         s_escapeCount++;
 
-        uint256 escapeHash = hashNoteEscapeMessage(escapeId, notes);
-
-        s_forcedEscapes[escapeId] = ForcedEscape(
-            escapeId,
-            timestamp,
-            escapeHash,
-            signature,
-            [uint256(0), uint256(0)],
-            msg.sender
-        );
-
         for (uint256 i = 0; i < notes.length; i++) {
             require(
                 IVaultManager(invisibleAddr).isTokenRegistered(notes[i].token),
@@ -74,18 +65,27 @@ contract EscapeVerifier is
             s_escapeAmounts[escapeId][notes[i].token] += notes[i].amount;
         }
 
+        uint256 escapeHash = hashNoteEscapeMessage(notes);
+
+        s_forcedEscapes[escapeId] = ForcedEscape(
+            escapeId,
+            timestamp,
+            escapeHash,
+            signature,
+            [uint256(0), uint256(0)],
+            msg.sender
+        );
+
         emit NoteEscapeEvent(escapeId, timestamp, notes, signature);
     }
 
     function hashNoteEscapeMessage(
-        uint32 escapeId,
         Note[] calldata notes
     ) public view returns (uint256) {
-        uint256[] memory inputArr = new uint256[](notes.length + 1);
-        inputArr[0] = escapeId;
+        uint256[] memory inputArr = new uint256[](notes.length);
 
         for (uint256 i = 0; i < notes.length; i++) {
-            inputArr[i + 1] = IStructHasher(structHasher).hashNote(notes[i]);
+            inputArr[i] = IStructHasher(structHasher).hashNote(notes[i]);
         }
 
         uint256 noteEscapeHash = IStructHasher(structHasher).hashArr(inputArr);
@@ -122,11 +122,7 @@ contract EscapeVerifier is
         uint32 escapeId = s_escapeCount;
         s_escapeCount++;
 
-        uint256 tabHash = IStructHasher(structHasher).hashOrderTab(orderTab);
-        uint256 escapeHash = IStructHasher(structHasher).hash2(
-            tabHash,
-            escapeId
-        );
+        uint256 escapeHash = IStructHasher(structHasher).hashOrderTab(orderTab);
 
         s_forcedEscapes[escapeId] = ForcedEscape(
             escapeId,
@@ -146,7 +142,7 @@ contract EscapeVerifier is
 
     // * ====================================================================
     // * Positions
-    function startPositionEscape(
+    function startPositionEscape1(
         Position calldata position_a,
         uint64 closePrice,
         Position calldata position_b,
@@ -163,7 +159,6 @@ contract EscapeVerifier is
             position_b
         );
         uint256 escapeHash = hashPositionEscapeMessage(
-            escapeId,
             position_a,
             closePrice,
             positionHash,
@@ -191,7 +186,7 @@ contract EscapeVerifier is
         );
     }
 
-    function startPositionEscape(
+    function startPositionEscape2(
         Position calldata position_a,
         uint64 closePrice,
         OpenOrderFields calldata openOrderFields_b,
@@ -210,7 +205,6 @@ contract EscapeVerifier is
             openOrderFields_b
         );
         uint256 escapeHash = hashPositionEscapeMessage(
-            escapeId,
             position_a,
             closePrice,
             fields_hash,
@@ -247,7 +241,7 @@ contract EscapeVerifier is
         uint256[2] calldata signature_a,
         uint256[2] calldata signature_b
     ) private {
-        require(closePrice > 0);
+        require(closePrice > 0, "Invalid close price");
         require(
             position_a.vlp_token == 0,
             "Cannot force escape a smart contract inititated position"
@@ -271,21 +265,19 @@ contract EscapeVerifier is
     }
 
     function hashPositionEscapeMessage(
-        uint32 escapeId,
         Position calldata position_a,
         uint64 closePrice,
         uint256 hashInp4,
         address recipient
     ) public view returns (uint256) {
-        // & H = (escape_id, position_a.hash, close_price, open_order_fields_b.hash, recipient)
+        // & H = (position_a.hash, close_price, open_order_fields_b.hash, recipient)
 
-        uint256[] memory inputArr = new uint256[](5);
-        inputArr[0] = escapeId;
+        uint256[] memory inputArr = new uint256[](4);
         uint256 posHash = IStructHasher(structHasher).hashPosition(position_a);
-        inputArr[1] = posHash;
-        inputArr[2] = closePrice;
-        inputArr[3] = hashInp4;
-        inputArr[4] = uint256(uint160(recipient));
+        inputArr[0] = posHash;
+        inputArr[1] = closePrice;
+        inputArr[2] = hashInp4;
+        inputArr[3] = uint256(uint160(recipient));
 
         uint256 positionEscapeHash = IStructHasher(structHasher).hashArr(
             inputArr
@@ -349,6 +341,15 @@ contract EscapeVerifier is
 
     // * ====================================================================
     // * Verification
+
+    event TestEvent(
+        bool is_valid,
+        EscapeType escape_type,
+        uint32 escape_id,
+        uint256 escape_message_hash,
+        uint256 signature_r,
+        uint256 signature_s
+    );
 
     function updatePendingEscapes(
         EscapeOutput[] memory escapeOutputs

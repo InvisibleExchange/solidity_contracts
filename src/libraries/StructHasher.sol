@@ -29,19 +29,20 @@ contract StructHasher {
     ) external pure returns (uint256) {
         //
 
-        // & hash = H({allow_partial_liquidations, synthetic_token, position_address, vlp_token, max_vlp_supply, order_side, position_size, entry_price, liquidation_price, last_funding_idx, vlp_supply})
-        uint256[] memory positionArr = new uint256[](4);
+        // & hash = H({allow_partial_liquidations, synthetic_token, position_address, vlp_token, max_vlp_supply,
+        // &           order_side, position_size, entry_price, liquidation_price, last_funding_idx, vlp_supply})
+        uint256[] memory positionArr = new uint256[](11);
         positionArr[0] = position.allow_partial_liquidations ? 1 : 0;
         positionArr[1] = uint256(position.synthetic_token);
         positionArr[2] = uint256(position.position_address);
         positionArr[3] = position.vlp_token;
-        positionArr[3] = position.max_vlp_supply;
-        positionArr[4] = position.order_side ? 1 : 0;
-        positionArr[5] = position.position_size;
-        positionArr[6] = position.entry_price;
-        positionArr[7] = position.liquidation_price;
-        positionArr[8] = position.last_funding_idx;
-        positionArr[9] = position.vlp_supply;
+        positionArr[4] = position.max_vlp_supply;
+        positionArr[5] = position.order_side ? 1 : 0;
+        positionArr[6] = position.position_size;
+        positionArr[7] = position.entry_price;
+        positionArr[8] = position.liquidation_price;
+        positionArr[9] = position.last_funding_idx;
+        positionArr[10] = position.vlp_supply;
         uint256 positionHash = hashArr(positionArr);
 
         return positionHash;

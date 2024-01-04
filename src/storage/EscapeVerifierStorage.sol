@@ -56,12 +56,12 @@ abstract contract EscapeVerifierStorage {
     );
 
     uint32 s_escapeCount;
-    mapping(uint32 => ForcedEscape) s_forcedEscapes; // escapeId => ForecdEscape
-    mapping(uint32 => mapping(uint32 => uint64)) s_escapeAmounts; // escapeId => tokenId => amount
-    mapping(address => mapping(uint32 => bool)) s_successfulEscapes; //   owner => escapeId => isValid
+    mapping(uint32 => ForcedEscape) public s_forcedEscapes; // escapeId => ForecdEscape
+    mapping(uint32 => mapping(uint32 => uint64)) public s_escapeAmounts; // escapeId => tokenId => amount
+    mapping(address => mapping(uint32 => bool)) public s_successfulEscapes; //   owner => escapeId => isValid
 
     uint32 constant EXCHNAGE_VERIFICATION_TIME = 7 days;
-    uint32 constant COLLATERAL_TOKEN = 55555;
+    uint32 constant COLLATERAL_TOKEN = 2413654107;
 
     uint256 constant P = 2 ** 251 + 17 * 2 ** 192 + 1;
 

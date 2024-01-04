@@ -4,11 +4,12 @@ pragma solidity ^0.8.22;
 import "../utils/ProgramOutputStructs.sol";
 
 library ProgramOutputParser {
+    event TestEvent(uint escapes, uint positionEscapes);
+
     function parseProgramOutput(
         uint256[] calldata cairoProgramOutput
     )
         internal
-        pure
         returns (
             GlobalDexState memory dexState,
             AccumulatedHashesOutput[] memory hashes,
@@ -88,7 +89,7 @@ library ProgramOutputParser {
         uint32 txBatchId = uint32(batchedInfo);
 
         // & n_output_notes (32 bits) | n_output_positions (16 bits) | n_output_tabs (16 bits) | n_zero_indexes (32 bits) | n_deposits (16 bits) | n_withdrawals (16 bits) |
-        // & n_onchain_mm_actions (16 bits) | n_note_escapes (16 bits) | n_position_escapes (16 bits) | n_tab_escapes (16 bits) |
+        // & n_onchain_mm_actions (16 bits) | n_note_escapes (16 bits) | n_tab_escapes (16 bits) | n_position_escapes (16 bits) |
         batchedInfo = dexStateArr[3];
         uint16 nDeposits = uint16(batchedInfo >> 80);
         uint16 nWithdrawals = uint16(batchedInfo >> 64);

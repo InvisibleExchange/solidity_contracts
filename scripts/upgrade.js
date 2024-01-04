@@ -7,7 +7,7 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
 async function UpgradeInvisible() {
   const [signer] = await ethers.getSigners();
 
-  const proxyAddress = "0x557d570c97E92b4A2C7fdfaE4DDCb9EF931d33C2";
+  const proxyAddress = "0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d";
   const invisibleV2 = await ethers.getContractFactory("InvisibleV2");
 
   const upgraded = await upgrades.upgradeProxy(proxyAddress, invisibleV2, {
@@ -24,7 +24,7 @@ async function UpgradeInvisible() {
 async function upgradeEscapeVerifier() {
   const [signer] = await ethers.getSigners();
 
-  const proxyAddress = "0x485caa427D245458D71674129A2340bDB69d8651";
+  const proxyAddress = "0x0931c3d86512aE7A38Ab870052657981bed5e01d";
   const escapeVerifier = await ethers.getContractFactory("EscapeVerifier");
 
   const upgraded = await upgrades.upgradeProxy(proxyAddress, escapeVerifier, {
@@ -38,16 +38,16 @@ async function upgradeEscapeVerifier() {
   console.log(`Deployed EscapeVerifier to ${EscapeVerifier.address}`);
 }
 
-UpgradeInvisible().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-
-// upgradeEscapeVerifier().catch((error) => {
+// UpgradeInvisible().catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });
 
-// * Deployed Invisible to 0x259af6f31f545C606A7E56b9960CF69066b19F91
-// & Deployed StructHasher to 0xc57d4F241f5AC60E6BFeA7CCCb75bFcCc3D75B7E and EscapeVerifier to 0xCB5e9CaA6bE7dF23d34961CbF4Ac594F17FAb5c2
-// ? Deployed TestUsdc to 0x22dff2e837e3F76CE2f3c193920ADb0A70878305 and TestWbtc to 0xaBC8E433D0308a41f67645cc8dCA56E4467e8Db4
+upgradeEscapeVerifier().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
+// * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
+// & Deployed StructHasher to 0x417406f2775035131468a9841d3b8b0FED2F6455 and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
+// ? Deployed TestUsdc to 0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1 and TestWbtc to 0x71a46b7F3F971982304E48342C78B5460d8047d6

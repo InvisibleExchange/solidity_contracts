@@ -78,5 +78,5 @@ main().catch((error) => {
 // });
 
 // * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
-// & Deployed StructHasher to 0x572EC9E81190bA3A8763C890ef9EE26f1b40A36C and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
+// & Deployed StructHasher to 0x417406f2775035131468a9841d3b8b0FED2F6455 and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
 // ? Deployed TestUsdc to 0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1 and TestWbtc to 0x71a46b7F3F971982304E48342C78B5460d8047d6
