@@ -72,7 +72,7 @@ library ProgramOutputParser {
         cairoProgramOutput = cairoProgramOutput[(dexState.nNoteEscapes +
             dexState.nTabEscapes) * 4:];
         positionEscapes = parsePositionEscapesArray(
-            cairoProgramOutput[:dexState.nPositionEscapes * 6]
+            cairoProgramOutput[:dexState.nPositionEscapes * 7]
         );
     }
 
@@ -307,12 +307,12 @@ library ProgramOutputParser {
     function parsePositionEscapesArray(
         uint256[] calldata escapeArr
     ) private pure returns (PositionEscapeOutput[] memory) {
-        uint256 nEscapes = escapeArr.length / 6;
+        uint256 nEscapes = escapeArr.length / 7;
         PositionEscapeOutput[] memory escapes = new PositionEscapeOutput[](
             nEscapes
         );
 
-        for (uint256 i = 0; i < escapeArr.length; i += 6) {
+        for (uint256 i = 0; i < escapeArr.length; i += 7) {
             uint256 batchedEscapeInfo = escapeArr[i];
             address recipient = address(uint160(escapeArr[i + 1]));
             uint256 escapeMessageHash = escapeArr[i + 2];
@@ -381,17 +381,11 @@ library ProgramOutputParser {
     )
         internal
         pure
-        returns (
-            uint32 vlpToken,
-            uint64 maxVlpSupply,
-            uint64 vlpAmount,
-            uint256 mmAddress
-        )
+        returns (uint32 vlpToken, uint64 vlpAmount, uint256 mmAddress)
     {
-        // & batched_registration_info format: | vlp_token (32 bits) | max_vlp_supply (64 bits) | vlp_amount (64 bits) | action_type (8 bits) |
+        // & batched_registration_info format: | vlp_token (32 bits) | vlp_amount (64 bits) | action_type (8 bits) |
 
         vlpToken = uint32(output.batchedActionInfo >> 136);
-        maxVlpSupply = uint64(output.batchedActionInfo >> 72);
         vlpAmount = uint64(output.batchedActionInfo >> 8);
         mmAddress = output.mmPositionAddress;
     }

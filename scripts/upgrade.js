@@ -38,15 +38,15 @@ async function upgradeEscapeVerifier() {
   console.log(`Deployed EscapeVerifier to ${EscapeVerifier.address}`);
 }
 
-// UpgradeInvisible().catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
-
-upgradeEscapeVerifier().catch((error) => {
+UpgradeInvisible().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+// upgradeEscapeVerifier().catch((error) => {
+//   console.error(error);
+//   process.exitCode = 1;
+// });
 
 // * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
 // & Deployed StructHasher to 0x417406f2775035131468a9841d3b8b0FED2F6455 and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d

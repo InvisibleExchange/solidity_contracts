@@ -20,7 +20,6 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
 
             (
                 uint32 vlpToken,
-                uint64 maxVlpSupply,
                 uint64 vlpAmount,
                 uint256 mmAddress
             ) = ProgramOutputParser.uncompressRegistrationOutput(registration);
@@ -32,7 +31,6 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
 
             if (
                 perpRegistration.vlpTokenId == vlpToken &&
-                perpRegistration.maxVlpSupply == maxVlpSupply &&
                 perpRegistration.positionAddress == mmAddress
             ) {
                 perpRegistration.vlpAmount = vlpAmount;

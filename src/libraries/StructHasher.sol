@@ -29,14 +29,13 @@ contract StructHasher {
     ) external pure returns (uint256) {
         //
 
-        // & hash = H({allow_partial_liquidations, synthetic_token, position_address, vlp_token, max_vlp_supply,
+        // & hash = H({allow_partial_liquidations, synthetic_token, position_address, vlp_token,
         // &           order_side, position_size, entry_price, liquidation_price, last_funding_idx, vlp_supply})
         uint256[] memory positionArr = new uint256[](11);
         positionArr[0] = position.allow_partial_liquidations ? 1 : 0;
         positionArr[1] = uint256(position.synthetic_token);
         positionArr[2] = uint256(position.position_address);
         positionArr[3] = position.vlp_token;
-        positionArr[4] = position.max_vlp_supply;
         positionArr[5] = position.order_side ? 1 : 0;
         positionArr[6] = position.position_size;
         positionArr[7] = position.entry_price;
@@ -129,7 +128,6 @@ struct Position {
     uint256 position_address;
     bool allow_partial_liquidations;
     uint32 vlp_token;
-    uint64 max_vlp_supply;
     //
     bool order_side;
     uint64 position_size;

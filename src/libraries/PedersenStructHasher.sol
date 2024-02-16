@@ -30,12 +30,12 @@ contract PedersenStructHasher {
     ) external view returns (uint256) {
         //
 
-        // & hash = H({allow_partial_liquidations, synthetic_token, position_address,  vlp_token * 2**32 + max_vlp_supply})
+        // & hash = H({allow_partial_liquidations, synthetic_token, position_address,  vlp_token})
         uint256[] memory headerArr = new uint256[](4);
         headerArr[0] = position.allow_partial_liquidations ? 1 : 0;
         headerArr[1] = uint256(position.synthetic_token);
         headerArr[2] = uint256(position.position_address);
-        headerArr[3] = position.vlp_token * 2 ** 32 + position.max_vlp_supply;
+        headerArr[3] = position.vlp_token;
         uint256 headerHash = hashArr(headerArr);
 
         // & hash = H({header_hash, order_side, position_size, entry_price, liquidation_price, current_funding_idx, vlp_supply})
@@ -57,14 +57,12 @@ contract PedersenStructHasher {
     ) external view returns (uint256) {
         //
 
-        // & header_hash = H({ is_smart_contract, base_token, quote_token, vlp_token, max_vlp_supply, pub_key})
+        // & header_hash = H({ is_smart_contract, base_token, quote_token, pub_key})
 
         uint256[] memory headerArr = new uint256[](6);
         headerArr[0] = orderTab.is_smart_contract ? 1 : 0;
         headerArr[1] = orderTab.base_token;
         headerArr[2] = orderTab.quote_token;
-        headerArr[3] = orderTab.vlp_token;
-        headerArr[4] = orderTab.max_vlp_supply;
         headerArr[5] = orderTab.pub_key;
         uint256 headerHash = hashArr(headerArr);
 
@@ -176,7 +174,6 @@ struct Position {
     uint256 position_address;
     bool allow_partial_liquidations;
     uint32 vlp_token;
-    uint64 max_vlp_supply;
     //
     bool order_side;
     uint64 position_size;
@@ -197,8 +194,6 @@ struct OrderTab {
     uint32 quote_token;
     uint256 base_blinding;
     uint256 quote_blinding;
-    uint32 vlp_token;
-    uint64 max_vlp_supply;
     uint256 pub_key;
     //
     uint64 base_amount;

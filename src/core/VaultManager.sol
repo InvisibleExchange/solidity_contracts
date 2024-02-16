@@ -97,12 +97,12 @@ abstract contract VaultManager is
 
         // ? Transfer the fee to the gasFeeCollector
         if (gasFee > 0) {
-            bool success = token.transfer(s_gasFeeCollector, gasFee);
-            require(success, "Transfer failed");
+            bool success_ = token.transfer(s_gasFeeCollector, gasFee);
+            if (!success_) return false;
         }
 
-        bool success2 = token.transfer(recipient, withdrawalAmount);
-        return success2;
+        bool success = token.transfer(recipient, withdrawalAmount);
+        return success;
     }
 
     // ---------------------------------------------------------

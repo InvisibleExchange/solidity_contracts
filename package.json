@@ -7,6 +7,7 @@
     "hardhat": "^2.19.0"
   },
   "dependencies": {
+    "@layerzerolabs/lz-evm-oapp-v2": "^2.0.25",
     "@openzeppelin/contracts-upgradeable": "^5.0.0",
     "dotenv": "^16.3.1"
   }

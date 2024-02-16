@@ -41,7 +41,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     //     uint32 baseAsset,
     //     uint32 quoteAsset,
     //     uint256 tabAddress,
-    //     uint64 maxVlpSupply
     // ) public {
     //     require(
     //         s_approvedSpotMMs[msg.sender][tabAddress],
@@ -65,7 +64,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     //         baseAsset,
     //         quoteAsset,
     //         tabAddress,
-    //         maxVlpSupply,
     //         vlpTokenId,
     //         false
     //     );
@@ -78,7 +76,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     //         baseAsset,
     //         quoteAsset,
     //         tabAddress,
-    //         maxVlpSupply,
     //         vlpTokenId
     //     );
     // }
@@ -86,7 +83,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     function registerPerpMarketMaker(
         uint32 syntheticAsset,
         uint256 positionAddress,
-        uint64 maxVlpSupply
     ) external {
         require(
             s_approvedPerpMMs[msg.sender][positionAddress],
@@ -106,7 +102,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
             msg.sender,
             syntheticAsset,
             positionAddress,
-            maxVlpSupply,
             vlpTokenId,
             0
         );
@@ -121,7 +116,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
             msg.sender,
             syntheticAsset,
             positionAddress,
-            maxVlpSupply,
             vlpTokenId,
             mmActionId
         );

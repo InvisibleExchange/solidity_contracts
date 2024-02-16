@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+abstract contract InteractionsStorageBase {
+    address public s_messageRelay;
 
-abstract contract InteractionsStorage {
     // * DEPOSITS ----------------------------------------------
 
     event DepositEvent(
@@ -25,13 +25,13 @@ abstract contract InteractionsStorage {
 
     uint64 s_depositCount;
 
-    struct DepositCancelation {
+    struct DepositCancellation {
         address depositor;
         uint256 pubKey;
         uint32 tokenId;
+        uint256 timestamp;
     }
-
-    DepositCancelation[] s_depositCencelations;
+    DepositCancellation[] s_depositCencelations;
 
     // * WITHDRAWALS -------------------------------------------
 
@@ -41,7 +41,27 @@ abstract contract InteractionsStorage {
         uint256 withdrawalAmount,
         uint256 timestamp
     );
-    event StoredNewWithdrawalsEvent(uint256 timestamp, uint64 txBatchId);
+    event ProcessedWithdrawals(uint256 timestamp, uint64 txBatchId);
 
-    mapping(address => mapping(address => uint256)) s_failedWithdrawals; // recipient => tokenAddress => amount
+    mapping(address => mapping(address => uint256)) s_pendingWithdrawals; // recipient => tokenAddress => amount
+}
+
+abstract contract L2InteractionsStorage is InteractionsStorageBase {
+    mapping(uint64 depositId => bytes32) public s_depositHashes;
+
+    mapping(uint64 depositId => DepositCancellation) s_L2DepositCencellations;
+
+    struct WithdrawalRequest {
+        uint32 chainId;
+        uint32 tokenId;
+        uint64 amount;
+        address recipient;
+    }
+
+    struct DepositRequest {
+        uint64 depositId;
+        uint32 tokenId;
+        uint64 amount;
+        uint256 starkKey;
+    }
 }

@@ -5,19 +5,11 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 abstract contract MMRegistryStorage {
     // * EVENTS --------------------------------------------
-    // event newSpotMMRegistration(
-    //     address mmOwner,
-    //     uint32 baseAsset,
-    //     uint32 quoteAsset,
-    //     uint256 tabAddress,
-    //     uint64 maxVlpSupply,
-    //     uint32 vlpTokenId
-    // );
+
     event newPerpMMRegistration(
         address mmOwner,
         uint32 syntheticAsset,
         uint256 positionAddress,
-        uint64 maxVlpSupply,
         uint32 vlpTokenId,
         uint32 indexed mmActionId
     );
@@ -44,21 +36,10 @@ abstract contract MMRegistryStorage {
 
     // * STRUCTS --------------------------------------------
 
-    // struct SpotMMRegistration {
-    //     address mmOwner;
-    //     uint32 baseAsset;
-    //     uint32 quoteAsset;
-    //     uint256 tabAddress;
-    //     uint64 maxVlpSupply;
-    //     uint32 vlpTokenId;
-    //     bool isRegistered;
-    // }
-
     struct PerpMMRegistration {
         address mmOwner;
         uint32 syntheticAsset;
         uint256 positionAddress;
-        uint64 maxVlpSupply;
         uint32 vlpTokenId;
         uint64 vlpAmount;
     }

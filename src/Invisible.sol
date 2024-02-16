@@ -22,7 +22,7 @@ contract Invisible is
     ReentrancyGuardUpgradeable,
     UUPSUpgradeable,
     VaultManager,
-    Interactions,
+    L1Interactions,
     MMRegistry
 {
     function initialize(address initialOwner) public initializer {
@@ -42,6 +42,12 @@ contract Invisible is
 
         _VMsetEscapeVerifier(newVerirfier);
     }
+
+    function setMessageRelay(address newRelay) external onlyOwner {
+        s_messageRelay = newRelay;
+    }
+
+    // * ================== * //
 
     /// @notice Processes a new L1 update
     /// @dev After the proof is verified on L1 this will be called to update the state and process deposits/withdrawals. The contract will
@@ -106,9 +112,50 @@ contract Invisible is
             uint256 withdrawalHash = accumulatedHashOutputs[i].withdrawalHash;
 
             // Todo: Relay the hashes to the relevant L2s
+
+            // uint32 _dstEid,
+            // uint32 txBatchId,
+            // bytes32 accumulatedDepositHash,
+            // bytes32 accumulatedWithdrawalHash,
+            // bytes calldata _options
+
+            bytes memory options = "0x123"; // TODO: Add options and msg.value
+            L2MessageRelay(s_messageRelay).sendAccumulatedHash(
+                chainId,
+                txBatchId,
+                bytes32(depositHash),
+                bytes32(withdrawalHash),
+                options
+            );
         }
 
         s_accumulatedHashesRelayed[txBatchId] = true;
+    }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+}
+
+// ** =================================================================================================
+// ** =================================================================================================
+
+contract Invisible is
+    Initializable,
+    OwnableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    UUPSUpgradeable,
+    VaultManager,
+    L2Interactions,
+{
+    function initialize(address initialOwner) public initializer {
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
+
+        __VaultManager_init(payable(initialOwner));
+
+        s_txBatchId = 0;
+        s_txBatchId2StateRoot[s_txBatchId] = INIT_STATE_ROOT;
+
+        version = 1;
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
