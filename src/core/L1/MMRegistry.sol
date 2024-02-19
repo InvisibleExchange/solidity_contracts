@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "../libraries/ProgramOutputParser.sol";
-import "../MMRegistry/MMRegistryManager.sol";
-import "../MMRegistry/MMRegistryUpdates.sol";
+import "../../libraries/ProgramOutputParser.sol";
+import "../../MMRegistry/MMRegistryManager.sol";
+import "../../MMRegistry/MMRegistryUpdates.sol";
 
-import "../core/VaultManager.sol";
+import "../VaultManager.sol";
 
-import "../storage/MainStorage.sol";
+import "../../storage/MainStorage.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -88,6 +88,8 @@ abstract contract MMRegistry is
             mmPositionAddress
         ];
 
+        address usdcTokenAddress = s_tokenId2Address[USDC_TOKEN_ID];
+
         // ? If the position has been closed by the owner, we return the users share directly
         if (s_closedPositionLiqudity[mmPositionAddress].vlpAmountSum > 0) {
             // ? Get the user's share of the closed position liquidity
@@ -97,7 +99,7 @@ abstract contract MMRegistry is
 
             uint256 scaledAmount = scaleUp(userShare, USDC_TOKEN_ID);
 
-            s_pendingWithdrawals[msg.sender] += scaledAmount;
+            s_pendingWithdrawals[msg.sender][usdcTokenAddress] += scaledAmount;
 
             s_closedPositionLiqudity[mmPositionAddress]
                 .vlpAmountSum -= activeLiq.vlpAmount;
@@ -173,17 +175,17 @@ abstract contract MMRegistry is
 
     // * WITHDRAW FUNDS --------------------------------------------
     function withdrawalLiquidity() external nonReentrant {
+        uint32 usdcTokenId = USDC_TOKEN_ID;
+        address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
+
         // We send the event {depositor, amount} to the depositor
-        uint256 amount = s_pendingWithdrawals[msg.sender];
+        uint256 amount = s_pendingWithdrawals[msg.sender][usdcTokenAddress];
 
         if (amount == 0) {
             return;
         }
 
-        s_pendingWithdrawals[msg.sender] = 0;
-
-        uint32 usdcTokenId = USDC_TOKEN_ID;
-        address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
+        s_pendingWithdrawals[msg.sender][usdcTokenAddress] = 0;
 
         // ? Make withdrawal from the vault
         VaultManager.makeErc20VaultWithdrawal(

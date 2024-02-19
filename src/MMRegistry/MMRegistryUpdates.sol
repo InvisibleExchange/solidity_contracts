@@ -6,11 +6,16 @@ import "./MMRegistryManager.sol";
 
 import "../storage/MMRegistryStorage.sol";
 import "../core/VaultManager.sol";
+import "../storage/InteractionsStorage.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
+abstract contract MMRegistryUpdates is
+    MMRegistryStorage,
+    VaultManager,
+    InteractionsStorageBase
+{
     // * UPDATE PENDING * //
     function updatePendingRegistrations(
         OnChainMMActionOutput[] memory registrations
@@ -42,6 +47,8 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
     function updatePendingAddLiquidityUpdates(
         OnChainMMActionOutput[] memory addLiqOutputs
     ) internal {
+        address usdcTokenAddress = s_tokenId2Address[USDC_TOKEN_ID];
+
         for (uint i = 0; i < addLiqOutputs.length; i++) {
             (
                 uint64 initialAmount,
@@ -57,7 +64,7 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
 
             // ? If position is closed/closing we should prevent new deposits
             if (s_pendingCloseRequests[mmAddress] > 0) {
-                s_pendingWithdrawals[depositor] += scaleUp(
+                s_pendingWithdrawals[depositor][usdcTokenAddress] += scaleUp(
                     initialAmount,
                     USDC_TOKEN_ID
                 );
@@ -82,7 +89,9 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
                 cancelation.depositor
             ][cancelation.mmAddress];
             uint256 scaledAmount = scaleUp(pendingAmount, USDC_TOKEN_ID);
-            s_pendingWithdrawals[cancelation.depositor] += scaledAmount;
+            s_pendingWithdrawals[cancelation.depositor][
+                usdcTokenAddress
+            ] += scaledAmount;
 
             s_pendingCancellations.pop();
         }
@@ -92,6 +101,8 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
     function updatePendingRemoveLiquidityUpdates(
         OnChainMMActionOutput[] memory removeLiqOutputs
     ) internal {
+        address usdcTokenAddress = s_tokenId2Address[USDC_TOKEN_ID];
+
         for (uint i = 0; i < removeLiqOutputs.length; i++) {
             (
                 uint64 initialAmount,
@@ -124,14 +135,14 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             }
             uint256 scaledFee = scaleUp(mmFee, USDC_TOKEN_ID);
             address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
-            s_pendingWithdrawals[mmOwner] += scaledFee;
+            s_pendingWithdrawals[mmOwner][usdcTokenAddress] += scaledFee;
 
             // ? The user can than call withdrawalLiquidity to withdraw the funds
             uint256 scaledAmount = scaleUp(
                 returnCollateral - mmFee,
                 USDC_TOKEN_ID
             );
-            s_pendingWithdrawals[depositor] += scaledAmount;
+            s_pendingWithdrawals[depositor][usdcTokenAddress] += scaledAmount;
         }
     }
 
@@ -139,6 +150,8 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
     function updatePendingCloseMMUpdates(
         OnChainMMActionOutput[] memory closeMMOutputs
     ) internal {
+        address usdcTokenAddress = s_tokenId2Address[USDC_TOKEN_ID];
+
         for (uint i = 0; i < closeMMOutputs.length; i++) {
             (
                 uint64 initialValueSum,
@@ -160,7 +173,7 @@ abstract contract MMRegistryUpdates is MMRegistryStorage, VaultManager {
             }
             uint256 scaledFee = scaleUp(mmFee, USDC_TOKEN_ID);
             address mmOwner = s_perpRegistrations[mmAddress].mmOwner;
-            s_pendingWithdrawals[mmOwner] += scaledFee;
+            s_pendingWithdrawals[mmOwner][usdcTokenAddress] += scaledFee;
 
             // ? Store the liquidity info of the LPs
             // ? The LPs  can then claim by calling remove liquidity

@@ -82,7 +82,7 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
 
     function registerPerpMarketMaker(
         uint32 syntheticAsset,
-        uint256 positionAddress,
+        uint256 positionAddress
     ) external {
         require(
             s_approvedPerpMMs[msg.sender][positionAddress],

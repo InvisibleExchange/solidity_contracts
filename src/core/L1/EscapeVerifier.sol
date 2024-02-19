@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "../libraries/StructHasher.sol";
-import "../libraries/ProgramOutputParser.sol";
-import "../storage/EscapeVerifierStorage.sol";
+import "../../libraries/StructHasher.sol";
+import "../../libraries/ProgramOutputParser.sol";
+import "../../storage/EscapeVerifierStorage.sol";
 
-import "../interfaces/IVaultManager.sol";
-import "../interfaces/IStructHasher.sol";
+import "../../interfaces/IVaultManager.sol";
+import "../../interfaces/IStructHasher.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";

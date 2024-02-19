@@ -1,57 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "../interactions/Deposit.sol";
-import "../interactions/Withdrawal.sol";
-import "./MessageRelay.sol";
+import "../../interfaces/IMessageRelay.sol";
+
+import "../../interactions/L2Deposit.sol";
+import "../../interactions/L2Withdrawal.sol";
 
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-
-abstract contract L1Interactions is
-    ReentrancyGuardUpgradeable,
-    L1Deposit,
-    Withdrawal
-{
-    // Deposits
-    function makeDeposit(
-        address tokenAddress,
-        uint256 amount,
-        uint256 starkKey
-    )
-        external
-        payable
-        nonReentrant
-        returns (uint64 newAmountDeposited, uint64 depositId)
-    {
-        return _makeDeposit(tokenAddress, amount, starkKey);
-    }
-
-    function startCancelDeposit(
-        address tokenAddress,
-        uint256 starkKey
-    ) external nonReentrant {
-        return _startCancelDeposit(tokenAddress, starkKey);
-    }
-
-    function startCancelETHDeposit(uint256 starkKey) external nonReentrant {
-        return _startCancelDeposit(address(0), starkKey);
-    }
-
-    function getPendingDepositAmount(
-        uint256 starkKey,
-        address tokenAddress
-    ) public view returns (uint256) {
-        return _getPendingDepositAmount(starkKey, tokenAddress);
-    }
-
-    function getPendingETHDepositAmount(
-        uint256 starkKey
-    ) public view returns (uint256) {
-        return _getPendingDepositAmount(starkKey, address(0));
-    }
-
-    //
-}
 
 // * NEW DEPOSIT FLOW:
 // * 1. User makes a deposit on the L2
@@ -160,7 +115,7 @@ abstract contract L2Interactions is
             depositsHash = keccak256(abi.encodePacked([depositsHash, depHash]));
         }
 
-        bytes32 accumulatedDepositHash = L2MessageRelay(s_messageRelay)
+        bytes32 accumulatedDepositHash = IL2MessageRelay(s_messageRelay)
             .accumulatedDepositHashes(txBatchId);
         require(
             depositsHash == accumulatedDepositHash,
@@ -172,7 +127,7 @@ abstract contract L2Interactions is
             s_depositHashes[deposits[i].depositId] = 0;
         }
 
-        L2MessageRelay(s_messageRelay).processAccumulatedDepositHash(
+        IL2MessageRelay(s_messageRelay).processAccumulatedDepositHash(
             txBatchId,
             accumulatedDepositHash
         );
@@ -198,7 +153,7 @@ abstract contract L2Interactions is
         }
 
         // ? Compare to the received withdrawal hash
-        bytes32 newAccumulatedWithdrawalHash = L2MessageRelay(s_messageRelay)
+        bytes32 newAccumulatedWithdrawalHash = IL2MessageRelay(s_messageRelay)
             .accumulatedWithdrawalHashes(txBatchId);
         require(
             withdrawalsHash == newAccumulatedWithdrawalHash,
@@ -208,30 +163,10 @@ abstract contract L2Interactions is
         // ? Process the withdrawals (send the funds to the recipients)
         processAccumulatedWithdrawalOutputs(withdrawals, txBatchId);
 
-        L2MessageRelay(s_messageRelay).processAccumulatedWithdrawalHash(
+        IL2MessageRelay(s_messageRelay).processAccumulatedWithdrawalHash(
             txBatchId,
             withdrawalsHash
         );
-    }
-
-    // * Helpers --------------------------------------------------------------------
-
-    function _getWithdrawalHash(
-        uint32 chainId,
-        uint32 tokenId,
-        uint64 amount,
-        address recipient_
-    ) private pure returns (bytes32) {
-        uint256 batchedWithdrawalInfo = ((chainId * 2 ** 32) + tokenId) *
-            2 ** 32 +
-            amount;
-        uint256 recipient = uint256(uint160(recipient_));
-
-        return keccak256(abi.encodePacked([batchedWithdrawalInfo, recipient]));
-    }
-
-    function setMessageRelay(address _relay) external onlyOwner {
-        s_messageRelay = _relay;
     }
 
     //

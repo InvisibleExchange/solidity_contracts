@@ -4,7 +4,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-async function main() {
+async function deployTestTokens() {
   const [deployer] = await ethers.getSigners();
 
   const testUsdc = await ethers.deployContract(
@@ -30,7 +30,7 @@ async function main() {
   );
 }
 
-async function main2() {
+async function mintTestTokens() {
   const [signer] = await ethers.getSigners();
 
   const testTokenAbi =
@@ -53,8 +53,8 @@ async function main2() {
   let accounts = [
     "0xaCEdF8742eDC7d923e1e6462852cCE136ee9Fb56",
     "0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74",
-    "0x26BD962c29195832F61Af94f438444A6B7212Ab8",
-    "0xcca319f79859761Cb2248Af392cB015967063369",
+    // "0x26BD962c29195832F61Af94f438444A6B7212Ab8",
+    // "0xcca319f79859761Cb2248Af392cB015967063369",
   ];
   for (let i = 0; i < accounts.length; i++) {
     let txRes = await usdcContract.mint(
@@ -68,15 +68,28 @@ async function main2() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-// main2().catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
+async function main() {
+  await deployTestTokens().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 
-// * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
-// & Deployed StructHasher to 0x417406f2775035131468a9841d3b8b0FED2F6455 and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
-// ? Deployed TestUsdc to 0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1 and TestWbtc to 0x71a46b7F3F971982304E48342C78B5460d8047d6
+  await mintTestTokens().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+main();
+
+// * ETH SEPOLIA
+// * Deployed TestUsdc to 0xFa255d4aa3Aa5d3a26DF650a158835b77877767a and TestWbtc to 0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0xaCEdF8742eDC7d923e1e6462852cCE136ee9Fb56
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0x26BD962c29195832F61Af94f438444A6B7212Ab8
+
+// ! ARBITRUM SEPOLIA
+// ! Deployed TestUsdc to 0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651 and TestWbtc to 0x27D6834e8D35CdAB5991b66ef1550326f1018F62
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0xaCEdF8742eDC7d923e1e6462852cCE136ee9Fb56
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0x26BD962c29195832F61Af94f438444A6B7212Ab8
+// Minted 10,000 TestUsdc and 100 TestWbtc to 0xcca319f79859761Cb2248Af392cB015967063369

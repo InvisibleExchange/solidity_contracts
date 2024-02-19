@@ -75,8 +75,6 @@ abstract contract MMRegistryStorage {
 
     mapping(bytes32 => uint256) public s_pendingRemoveLiqudityRequests; // keccak256(depositor, mm_position_address) => timestamp
 
-    mapping(address => uint256) public s_pendingWithdrawals; // depositor => amount
-
     mapping(uint256 => ClosedPositionLiquidityInfo)
         public s_closedPositionLiqudity; // mm_position_address => ClosedPositionLiquidityInfo
 

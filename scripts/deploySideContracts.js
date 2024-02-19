@@ -4,7 +4,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-async function main() {
+async function deploy() {
   const [deployer] = await ethers.getSigners();
 
   const esacpeVerifier = await ethers.getContractFactory("EscapeVerifier");
@@ -29,11 +29,38 @@ async function main() {
   );
 }
 
-main().catch((error) => {
+async function deployMessageRelay(isL1) {
+  const [deployer] = await ethers.getSigners();
+
+  let lzEndpoint = "0x6edce65403992e310a62460808c4b910d972f10f";
+  const messageRelayInstance = await ethers.deployContract(
+    isL1 ? "L1MessageRelay" : "L2MessageRelay",
+    [lzEndpoint, deployer.address],
+    {
+      signer: deployer,
+    }
+  );
+  let MessageRelay = await messageRelayInstance.waitForDeployment();
+
+  console.log(`Deployed MessageRelay to ${await MessageRelay.getAddress()}`);
+}
+
+// deploy().catch((error) => {
+//   console.error(error);
+//   process.exitCode = 1;
+// });
+deployMessageRelay(false).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
 
-// Deploying contracts with the account: 0xaCEdF8742eDC7d923e1e6462852cCE136ee9Fb56
-// * Deployed Invisible to 0x9ECC2Ccc13Bf31790aaa88A985D3d24A5000d01a
-// & Deployed StructHasher to 0x2b9350c10B6FBf52B1762ea8245d8C6c411Ce36E and EscapeVerifier to 0x241Da4c0CEC65fBef4F94f182BAeCb4757547692
+// * ETH SEPOLIA
+// * Deployed Invisible to
+// * Deployed StructHasher to  and EscapeVerifier to
+// * Deployed TestUsdc to  and TestWbtc to
+// * Deployed MessageRelay to
+
+// ! ARBITRUM SEPOLIA
+// ! Deployed InvisibleL2 to
+// ! Deployed TestUsdc to  and TestWbtc to
+// ! Deployed MessageRelay to

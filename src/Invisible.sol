@@ -3,13 +3,13 @@ pragma solidity ^0.8.22;
 
 import "./interfaces/IPedersenHash.sol";
 import "./interfaces/IEscapeVerifier.sol";
+import "./interfaces/IMessageRelay.sol";
 
 import "./libraries/ProgramOutputParser.sol";
 
 import "./core/VaultManager.sol";
-import "./core/Interactions.sol";
-import "./core/EscapeVerifier.sol";
-import "./core/MMRegistry.sol";
+import "./core/L1/L1Interactions.sol";
+import "./core/L1/MMRegistry.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -25,11 +25,14 @@ contract Invisible is
     L1Interactions,
     MMRegistry
 {
-    function initialize(address initialOwner) public initializer {
+    function initialize(
+        address initialOwner,
+        uint32 _chainId
+    ) public initializer {
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
 
-        __VaultManager_init(payable(initialOwner));
+        __VaultManager_init(payable(initialOwner), _chainId);
 
         s_txBatchId = 0;
         s_txBatchId2StateRoot[s_txBatchId] = INIT_STATE_ROOT;
@@ -92,13 +95,15 @@ contract Invisible is
             positionEscapes
         );
 
+        relayAccumulatedHashes(s_txBatchId, hashes);
+
         s_txBatchId += 1;
         s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
         s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
     }
 
     function relayAccumulatedHashes(
-        uint64 txBatchId,
+        uint32 txBatchId,
         AccumulatedHashesOutput[] memory accumulatedHashOutputs
     ) internal {
         require(
@@ -111,51 +116,16 @@ contract Invisible is
             uint256 depositHash = accumulatedHashOutputs[i].depositHash;
             uint256 withdrawalHash = accumulatedHashOutputs[i].withdrawalHash;
 
-            // Todo: Relay the hashes to the relevant L2s
-
-            // uint32 _dstEid,
-            // uint32 txBatchId,
-            // bytes32 accumulatedDepositHash,
-            // bytes32 accumulatedWithdrawalHash,
-            // bytes calldata _options
-
-            bytes memory options = "0x123"; // TODO: Add options and msg.value
-            L2MessageRelay(s_messageRelay).sendAccumulatedHash(
+            // ? Relay the hashes to the relevant L2s
+            IL1MessageRelay(s_messageRelay).storeAccumulatedHashes(
                 chainId,
                 txBatchId,
                 bytes32(depositHash),
-                bytes32(withdrawalHash),
-                options
+                bytes32(withdrawalHash)
             );
         }
 
         s_accumulatedHashesRelayed[txBatchId] = true;
-    }
-
-    function _authorizeUpgrade(address) internal override onlyOwner {}
-}
-
-// ** =================================================================================================
-// ** =================================================================================================
-
-contract Invisible is
-    Initializable,
-    OwnableUpgradeable,
-    ReentrancyGuardUpgradeable,
-    UUPSUpgradeable,
-    VaultManager,
-    L2Interactions,
-{
-    function initialize(address initialOwner) public initializer {
-        __Ownable_init(initialOwner);
-        __UUPSUpgradeable_init();
-
-        __VaultManager_init(payable(initialOwner));
-
-        s_txBatchId = 0;
-        s_txBatchId2StateRoot[s_txBatchId] = INIT_STATE_ROOT;
-
-        version = 1;
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

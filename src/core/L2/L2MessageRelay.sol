@@ -9,114 +9,6 @@ import {OAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OAppCore.so
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-import "./MessageRelay.sol";
-
-struct AccumulatedHashesMessage {
-    uint32 txBatchId;
-    bytes32 accumulatedDepositHash;
-    bytes32 accumulatedWithdrawalHash;
-}
-
-struct L2AcknowledgmentMessage {
-    uint32 txBatchId;
-    bool depositsVerified;
-    bool withdrawalsVerified;
-}
-
-contract L1MessageRelay is OAppSender, OAppReceiver {
-    event MessageSent(bytes message, uint32 dstEid);
-    event MessageReceived(string message, uint32 senderEid, bytes32 sender);
-
-    // xyz: 0x00030100110100000000000000000000000000030d40
-
-    mapping(uint32 => mapping(uint32 => bool)) public s_depositAcknowledgments; // senderEid -> txBatchId -> depositsAcknowledged
-    mapping(uint32 => mapping(uint32 => bool))
-        public s_withdrawalAcknowledgments; // senderEid -> txBatchId -> depositsAcknowledged
-
-    uint64 constant chainId = 1; // TODO:
-
-    address public s_invisibleAddress;
-
-    constructor(
-        address _endpoint,
-        address _owner
-    ) OAppCore(_endpoint, _owner) Ownable(_owner) {}
-
-    function setInvisibleAddress(address _invAddress) external onlyOwner {
-        s_invisibleAddress = _invAddress;
-    }
-
-    // * ================== * //
-
-    function sendAccumulatedHash(
-        uint32 _dstEid,
-        uint32 txBatchId,
-        bytes32 accumulatedDepositHash,
-        bytes32 accumulatedWithdrawalHash,
-        bytes calldata _options
-    ) external payable {
-        require(msg.sender == s_invisibleAddress, "Invalid sender");
-
-        AccumulatedHashesMessage memory message = AccumulatedHashesMessage(
-            txBatchId,
-            accumulatedDepositHash,
-            accumulatedWithdrawalHash
-        );
-
-        bytes memory _payload = abi.encode(message);
-
-        MessagingFee memory fee = _quote(_dstEid, _payload, _options, false);
-
-        // TODO: Verify the balance is sufficient to send the transaction. If it isn't, store the message and send it later.
-
-        // MessagingReceipt memory _receipt =
-        _lzSend(_dstEid, _payload, _options, fee, payable(msg.sender));
-
-        // TODO: Do we need to store the message?
-
-        emit MessageSent(_payload, _dstEid);
-    }
-
-    function _lzReceive(
-        Origin calldata _origin,
-        bytes32 _guid,
-        bytes calldata payload,
-        address,
-        bytes calldata
-    ) internal override {
-        L2AcknowledgmentMessage memory message = abi.decode(
-            payload,
-            (L2AcknowledgmentMessage)
-        );
-
-        // Extract the sender's EID from the origin
-        uint32 senderEid = _origin.srcEid;
-        bytes32 sender = _origin.sender;
-
-        // TODO: Do we need to verify the sender is a registered peer?
-
-        if (message.depositsVerified) {
-            s_depositAcknowledgments[senderEid][message.txBatchId] = true;
-        }
-        if (message.withdrawalsVerified) {
-            s_withdrawalAcknowledgments[senderEid][message.txBatchId] = true;
-        }
-        // TODO: What do we do if the deposits/withdrawals are not verified?
-
-        // TODO: What do we do with this information?
-    }
-
-    function oAppVersion()
-        public
-        pure
-        virtual
-        override(OAppSender, OAppReceiver)
-        returns (uint64 senderVersion, uint64 receiverVersion)
-    {
-        return (SENDER_VERSION, RECEIVER_VERSION);
-    }
-}
-
 // * DEPOSIT FLOW:
 // * 1. User makes a deposit on the L2
 // * 2. The L2MessageRelay maps(stores) the depositId to the depositHash
@@ -136,6 +28,18 @@ contract L1MessageRelay is OAppSender, OAppReceiver {
 // * 3. The L2 checks if the hashes from the previous batch have been verified
 // * 4. If the hashes have been verified the L2 send back and acknowledgement to the L1
 
+struct AccumulatedHashesMessage {
+    uint32 txBatchId;
+    bytes32 accumulatedDepositHash;
+    bytes32 accumulatedWithdrawalHash;
+}
+
+struct L2AcknowledgmentMessage {
+    uint32 txBatchId;
+    bool depositsVerified;
+    bool withdrawalsVerified;
+}
+
 contract L2MessageRelay is OAppSender, OAppReceiver {
     uint32 txBatchId = 0;
     uint32 public totalDepositCount = 0;
@@ -146,7 +50,7 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
     mapping(uint32 => bool) public processedDeposits; // txBatchId -> isProcessed
     mapping(uint32 => bool) public processedWithdrawals; // txBatchId -> isProcessed
 
-    uint32 L1DestEid = 123; // TODO
+    uint32 L1DestEid = 40161; // TODO
 
     event UpdateAccumulatedDepositHash(
         uint32 totalDepositCount,
@@ -192,27 +96,12 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
         accumulatedWithdrawalHashes[message.txBatchId] = message
             .accumulatedWithdrawalHash;
 
-        // TODO: Verify that the previous accumulated hashes have been verified
-        bool prevDepositsVerified = processedDeposits[message.txBatchId - 1];
-        bool prevWithdrawalsVerified = processedWithdrawals[
-            message.txBatchId - 1
-        ];
-
-        L2AcknowledgmentMessage memory ack = L2AcknowledgmentMessage(
-            message.txBatchId - 1,
-            prevDepositsVerified,
-            prevWithdrawalsVerified
-        );
-
-        bytes memory options = "0x123"; // TODO: Add options and msg.value
-        _sendAcknowledgment(ack, options);
-
-        txBatchId = message.txBatchId;
+        txBatchId = message.txBatchId + 1;
     }
 
     /* @dev Used to send the acknowledgment message manually, if necessary.
      */
-    function sendAcknowledgment(uint32 _txBatchId) external {
+    function sendAcknowledgment(uint32 _txBatchId) external onlyOwner {
         bool prevDepositsVerified = processedDeposits[_txBatchId];
         bool prevWithdrawalsVerified = processedWithdrawals[_txBatchId];
 
@@ -222,7 +111,7 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
             prevWithdrawalsVerified
         );
 
-        bytes memory options = "0x123"; // TODO: Add options and msg.value
+        bytes memory options = "0x00030100110100000000000000000000000000030d40"; // TODO: Add options and msg.value
         _sendAcknowledgment(ack, options);
     }
 

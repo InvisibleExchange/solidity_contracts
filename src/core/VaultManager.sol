@@ -18,13 +18,16 @@ abstract contract VaultManager is
     FlashLender,
     TokenInfo
 {
-    function __VaultManager_init(address payable _gasCollector) internal {
+    function __VaultManager_init(
+        address payable _gasCollector,
+        uint32 _chainId
+    ) internal {
         s_gasFeeCollector = _gasCollector;
 
         __tokenInfo_init();
 
         s_vaults[address(0)] = true; // Eth vault
-        chainId = 9090909;
+        chainId = _chainId;
     }
 
     function _VMsetEscapeVerifier(address newVerirfier) internal {

@@ -37,12 +37,30 @@ module.exports = {
   },
   networks: {
     sepolia: {
-      url: `https://ethereum-sepolia.publicnode.com`,
+      url: `https://sepolia.rpc.thirdweb.com`,
+      accounts: [process.env.PRIVATE_KEY],
+    },
+    arbitrum_sepolia: {
+      url: `https://arbitrum-sepolia.rpc.thirdweb.com`,
       accounts: [process.env.PRIVATE_KEY],
     },
   },
 
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY,
+      arbitrum_sepolia: process.env.ARBISCAN_API_KEY,
+    },
+
+    customChains: [
+      {
+        network: "arbitrum_sepolia",
+        chainId: 421614,
+        urls: {
+          apiURL: "https://api-sepolia.arbiscan.io/api",
+          browserURL: "https://sepolia.arbiscan.io",
+        },
+      },
+    ],
   },
 };

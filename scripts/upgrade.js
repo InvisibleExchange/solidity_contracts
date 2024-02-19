@@ -4,21 +4,22 @@ const path = require("path");
 const dotenv = require("dotenv");
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-async function UpgradeInvisible() {
+async function UpgradeInvisible(proxyAddress, isL1) {
   const [signer] = await ethers.getSigners();
 
-  const proxyAddress = "0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d";
-  const invisibleV2 = await ethers.getContractFactory("InvisibleV2");
+  const invisibleV2 = await ethers.getContractFactory(
+    isL1 ? "Invisible" : "InvisibleL2"
+  );
 
   const upgraded = await upgrades.upgradeProxy(proxyAddress, invisibleV2, {
     kind: "uups",
-    // call: { fn: "initialize", args: [signer.address] },
+    // call: { fn: "initialize", args: [signer.address, chainId] },
     gasLimit: 750000,
   });
 
   let Invisible = await upgraded.waitForDeployment();
 
-  console.log(`Deployed InvisibleV2 to ${invisibleV2.address}`);
+  console.log(`Deployed InvisibleV2 to ${await Invisible.getAddress()}`);
 }
 
 async function upgradeEscapeVerifier() {
@@ -38,16 +39,25 @@ async function upgradeEscapeVerifier() {
   console.log(`Deployed EscapeVerifier to ${EscapeVerifier.address}`);
 }
 
-UpgradeInvisible().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+UpgradeInvisible("0x1067EEB555DC298f7F4787919104826FF5881060", true).catch(
+  (error) => {
+    console.error(error);
+    process.exitCode = 1;
+  }
+);
 
 // upgradeEscapeVerifier().catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });
 
-// * Deployed Invisible to 0x951bBd501d9CaF6E75CD9566f8eC40eF0860B10d
-// & Deployed StructHasher to 0x417406f2775035131468a9841d3b8b0FED2F6455 and EscapeVerifier to 0x0931c3d86512aE7A38Ab870052657981bed5e01d
-// ? Deployed TestUsdc to 0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1 and TestWbtc to 0x71a46b7F3F971982304E48342C78B5460d8047d6
+// * ETH SEPOLIA
+// * Deployed Invisible to 0x1067EEB555DC298f7F4787919104826FF5881060
+// * Deployed StructHasher to 0xB54b9D3c5e274b577AD4fba497779F6253F1bc89 and EscapeVerifier to 0xf2c1E1D6cA9c35D1686f29f082927748520c7F63
+// * Deployed TestUsdc to 0xFa255d4aa3Aa5d3a26DF650a158835b77877767a and TestWbtc to 0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3
+// * Deployed MessageRelay to 0x65cAD7503C36FbB9eda10877c113311c2d732D82
+
+// ! ARBITRUM SEPOLIA
+// ! Deployed InvisibleL2 to 0x72D3D0F9f9A9F8ca748Fbed1Fd7A8A1b17a943e4
+// ! Deployed TestUsdc to 0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651 and TestWbtc to 0x27D6834e8D35CdAB5991b66ef1550326f1018F62
+// ! Deployed MessageRelay to 0x990248Cbae36334a576BD3Db2aA9bfFC6AA1AdC3
