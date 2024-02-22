@@ -53,14 +53,3 @@ deployMessageRelay(false).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
-
-// * ETH SEPOLIA
-// * Deployed Invisible to
-// * Deployed StructHasher to  and EscapeVerifier to
-// * Deployed TestUsdc to  and TestWbtc to
-// * Deployed MessageRelay to
-
-// ! ARBITRUM SEPOLIA
-// ! Deployed InvisibleL2 to
-// ! Deployed TestUsdc to  and TestWbtc to
-// ! Deployed MessageRelay to

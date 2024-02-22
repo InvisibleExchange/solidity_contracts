@@ -25,7 +25,8 @@ contract L1MessageRelay is OAppSender, OAppReceiver {
     event MessageSent(bytes message, uint32 dstEid);
     event MessageReceived(string message, uint32 senderEid, bytes32 sender);
 
-    // xyz: 0x00030100110100000000000000000000000000030d40
+    // 200k gas: 0x00030100110100000000000000000000000000030d40
+    // 500k gas: 0x000301001101000000000000000000000000004c4b40
 
     mapping(uint32 => mapping(uint32 => bytes32))
         public s_accumulatedDepositHashes; // senderEid -> txBatchId -> depositsAcknowledged
@@ -100,7 +101,10 @@ contract L1MessageRelay is OAppSender, OAppReceiver {
         );
 
         // ? Verify the balance is sufficient to send the transaction
-        require(msg.value >= fee.nativeFee, "Insufficient balance");
+        require(
+            msg.value >= fee.nativeFee,
+            "Insufficient value sent to cover fee"
+        );
 
         // MessagingReceipt memory _receipt =
         _lzSend(_dstEid, _payload, _options, fee, payable(msg.sender));

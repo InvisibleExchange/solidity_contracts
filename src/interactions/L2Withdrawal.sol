@@ -45,6 +45,11 @@ abstract contract L2Withdrawal is WithdrawalBase, L2InteractionsStorage {
             uint(amount);
         uint256 recipient = uint256(uint160(recipient_));
 
-        return keccak256(abi.encodePacked([batchedWithdrawalInfo, recipient]));
+        uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
+
+        bytes memory data = abi.encodePacked(batchedWithdrawalInfo, recipient);
+        uint256 withdrawalHash = uint256(keccak256(data)) % P;
+
+        return bytes32(withdrawalHash);
     }
 }

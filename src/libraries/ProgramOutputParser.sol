@@ -39,10 +39,10 @@ library ProgramOutputParser {
 
         cairoProgramOutput = cairoProgramOutput[configLen:];
         hashes = parseAccumulatedHashes(
-            cairoProgramOutput[:config.chainIdsLen * 3]
+            cairoProgramOutput[:(config.chainIdsLen - 1) * 3]
         );
 
-        cairoProgramOutput = cairoProgramOutput[config.chainIdsLen * 3:];
+        cairoProgramOutput = cairoProgramOutput[(config.chainIdsLen - 1) * 3:];
         deposits = parseDepositsArray(
             cairoProgramOutput[:dexState.nDeposits * 2]
         );

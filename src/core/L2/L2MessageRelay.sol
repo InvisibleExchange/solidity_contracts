@@ -40,6 +40,7 @@ struct L2AcknowledgmentMessage {
     bool withdrawalsVerified;
 }
 
+
 contract L2MessageRelay is OAppSender, OAppReceiver {
     uint32 txBatchId = 0;
     uint32 public totalDepositCount = 0;
@@ -63,7 +64,9 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
     constructor(
         address _endpoint,
         address _owner
-    ) OAppCore(_endpoint, _owner) Ownable(_owner) {}
+    ) OAppCore(_endpoint, _owner) Ownable(_owner) {
+        processedDeposits[1] = true; // TODO: For testing only
+    }
 
     function setInvisibleAddress(address _invAddress) external onlyOwner {
         s_invisibleAddress = _invAddress;
@@ -96,12 +99,22 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
         accumulatedWithdrawalHashes[message.txBatchId] = message
             .accumulatedWithdrawalHash;
 
+        if (message.accumulatedDepositHash == 0) {
+            processedDeposits[message.txBatchId] = true;
+        }
+        if (message.accumulatedWithdrawalHash == 0) {
+            processedWithdrawals[message.txBatchId] = true;
+        }
+
         txBatchId = message.txBatchId + 1;
     }
 
     /* @dev Used to send the acknowledgment message manually, if necessary.
      */
-    function sendAcknowledgment(uint32 _txBatchId) external onlyOwner {
+    function sendAcknowledgment(
+        uint32 _txBatchId,
+        bytes memory _options
+    ) external payable onlyOwner {
         bool prevDepositsVerified = processedDeposits[_txBatchId];
         bool prevWithdrawalsVerified = processedWithdrawals[_txBatchId];
 
@@ -111,8 +124,25 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
             prevWithdrawalsVerified
         );
 
-        bytes memory options = "0x00030100110100000000000000000000000000030d40"; // TODO: Add options and msg.value
-        _sendAcknowledgment(ack, options);
+        _sendAcknowledgment(ack, _options);
+    }
+
+    function estimateAcknowledgmentFee(
+        uint32 _txBatchId,
+        bytes memory _options
+    ) external view returns (MessagingFee memory) {
+        bool prevDepositsVerified = processedDeposits[_txBatchId];
+        bool prevWithdrawalsVerified = processedWithdrawals[_txBatchId];
+
+        L2AcknowledgmentMessage memory ack = L2AcknowledgmentMessage(
+            _txBatchId,
+            prevDepositsVerified,
+            prevWithdrawalsVerified
+        );
+
+        bytes memory _payload = abi.encode(ack);
+
+        return _quote(L1DestEid, _payload, _options, false);
     }
 
     function _sendAcknowledgment(

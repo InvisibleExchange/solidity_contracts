@@ -6,11 +6,15 @@ import "../interfaces/IMessageRelay.sol";
 
 import "./Base.sol";
 
+event TestEvent(uint256 value);
+
 abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
     function _processDepositHashes(
         uint32 txBatchId,
         DepositRequest[] calldata deposits
     ) internal {
+        uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
+
         bytes32 depositsHash = 0;
         for (uint256 i = 0; i < deposits.length; i++) {
             bytes32 depHash = _getDepositHash(
@@ -20,11 +24,21 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
                 deposits[i].starkKey
             );
 
-            depositsHash = keccak256(abi.encodePacked([depositsHash, depHash]));
+            emit TestEvent(uint256(depHash));
+
+            bytes memory data = abi.encodePacked(depositsHash, depHash);
+            uint256 newDepHash = uint256(keccak256(data)) % P;
+
+            depositsHash = bytes32(newDepHash);
+
+            emit TestEvent(uint256(depositsHash));
         }
 
         bytes32 accumulatedDepositHash = IL2MessageRelay(s_messageRelay)
-            .accumulatedDepositHashes(txBatchId - 1);
+            .accumulatedDepositHashes(txBatchId);
+
+        emit TestEvent(uint256(accumulatedDepositHash));
+
         require(
             depositsHash == accumulatedDepositHash,
             "Invalid accumulated deposit hash"
@@ -46,7 +60,7 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
         }
 
         IL2MessageRelay(s_messageRelay).processAccumulatedDepositHash(
-            txBatchId - 1,
+            txBatchId,
             accumulatedDepositHash
         );
     }
@@ -60,8 +74,11 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
     ) internal {
         // TODO: Add nonReentrant modifier
 
-        require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark key");
+        uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
+        require(starkKey < P, "Invalid stark key");
         require(msg.sender != address(0), "msg.sender can't be 0");
+
+        require(s_depositHashes[depositId] != 0, "Invalid deposit id");
 
         // ? Get the token id and scale the amount
         uint32 tokenId = getTokenId(tokenAddress);
@@ -127,10 +144,11 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
             2 ** 64 +
             uint(amount);
 
-        bytes32 depositHash = keccak256(
-            abi.encodePacked([batchedDepositInfo, starkKey])
-        );
+        uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
 
-        return depositHash;
+        bytes memory data = abi.encodePacked(batchedDepositInfo, starkKey);
+        uint256 depositHash = uint256(keccak256(data)) % P;
+
+        return bytes32(depositHash);
     }
 }

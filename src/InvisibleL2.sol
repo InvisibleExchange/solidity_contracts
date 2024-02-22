@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "./interfaces/IPedersenHash.sol";
-
 import "./core/VaultManager.sol";
 import "./core/L2/L2Interactions.sol";
 import "./core/L2/L2MessageRelay.sol";

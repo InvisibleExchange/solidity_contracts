@@ -21,6 +21,8 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 // * 8. The cancellation will be valid after a time delay of 3 days (for example)
 // * 9. The user can reclaim the funds back to his account after the time delay
 
+event TestEvent(uint256 value, uint256 value2);
+
 abstract contract L2Interactions is
     ReentrancyGuardUpgradeable,
     L2Deposit,
@@ -103,40 +105,15 @@ abstract contract L2Interactions is
         uint32 txBatchId,
         DepositRequest[] calldata deposits
     ) external {
-        bytes32 depositsHash = 0;
-        for (uint256 i = 0; i < deposits.length; i++) {
-            bytes32 depHash = _getDepositHash(
-                deposits[i].depositId,
-                deposits[i].tokenId,
-                deposits[i].amount,
-                deposits[i].starkKey
-            );
-
-            depositsHash = keccak256(abi.encodePacked([depositsHash, depHash]));
-        }
-
-        bytes32 accumulatedDepositHash = IL2MessageRelay(s_messageRelay)
-            .accumulatedDepositHashes(txBatchId);
-        require(
-            depositsHash == accumulatedDepositHash,
-            "Invalid accumulated deposit hash"
-        );
-
-        // ? remove the deposits from the pending deposits
-        for (uint256 i = 0; i < deposits.length; i++) {
-            s_depositHashes[deposits[i].depositId] = 0;
-        }
-
-        IL2MessageRelay(s_messageRelay).processAccumulatedDepositHash(
-            txBatchId,
-            accumulatedDepositHash
-        );
+        _processDepositHashes(txBatchId, deposits);
     }
 
     function processWithdrawals(
         uint32 txBatchId,
         WithdrawalRequest[] calldata withdrawals
     ) external {
+        uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
+
         bytes32 withdrawalsHash = 0;
         // ? Hash the withdrawals
         for (uint256 i = 0; i < withdrawals.length; i++) {
@@ -147,9 +124,9 @@ abstract contract L2Interactions is
                 withdrawals[i].recipient
             );
 
-            withdrawalsHash = keccak256(
-                abi.encodePacked([withdrawalsHash, withHash])
-            );
+            bytes memory data = abi.encodePacked(withdrawalsHash, withHash);
+            uint256 newWithHash = uint256(keccak256(data)) % P;
+            withdrawalsHash = bytes32(newWithHash);
         }
 
         // ? Compare to the received withdrawal hash
