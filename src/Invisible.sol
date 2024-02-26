@@ -15,15 +15,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-event TestEvent(
-    uint64 depositId,
-    uint32 tokenId,
-    uint64 depositAmount,
-    uint256 depositPubKey
-);
-event TestEvent2(uint64 chainId, uint256 depositHash, uint256 withdrawalHash);
 
-contract Invisible is
+contract InvisibleL1 is
     Initializable,
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
@@ -109,11 +102,9 @@ contract Invisible is
                 uint64 depositAmount,
                 uint256 depositPubKey
             ) = ProgramOutputParser.uncompressDepositOutput(depositOutput);
-
-            emit TestEvent(depositId, tokenId, depositAmount, depositPubKey);
         }
 
-        // updatePendingDeposits(deposits, s_txBatchId);
+        updatePendingDeposits(deposits, s_txBatchId);
         processBatchWithdrawalOutputs(withdrawals, s_txBatchId);
 
         updatePendingRegistrations(registrationsArr);
@@ -128,16 +119,16 @@ contract Invisible is
 
         relayAccumulatedHashes(s_txBatchId, hashes);
 
-        // s_txBatchId += 1;
-        // s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
-        // s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
+        s_txBatchId += 1;
+        s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
+        s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
 
-        // emit TxBatchProcesssed(
-        //     s_txBatchId,
-        //     dexState.initStateRoot,
-        //     dexState.finalStateRoot,
-        //     block.timestamp
-        // );
+        emit TxBatchProcesssed(
+            s_txBatchId,
+            dexState.initStateRoot,
+            dexState.finalStateRoot,
+            block.timestamp
+        );
     }
 
     function relayAccumulatedHashes(
@@ -161,8 +152,6 @@ contract Invisible is
                 bytes32(depositHash),
                 bytes32(withdrawalHash)
             );
-
-            emit TestEvent2(chainId, depositHash, withdrawalHash);
         }
 
         s_accumulatedHashesRelayed[txBatchId] = true;

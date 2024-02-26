@@ -21,7 +21,6 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 // * 8. The cancellation will be valid after a time delay of 3 days (for example)
 // * 9. The user can reclaim the funds back to his account after the time delay
 
-event TestEvent(uint256 value, uint256 value2);
 
 abstract contract L2Interactions is
     ReentrancyGuardUpgradeable,

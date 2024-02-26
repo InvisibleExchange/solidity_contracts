@@ -74,10 +74,10 @@ async function main() {
     process.exitCode = 1;
   });
 
-  await mintTestTokens().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  // await mintTestTokens().catch((error) => {
+  //   console.error(error);
+  //   process.exitCode = 1;
+  // });
 }
 main();
 

@@ -6,7 +6,6 @@ import "../interfaces/IMessageRelay.sol";
 
 import "./Base.sol";
 
-event TestEvent(uint256 value);
 
 abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
     function _processDepositHashes(
@@ -24,20 +23,14 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
                 deposits[i].starkKey
             );
 
-            emit TestEvent(uint256(depHash));
-
             bytes memory data = abi.encodePacked(depositsHash, depHash);
             uint256 newDepHash = uint256(keccak256(data)) % P;
 
             depositsHash = bytes32(newDepHash);
-
-            emit TestEvent(uint256(depositsHash));
         }
 
         bytes32 accumulatedDepositHash = IL2MessageRelay(s_messageRelay)
             .accumulatedDepositHashes(txBatchId);
-
-        emit TestEvent(uint256(accumulatedDepositHash));
 
         require(
             depositsHash == accumulatedDepositHash,

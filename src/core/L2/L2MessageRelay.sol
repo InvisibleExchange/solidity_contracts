@@ -42,8 +42,7 @@ struct L2AcknowledgmentMessage {
 
 
 contract L2MessageRelay is OAppSender, OAppReceiver {
-    uint32 txBatchId = 0;
-    uint32 public totalDepositCount = 0;
+    uint32 txBatchId = 1;
 
     mapping(uint32 => bytes32) public accumulatedDepositHashes; // txBatchId -> accumulatedHash
     mapping(uint32 => bytes32) public accumulatedWithdrawalHashes; // txBatchId -> accumulatedHash
@@ -52,20 +51,13 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
     mapping(uint32 => bool) public processedWithdrawals; // txBatchId -> isProcessed
 
     uint32 L1DestEid = 40161; // TODO
-
-    event UpdateAccumulatedDepositHash(
-        uint32 totalDepositCount,
-        bytes32 accumulatedDepositHash,
-        uint256 timestamp
-    );
-
     address s_invisibleAddress;
 
     constructor(
         address _endpoint,
         address _owner
     ) OAppCore(_endpoint, _owner) Ownable(_owner) {
-        processedDeposits[1] = true; // TODO: For testing only
+        // processedDeposits[1] = true; // TODO: For testing only
     }
 
     function setInvisibleAddress(address _invAddress) external onlyOwner {

@@ -39,7 +39,7 @@ async function upgradeEscapeVerifier() {
   console.log(`Deployed EscapeVerifier to ${EscapeVerifier.address}`);
 }
 
-UpgradeInvisible("0x46dac0E2F096A496BCADCf3738d28EA540BE9744", false).catch(
+UpgradeInvisible("0xCd086eb074169F629e44e74A6F288E565e439204", true).catch(
   (error) => {
     console.error(error);
     process.exitCode = 1;

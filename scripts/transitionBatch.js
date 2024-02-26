@@ -8,7 +8,7 @@ async function transitionBatch(invisibleAddress) {
   const [signer] = await ethers.getSigners();
 
   const invisibleL1Abi =
-    require("../artifacts/src/Invisible.sol/Invisible.json").abi;
+    require("../artifacts/src/Invisible.sol/InvisibleL1.json").abi;
   const invisibleContract = new ethers.Contract(
     invisibleAddress,
     invisibleL1Abi,
@@ -17,7 +17,7 @@ async function transitionBatch(invisibleAddress) {
 
   let programOutput = getProgramOutput(); //.map((x) => BigNumber.from(x));
 
-  let overrides = { gasLimit: 750000 };
+  let overrides = {};
 
   let txRes = await invisibleContract
     .updateStateAfterTxBatch(programOutput, overrides)
@@ -26,61 +26,15 @@ async function transitionBatch(invisibleAddress) {
     });
   console.log("tx hash: ", txRes.hash);
   let receipt = await txRes.wait();
-
-  console.log("receipt: ", receipt);
   console.log("Successfully updated state after tx batch: ", txRes.hash);
 
-  console.log("events: ", receipt.logs);
-}
-
-async function relayAccumulatedHashes(relayAddress, txBatchId) {
-  const [signer] = await ethers.getSigners();
-
-  const relayAbi =
-    require("../artifacts/src/core/L1/L1MessageRelay.sol/L1MessageRelay.json").abi;
-  const relayContract = new ethers.Contract(
-    relayAddress,
-    relayAbi,
-    signer ?? undefined
+  console.log(
+    "events: ",
+    receipt.logs.map((log) => log.args)
   );
-
-  let gasFeeData = await signer.provider.getFeeData();
-
-  let options = "0x00030100110100000000000000000000000000030d40";
-  let destinationIds = [40231];
-
-  for (let i = 0; i < destinationIds.length; i++) {
-    let result = await relayContract.estimateMessageFee(
-      destinationIds[i],
-      txBatchId,
-      options
-    );
-    let messageFee = result[0][0]; // + result[0][0] / 1000n;
-    // let messageFee = 50000000000000n;
-
-    console.log("messageFee: ", messageFee);
-
-    let overrides = {
-      gasLimit: 500_000,
-      // gasPrice: gasFeeData.gasPrice,
-      maxFeePerGas: gasFeeData.maxFeePerGas,
-      maxPriorityFeePerGas: gasFeeData.maxPriorityFeePerGas,
-      value: messageFee,
-    };
-
-    let txRes = await relayContract
-      .sendAccumulatedHashes(destinationIds[i], txBatchId, options, overrides)
-      .catch((err) => {
-        console.log("Error: ", err);
-      });
-    let receipt = await txRes.wait();
-    console.log(
-      "events: ",
-      receipt.logs.map((log) => log.args)
-    );
-    console.log("\nSuccessfully sent accumulated hashes: ", txRes.hash);
-  }
 }
+
+// * -----------------------------------
 
 async function processL2Deposits(invisibleAddress, txBatchId, depositRequests) {
   const [signer] = await ethers.getSigners();
@@ -95,7 +49,7 @@ async function processL2Deposits(invisibleAddress, txBatchId, depositRequests) {
 
   let gasFeeData = await signer.provider.getFeeData();
   let overrides = {
-    gasLimit: 3_000_000,
+    // gasLimit: 3_000_000,
     maxFeePerGas: gasFeeData.maxFeePerGas,
     maxPriorityFeePerGas: gasFeeData.maxPriorityFeePerGas,
   };
@@ -112,94 +66,28 @@ async function processL2Deposits(invisibleAddress, txBatchId, depositRequests) {
   console.log("Successfully updated state after tx batch: ", txRes.hash);
 }
 
-async function relayL2Acknowledgment(relayAddress, txBatchId) {
-  const [signer] = await ethers.getSigners();
+let invisibleAddress = "0xc943D66a01bd28ED9C74e03A920ae56A02d953f8";
+transitionBatch(invisibleAddress).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
-  const relayAbi =
-    require("../artifacts/src/core/L2/L2MessageRelay.sol/L2MessageRelay.json").abi;
-  const relayContract = new ethers.Contract(
-    relayAddress,
-    relayAbi,
-    signer ?? undefined
-  );
-
-  let gasFeeData = await signer.provider.getFeeData();
-
-  let options = "0x000301001101000000000000000000000000004c4b40";
-
-  let result = await relayContract.estimateAcknowledgmentFee(
-    txBatchId,
-    options
-  );
-  let messageFee = result[0];
-
-  console.log("messageFee: ", messageFee);
-
-  let overrides = {
-    gasLimit: 1_000_000,
-    maxFeePerGas: gasFeeData.maxFeePerGas,
-    maxPriorityFeePerGas: gasFeeData.maxPriorityFeePerGas,
-    value: messageFee,
-  };
-
-  let txRes = await relayContract
-    .sendAcknowledgment(txBatchId, options, overrides)
-    .catch((err) => {
-      console.log("Error: ", err);
-    });
-  console.log("tx hash: ", txRes);
-  let receipt = await txRes.wait();
-
-  console.log(
-    "events: ",
-    receipt.logs.map((log) => log.args)
-  );
-  console.log("\nSuccessfully sent accumulated hashes: ", txRes.hash);
-}
-
-// transitionBatch("0xCd086eb074169F629e44e74A6F288E565e439204").catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
-
-// relayAccumulatedHashes("0x7A37e98441d3c45204c281A7a1cEBAdd39A307Ec", 1).catch(
+// let depositRequests = getDepositOutputs();
+// let invisibleAddress = "0xfa11c66f7E7C96862c2D0726aD36E372fc720Acb";
+// let txBatchId = 2;
+// processL2Deposits(invisibleAddress, txBatchId, depositRequests).catch(
 //   (error) => {
 //     console.error(error);
 //     process.exitCode = 1;
 //   }
 // );
 
-// let depositRequests = [
-//   {
-//     depositId: 172790829285376,
-//     tokenId: 2413654107,
-//     amount: 30000000,
-//     starkKey:
-//       "1669987464367741806901581703315727722326801619559351826421346426798401265671",
-//   },
-// ];
-// processL2Deposits(
-//   "0x46dac0E2F096A496BCADCf3738d28EA540BE9744",
-//   1,
-//   depositRequests
-// ).catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
-
-relayL2Acknowledgment("0x33C240077CE294Ea37c2439b5b2db53d8A7a16fB", 1).catch(
-  (error) => {
-    console.error(error);
-    process.exitCode = 1;
-  }
-);
-
 function getProgramOutput() {
   return [
-    2450644354998405982022115704618884006901283874365176806194200773707121413423n,
-    2308781005156518147215710264135861262766973966466339122345457151024766823175n,
-    597633417922681503745n,
-    2923003274661805836407370874358385653941039792128n,
+    3122045166344712876436189192695646099784305822139485620570275293141030450110n,
+    361774114494094996144832610614300124642270252465375182615864945613907231066n,
+    597635766440863727619n,
+    11692013098647223345629483497433542615764159168512n,
     210258926710712570525957419222609112870661182717954n,
     3592681469n,
     453755560n,
@@ -235,10 +123,44 @@ function getProgramOutput() {
     1839793652349538280924927302501143912227271479439798783640887258675143576352n,
     296568192680735721663075531306405401515803196637037431012739700151231900092n,
     40231n,
-    2551512883222007111101294975648258367973295612776855703669225340654746306991n,
+    2167060119205161429725692703140577688734624460848985836807740885084600866713n,
     0n,
-    13666080137911854155212181896037226327171328n,
+    13666080137912192817078241668293796768289664n,
+    95386976468426923783346594028622962171518585924647255192876045839129024801n,
+    13666080137912250296024753217725194446923008n,
     1669987464367741806901581703315727722326801619559351826421346426798401265671n,
-    2112678174764664975105616342095246236799898327306347996646273750320011999860n,
+    13666080137912329524187267482062787940873344n,
+    1669987464367741806901581703315727722326801619559351826421346426798401265671n,
+    13666080137912408752349781746400381534823680n,
+    1669987464367741806901581703315727722326801619559351826421346426798401265671n,
+    47451617529847155513430293294260239361188648922702283848823476362958144311n,
   ];
+}
+
+function getDepositOutputs() {
+  let depositRequests = [
+    {
+      depositId: 172790829285378,
+      tokenId: 2413654107,
+      amount: 1200000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285379,
+      tokenId: 2413654107,
+      amount: 200000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285380,
+      tokenId: 3592681469,
+      amount: 200000000,
+      starkKey:
+        "95386976468426923783346594028622962171518585924647255192876045839129024801",
+    },
+  ];
+
+  return depositRequests;
 }
