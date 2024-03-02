@@ -90,27 +90,29 @@ contract L1MessageRelay is OAppSender, OAppReceiver {
     }
 
     function sendAccumulatedHashes(
-        uint32 _dstEid,
         uint32 txBatchId,
+        uint32 _dstEid,
         bytes calldata _options
     ) external payable {
-        (MessagingFee memory fee, bytes memory _payload) = estimateMessageFee(
-            _dstEid,
-            txBatchId,
-            _options
-        );
+            (MessagingFee memory fee, bytes memory _payload) = estimateMessageFee(
+                _dstEid,
+                txBatchId,
+                _options
+            );
 
-        // ? Verify the balance is sufficient to send the transaction
-        require(
-            msg.value >= fee.nativeFee,
-            "Insufficient value sent to cover fee"
-        );
+            // ? Verify the balance is sufficient to send the transaction
+            require(
+                msg.value >= fee.nativeFee,
+                "Insufficient value sent to cover fee"
+            );
 
-        // MessagingReceipt memory _receipt =
-        _lzSend(_dstEid, _payload, _options, fee, payable(msg.sender));
+            // MessagingReceipt memory _receipt =
+            _lzSend(_dstEid, _payload, _options, fee, payable(msg.sender));
 
-        emit MessageSent(_payload, _dstEid);
+            emit MessageSent(_payload, _dstEid);
     }
+
+   
 
     function _lzReceive(
         Origin calldata _origin,

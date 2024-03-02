@@ -41,7 +41,7 @@ abstract contract L2Withdrawal is WithdrawalBase, L2InteractionsStorage {
     ) internal pure returns (bytes32) {
         uint256 batchedWithdrawalInfo = ((uint(chainId) * 2 ** 32) +
             uint(tokenId)) *
-            2 ** 32 +
+            2 ** 64 +
             uint(amount);
         uint256 recipient = uint256(uint160(recipient_));
 

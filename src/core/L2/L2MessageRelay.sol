@@ -23,10 +23,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 // * 9. The user can reclaim the funds back to his account after the time delay
 
 // * SEND/RECEIVE FLOW:
-// * 1. The L1 sends a message to the L2 after every batch
-// * 2. The L2 receives the message and updates the accumulated deposit/withdrawal hashes
+// * 1. The L1 sends a message for to the main L2 (Arbitrum?) after every batch
+// * 2. The message contains the accumulated dep/with hashes for all the L2s that batch
+// * 3. The main L2 that receives the message updates it's own storage and relays the message to the other L2s
+// * 2. When every other L2 receives the message and updates the accumulated deposit/withdrawal hashes
 // * 3. The L2 checks if the hashes from the previous batch have been verified
-// * 4. If the hashes have been verified the L2 send back and acknowledgement to the L1
+// * 4. If the hashes have been verified the L2 sends back and acknowledgement to the main L2
+// * 5. The main L2 sends the acknowledgement to the L1
 
 struct AccumulatedHashesMessage {
     uint32 txBatchId;
@@ -101,6 +104,30 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
         txBatchId = message.txBatchId + 1;
     }
 
+
+    function mockLzReceive(
+        bytes calldata payload
+    ) external {
+        AccumulatedHashesMessage memory message = abi.decode(
+            payload,
+            (AccumulatedHashesMessage)
+        );
+        
+        accumulatedDepositHashes[message.txBatchId] = message
+            .accumulatedDepositHash;
+        accumulatedWithdrawalHashes[message.txBatchId] = message
+            .accumulatedWithdrawalHash;
+
+        if (message.accumulatedDepositHash == 0) {
+            processedDeposits[message.txBatchId] = true;
+        }
+        if (message.accumulatedWithdrawalHash == 0) {
+            processedWithdrawals[message.txBatchId] = true;
+        }
+
+        txBatchId = message.txBatchId + 1;
+    }
+
     /* @dev Used to send the acknowledgment message manually, if necessary.
      */
     function sendAcknowledgment(
@@ -148,7 +175,7 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
         _lzSend(L1DestEid, _payload, _options, fee, payable(msg.sender));
     }
 
-    // *
+    // * 
 
     function processAccumulatedDepositHash(
         uint32 processedTxBatchId,

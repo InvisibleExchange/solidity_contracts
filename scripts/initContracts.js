@@ -114,24 +114,26 @@ async function setPeers(messageRelayAddress, destIds, peerAddresses, isL1) {
 
 // * -------------------------------------------
 
-// initContracts(
-//   "0xc943D66a01bd28ED9C74e03A920ae56A02d953f8",
-//   "0x3eAa88623F737950E46c820776A8925CC585B63E",
-//   "0x8824B3D2099C8B26dd9Eb5cf8e57D4B2F5f42EA8",
-//   "0x5684Ccd1571749Caf41315b13Eb66F8F9112d5bd",
-//   "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a",
-//   "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3",
-//   true
-// ).catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
+//
+
+initContracts(
+  "0x582DAF4368f88281b6FE7a315Ef50323693C39AF",
+  "0x3eAa88623F737950E46c820776A8925CC585B63E",
+  "0x8824B3D2099C8B26dd9Eb5cf8e57D4B2F5f42EA8",
+  "0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82",
+  "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a",
+  "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3",
+  true
+).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
 // //
 // setPeers(
-//   "0x5684Ccd1571749Caf41315b13Eb66F8F9112d5bd",
+//   "0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82",
 //   [40231],
-//   ["0xF19bECd2d9Be4Cb11445DbbB74B57b7D18037a7f"],
+//   ["0x6308a5F167ddf199b16E0569582325D4f33962aB"],
 //   true
 // ).catch((error) => {
 //   console.error(error);
@@ -139,10 +141,10 @@ async function setPeers(messageRelayAddress, destIds, peerAddresses, isL1) {
 // });
 
 // initContracts(
-//   "0xfa11c66f7E7C96862c2D0726aD36E372fc720Acb",
+//   "0xf077225097090fB566BC5d32995a29808035E156",
 //   "",
 //   "",
-//   "0xF19bECd2d9Be4Cb11445DbbB74B57b7D18037a7f",
+//   "0x6308a5F167ddf199b16E0569582325D4f33962aB",
 //   "0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651",
 //   "0x27D6834e8D35CdAB5991b66ef1550326f1018F62",
 //   false
@@ -153,9 +155,9 @@ async function setPeers(messageRelayAddress, destIds, peerAddresses, isL1) {
 
 // //
 // setPeers(
-//   "0xF19bECd2d9Be4Cb11445DbbB74B57b7D18037a7f",
+//   "0x6308a5F167ddf199b16E0569582325D4f33962aB",
 //   [40161],
-//   ["0x5684Ccd1571749Caf41315b13Eb66F8F9112d5bd"],
+//   ["0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82"],
 //   false
 // ).catch((error) => {
 //   console.error(error);

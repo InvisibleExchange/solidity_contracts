@@ -101,13 +101,13 @@ async function relayL2Acknowledgment(relayAddress, txBatchId) {
 }
 
 let relayAddress = "0x5684Ccd1571749Caf41315b13Eb66F8F9112d5bd";
-let txBatchId = 2;
+let txBatchId = 4;
 relayAccumulatedHashes(relayAddress, txBatchId).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
 
-// let l2RelayAddress = "0xF19bECd2d9Be4Cb11445DbbB74B57b7D18037a7f";
+// let l2RelayAddress = "0xe6a55d843673D07afC2935a4CD9a6600Abbe0Fb7";
 // let txBatchId = 2;
 // relayL2Acknowledgment(l2RelayAddress, txBatchId).catch((error) => {
 //   console.error(error);
