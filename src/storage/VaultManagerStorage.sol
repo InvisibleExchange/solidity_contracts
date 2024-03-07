@@ -14,7 +14,7 @@ abstract contract VaultManagerStorage {
 
     address[] addresses;
 
-    uint64 chainId;
+    uint32 chainId;
 
     // * TOKEN INFO -------------------------------------------
 

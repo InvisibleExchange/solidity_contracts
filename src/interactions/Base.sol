@@ -8,20 +8,22 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
     function _makeDeposit(
         address tokenAddress,
         uint256 amount,
-        uint256 starkKey
+        uint256 starkKey,
+        uint32 chainId
     ) internal returns (uint64 newAmountDeposited, uint64 depositId) {
         require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark Key");
         require(starkKey > 0, "Invalid stark Key");
 
         if (msg.value > 0) {
-            return _makeEthDeposit(starkKey);
+            return _makeEthDeposit(starkKey, chainId);
         } else {
-            return _makeErc20Deposit(tokenAddress, amount, starkKey);
+            return _makeErc20Deposit(tokenAddress, amount, starkKey, chainId);
         }
     }
 
     function _makeEthDeposit(
-        uint256 starkKey
+        uint256 starkKey,
+        uint32 chainId 
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
@@ -31,8 +33,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
         s_pendingDeposits[starkKey][ETH_ID] =
             pendingAmount +
             depositAmountScaled;
-
-        uint64 chainId = getChainId();
+        
         depositId = chainId * 2 ** 32 + s_depositCount;
         s_depositCount += 1;
 
@@ -50,7 +51,8 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
     function _makeErc20Deposit(
         address tokenAddress,
         uint256 amount,
-        uint256 starkKey
+        uint256 starkKey,
+        uint32 chainId 
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
@@ -64,7 +66,6 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
             pendingAmount +
             depositAmountScaled;
 
-        chainId = getChainId();
         depositId = chainId * 2 ** 32 + s_depositCount;
         s_depositCount += 1;
 

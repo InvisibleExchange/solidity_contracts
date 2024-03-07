@@ -9,6 +9,8 @@ import {OAppCore} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/OAppCore.so
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+import "../../interfaces/IL2Interactions.sol";
+
 // * DEPOSIT FLOW:
 // * 1. User makes a deposit on the L2
 // * 2. The L2MessageRelay maps(stores) the depositId to the depositHash
@@ -55,12 +57,14 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
 
     uint32 L1DestEid = 40161; // TODO
     address s_invisibleAddress;
+    address s_stargateRouter;
 
     constructor(
         address _endpoint,
-        address _owner
+        address _owner,
+        address _stargateRouter
     ) OAppCore(_endpoint, _owner) Ownable(_owner) {
-        // processedDeposits[1] = true; // TODO: For testing only
+        s_stargateRouter = s_stargateRouter;
     }
 
     function setInvisibleAddress(address _invAddress) external onlyOwner {
@@ -175,6 +179,32 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
         _lzSend(L1DestEid, _payload, _options, fee, payable(msg.sender));
     }
 
+    // * Receive a deposit from an L2 Extension 
+    struct DepositMessage {
+        address tokenAddress;
+        uint256 amount;
+        uint256 starkKey;
+    }
+    function sgReceive(
+        uint16 _srcChainId,              // the remote chainId sending the tokens
+        bytes memory _srcAddress,        // the remote Bridge address
+        uint256 _nonce,                  
+        address _token,                  // the token contract on the local chain
+        uint256 amountLD,                // the qty of local _token contract tokens  
+        bytes memory payload
+    ) external {
+        require(msg.sender == address(s_stargateRouter), "Stargate: only router");
+
+        require(peers[_srcChainId] == bytes32(_srcAddress), "Invalid sender");
+        require(amountLD > 0, "Invalid amount");
+
+        DepositMessage memory deposit = abi.decode(payload, (DepositMessage));
+
+        IL2Interactions(s_invisibleAddress).handleExtensionDeposit(_srcChainId, deposit.tokenAddress, deposit.amount, deposit.starkKey);
+
+    }
+
+
     // * 
 
     function processAccumulatedDepositHash(
@@ -228,4 +258,6 @@ contract L2MessageRelay is OAppSender, OAppReceiver {
     {
         return (SENDER_VERSION, RECEIVER_VERSION);
     }
+
+
 }

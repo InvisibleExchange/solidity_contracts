@@ -41,12 +41,71 @@ abstract contract L2Interactions is
             uint64 depositId,
             bytes32 depositHash
         )
-    {
+    {   
+
+        uint32 chainId = getChainId();
         (newAmountDeposited, depositId) = _makeDeposit(
+            tokenAddress,
+            amount,
+            starkKey,
+            chainId
+        );
+
+
+        depositHash = _updateDepositHashes(
+            depositId,
             tokenAddress,
             amount,
             starkKey
         );
+
+        return (newAmountDeposited, depositId, depositHash);
+    }
+
+
+    function handleExtensionDeposit(
+        uint32 _srcChainId,
+        address tokenAddress,
+        uint256 amount,
+        uint256 starkKey
+    )
+        external
+        payable
+        nonReentrant
+        returns (
+            uint64 newAmountDeposited,
+            uint64 depositId,
+            bytes32 depositHash
+        )
+    {   
+        require(msg.sender == s_messageRelay, "Invalid caller");
+
+        (newAmountDeposited, depositId) = _makeDeposit(
+            tokenAddress,
+            amount,
+            starkKey,
+            _srcChainId
+        );
+
+
+        depositHash = _updateDepositHashes(
+            depositId,
+            tokenAddress,
+            amount,
+            starkKey
+        );
+
+        return (newAmountDeposited, depositId, depositHash);
+    }
+
+
+
+    function _updateDepositHashes(
+        uint64 depositId,
+        address tokenAddress,
+        uint256 amount,
+        uint256 starkKey
+        ) private returns (bytes32 depositHash) {
 
         // ? Hash the deposit info
         uint32 tokenId = getTokenId(tokenAddress);
@@ -67,7 +126,7 @@ abstract contract L2Interactions is
         // ? Store the deposit hash
         s_depositHashes[depositId] = depositHash;
 
-        return (newAmountDeposited, depositId, depositHash);
+        return depositHash;
     }
 
     function startCancelDeposit(
