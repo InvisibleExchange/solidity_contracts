@@ -30,14 +30,11 @@ async function deployTestTokens() {
   );
 }
 
-async function mintTestTokens() {
+async function mintTestTokens(usdcAddress, wbtcAddress) {
   const [signer] = await ethers.getSigners();
 
   const testTokenAbi =
     require("../artifacts/src/TestToken.sol/TestToken.json").abi;
-
-  let usdcAddress = "0xa0eb40164C5d64fa4B5b466F677d3ef70c79c5c1";
-  let btcAddress = "0x71a46b7F3F971982304E48342C78B5460d8047d6";
 
   const usdcContract = new ethers.Contract(
     usdcAddress,
@@ -45,7 +42,7 @@ async function mintTestTokens() {
     signer ?? undefined
   );
   const btcContract = new ethers.Contract(
-    btcAddress,
+    wbtcAddress,
     testTokenAbi,
     signer ?? undefined
   );
@@ -53,7 +50,7 @@ async function mintTestTokens() {
   let accounts = [
     "0xaCEdF8742eDC7d923e1e6462852cCE136ee9Fb56",
     "0x2b2eA7eC7e366666772DaAf496817c14b8c0Ae74",
-    // "0x26BD962c29195832F61Af94f438444A6B7212Ab8",
+    "0x26BD962c29195832F61Af94f438444A6B7212Ab8",
     // "0xcca319f79859761Cb2248Af392cB015967063369",
   ];
   for (let i = 0; i < accounts.length; i++) {
@@ -69,15 +66,21 @@ async function mintTestTokens() {
 }
 
 async function main() {
-  await deployTestTokens().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+  let l1Usdc = "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a";
+  let l1Wbtc = "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3";
 
-  // await mintTestTokens().catch((error) => {
+  let l2Usdc = "0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651";
+  let l2Wbtc = "0x27D6834e8D35CdAB5991b66ef1550326f1018F62";
+
+  // await deployTestTokens().catch((error) => {
   //   console.error(error);
   //   process.exitCode = 1;
   // });
+
+  await mintTestTokens(l2Usdc, l2Wbtc).catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }
 main();
 

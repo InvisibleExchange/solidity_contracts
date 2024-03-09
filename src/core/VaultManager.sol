@@ -163,7 +163,7 @@ abstract contract VaultManager is
 
     // ---------------------------------------------------------
 
-    function getChainId() internal view returns (uint32) {
-        return chainId;
+    function getChainId() internal view returns (uint64) {
+        return uint64(chainId);
     }
 }

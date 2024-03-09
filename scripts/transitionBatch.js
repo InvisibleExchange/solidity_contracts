@@ -19,10 +19,13 @@ async function transitionBatch(invisibleAddress) {
 
   let gasFeeData = await signer.provider.getFeeData();
   let overrides = {
-    // gasLimit: 3_000_000,
+    gasLimit: 3_000_000,
     maxFeePerGas: gasFeeData.maxFeePerGas,
     maxPriorityFeePerGas: gasFeeData.maxPriorityFeePerGas,
   };
+
+  // console.log("programOutput: ", programOutput);
+  // console.log("overrides: ", overrides);
 
   let txRes = await invisibleContract
     .updateStateAfterTxBatch(programOutput, overrides)
@@ -64,17 +67,17 @@ async function processL2Interactions(
     maxPriorityFeePerGas: gasFeeData.maxPriorityFeePerGas,
   };
 
-  // // * PROCESS DEPOSITS ------------------------
-  // let txRes = await invisibleContract
-  //   .processDepositHashes(txBatchId, depositRequests, overrides)
-  //   .catch((err) => {
-  //     console.log("Error: ", err);
-  //   });
-  // console.log("tx hash: ", txRes.hash);
-  // let receipt = await txRes.wait();
+  // * PROCESS DEPOSITS ------------------------
+  let txRes = await invisibleContract
+    .processDepositHashes(txBatchId, depositRequests, overrides)
+    .catch((err) => {
+      console.log("Error: ", err);
+    });
+  console.log("tx hash: ", txRes.hash);
+  let receipt = await txRes.wait();
 
-  // console.log("events: ", receipt.logs);
-  // console.log("Successfully processed deposits: ", txRes.hash);
+  console.log("events: ", receipt.logs);
+  console.log("Successfully processed deposits: ", txRes.hash);
 
   // * PROCESS WITHDRAWALS ------------------------
   txRes = await invisibleContract
@@ -89,32 +92,32 @@ async function processL2Interactions(
   console.log("Successfully processed withdrawals: ", txRes.hash);
 }
 
-let invisibleAddress = "0x582DAF4368f88281b6FE7a315Ef50323693C39AF";
-transitionBatch(invisibleAddress).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-
-// let depositRequests = getDepositOutputs();
-// let withdrawalRequests = getWithdrawalOutputs();
-// let invisibleAddress = "0xf077225097090fB566BC5d32995a29808035E156";
-// let txBatchId = 5;
-// processL2Interactions(
-//   invisibleAddress,
-//   txBatchId,
-//   depositRequests,
-//   withdrawalRequests
-// ).catch((error) => {
+// let invisibleAddress = "0x38a059b0EB6c42234AAAa872424500f3e1E4253F";
+// transitionBatch(invisibleAddress).catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });
 
+let depositRequests = getDepositOutputs();
+let withdrawalRequests = getWithdrawalOutputs();
+let invisibleAddress = "0xb9775eCBce69555fBEE3C5cFB0c0D7c59a6b82e3";
+let txBatchId = 2;
+processL2Interactions(
+  invisibleAddress,
+  txBatchId,
+  depositRequests,
+  withdrawalRequests
+).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
 function getProgramOutput() {
   return [
-    2413538521893157956869522357006235860322019039808149590262438952731562665373n,
-    778643507763365307684435980607034917737400029513894349099445580984279878135n,
-    597639461079105929219n,
-    20461022922632640854851594911582879962958103838720n,
+    2132616961684971076565772114418786220818472814443497691298505987987571786167n,
+    916692353632818141094092754065738969697627650589059088688998936652690781169n,
+    597640121284298801154n,
+    10230556062806717488988994386229308987279123939328n,
     210258926710712570525957419222609112870661182717954n,
     3592681469n,
     453755560n,
@@ -150,32 +153,86 @@ function getProgramOutput() {
     1839793652349538280924927302501143912227271479439798783640887258675143576352n,
     296568192680735721663075531306405401515803196637037431012739700151231900092n,
     40231n,
-    529772439197085255804942518291485531350899438878394109743661553264768126565n,
-    0n,
-    13666080137912171067862238953387600902972672n,
+    114955376182661222528459590620020015627924498786408205437491963098052443160n,
+    1848749649068846898772464803574342175054383802756396370513706250192760409288n,
+    13666080137912091839699724689050007859022336n,
     1669987464367741806901581703315727722326801619559351826421346426798401265671n,
-    13666080137912408752349781746400381084823680n,
-    1669987464367741806901581703315727722326801619559351826421346426798401265671n,
-    13666080137912668186053327254319357781991680n,
+    13666080137912192817078241668293796518289664n,
     95386976468426923783346594028622962171518585924647255192876045839129024801n,
-    13666080137912905870540870047332138413842688n,
-    95386976468426923783346594028622962171518585924647255192876045839129024801n,
-    13666080137912985098703384311669731957793024n,
-    95386976468426923783346594028622962171518585924647255192876045839129024801n,
-    13666080137913042577649895861101129387426368n,
-    1669987464367741806901581703315727722326801619559351826421346426798401265671n,
-    2080056632011220430802714481244435741834961858455520233203053625351682007237n,
+    13666080137912250296024753217725194046923008n,
+    2642092749689377153080241311842925827947262820199074023775737174772744537106n,
+    13666080137912329524187267482062789990873344n,
+    2642092749689377153080241311842925827947262820199074023775737174772744537106n,
+    3181926758794964349064301926331008n,
+    987253332575707135225395624901186832535835507542n,
+    1642363199488299864620532354628131733495459515046521176289134923496084204783n,
   ];
 }
 
 function getDepositOutputs() {
   let depositRequests = [
     {
-      depositId: 172790829285385,
+      depositId: 172790829285380,
       tokenId: 2413654107,
-      amount: 1000000000,
+      amount: 3000000000,
       starkKey:
         "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285381,
+      tokenId: 2413654107,
+      amount: 100000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285382,
+      tokenId: 3592681469,
+      amount: 200000000,
+      starkKey:
+        "95386976468426923783346594028622962171518585924647255192876045839129024801",
+    },
+    {
+      depositId: 172790829285383,
+      tokenId: 2413654107,
+      amount: 100000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285384,
+      tokenId: 2413654107,
+      amount: 1000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285385,
+      tokenId: 2413654107,
+      amount: 1000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285386,
+      tokenId: 2413654107,
+      amount: 1000000,
+      starkKey:
+        "1669987464367741806901581703315727722326801619559351826421346426798401265671",
+    },
+    {
+      depositId: 172790829285387,
+      tokenId: 3592681469,
+      amount: 100000000,
+      starkKey:
+        "95386976468426923783346594028622962171518585924647255192876045839129024801",
+    },
+    {
+      depositId: 172790829285388,
+      tokenId: 3592681469,
+      amount: 100000000,
+      starkKey:
+        "95386976468426923783346594028622962171518585924647255192876045839129024801",
     },
   ];
 
@@ -186,8 +243,14 @@ function getWithdrawalOutputs() {
   let withdrawalRequests = [
     {
       chainId: 40231,
+      tokenId: 3592681469,
+      amount: 200000000,
+      recipient: "0xacedf8742edc7d923e1e6462852cce136ee9fb56",
+    },
+    {
+      chainId: 40231,
       tokenId: 2413654107,
-      amount: 75000000,
+      amount: 362600000,
       recipient: "0xacedf8742edc7d923e1e6462852cce136ee9fb56",
     },
   ];

@@ -23,8 +23,9 @@ abstract contract L1Interactions is
         payable
         nonReentrant
         returns (uint64 newAmountDeposited, uint64 depositId)
-    {
-        return _makeDeposit(tokenAddress, amount, starkKey);
+    {   
+        uint64 chainId = getChainId();
+        return _makeDeposit(tokenAddress, amount, starkKey, chainId);
     }
 
     function startCancelDeposit(

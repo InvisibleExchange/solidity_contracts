@@ -40,7 +40,7 @@ async function relayAccumulatedHashes(relayAddress, txBatchId) {
     };
 
     let txRes = await relayContract
-      .sendAccumulatedHashes(destinationIds[i], txBatchId, options, overrides)
+      .sendAccumulatedHashes(txBatchId, destinationIds[i], options, overrides)
       .catch((err) => {
         console.log("Error: ", err);
       });
@@ -100,14 +100,14 @@ async function relayL2Acknowledgment(relayAddress, txBatchId) {
   console.log("\nSuccessfully sent accumulated hashes: ", txRes.hash);
 }
 
-let relayAddress = "0x5684Ccd1571749Caf41315b13Eb66F8F9112d5bd";
-let txBatchId = 4;
+let relayAddress = "0x3846c7Cf4718E080Bd023C58d9EEe640c26ffe56";
+let txBatchId = 2;
 relayAccumulatedHashes(relayAddress, txBatchId).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
 
-// let l2RelayAddress = "0xe6a55d843673D07afC2935a4CD9a6600Abbe0Fb7";
+// let l2RelayAddress = "";
 // let txBatchId = 2;
 // relayL2Acknowledgment(l2RelayAddress, txBatchId).catch((error) => {
 //   console.error(error);

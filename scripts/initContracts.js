@@ -114,52 +114,57 @@ async function setPeers(messageRelayAddress, destIds, peerAddresses, isL1) {
 
 // * -------------------------------------------
 
-//
+// * L1
+let invisibleL1 = "0x38a059b0EB6c42234AAAa872424500f3e1E4253F";
+let escapeVerifier = "0x3eAa88623F737950E46c820776A8925CC585B63E";
+let structHasher = "0x8824B3D2099C8B26dd9Eb5cf8e57D4B2F5f42EA8";
+let l1MessageRelay = "0x3846c7Cf4718E080Bd023C58d9EEe640c26ffe56";
+let testUsdc = "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a";
+let testWbtc = "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3";
 
-initContracts(
-  "0x582DAF4368f88281b6FE7a315Ef50323693C39AF",
-  "0x3eAa88623F737950E46c820776A8925CC585B63E",
-  "0x8824B3D2099C8B26dd9Eb5cf8e57D4B2F5f42EA8",
-  "0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82",
-  "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a",
-  "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3",
-  true
-).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// * L2
+let invisibleL2 = "0xb9775eCBce69555fBEE3C5cFB0c0D7c59a6b82e3";
+let l2MessageRelay = "0xF22b70448469950EfDFc44126382897CC7877A29";
+let testUsdcL2 = "0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651";
+let testWbtcL2 = "0x27D6834e8D35CdAB5991b66ef1550326f1018F62";
 
-// //
-// setPeers(
-//   "0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82",
-//   [40231],
-//   ["0x6308a5F167ddf199b16E0569582325D4f33962aB"],
+// * -------------------------------------------
+
+// initContracts(
+//   invisibleL1,
+//   escapeVerifier,
+//   structHasher,
+//   l1MessageRelay,
+//   testUsdc,
+//   testWbtc,
 //   true
 // ).catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });
 
+// //
+// setPeers(l1MessageRelay, [40231], [l2MessageRelay], true).catch((error) => {
+//   console.error(error);
+//   process.exitCode = 1;
+// });
+
+// * -------------------------------------------
+
 // initContracts(
-//   "0xf077225097090fB566BC5d32995a29808035E156",
+//   invisibleL2,
 //   "",
 //   "",
-//   "0x6308a5F167ddf199b16E0569582325D4f33962aB",
-//   "0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651",
-//   "0x27D6834e8D35CdAB5991b66ef1550326f1018F62",
+//   l2MessageRelay,
+//   testUsdcL2,
+//   testWbtcL2,
 //   false
 // ).catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });
 
-// //
-// setPeers(
-//   "0x6308a5F167ddf199b16E0569582325D4f33962aB",
-//   [40161],
-//   ["0x5ed7BEBabf1B54824953F4045f0a6D67545e3e82"],
-//   false
-// ).catch((error) => {
+// setPeers(l2MessageRelay, [40161], [l1MessageRelay], false).catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;
 // });

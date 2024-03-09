@@ -8,7 +8,7 @@ async function UpgradeInvisible(proxyAddress, isL1) {
   const [signer] = await ethers.getSigners();
 
   const invisibleV2 = await ethers.getContractFactory(
-    isL1 ? "Invisible" : "InvisibleL2"
+    isL1 ? "InvisibleL1" : "InvisibleL2"
   );
 
   const upgraded = await upgrades.upgradeProxy(proxyAddress, invisibleV2, {
@@ -39,7 +39,7 @@ async function upgradeEscapeVerifier() {
   console.log(`Deployed EscapeVerifier to ${EscapeVerifier.address}`);
 }
 
-UpgradeInvisible("0xfa11c66f7E7C96862c2D0726aD36E372fc720Acb", false).catch(
+UpgradeInvisible("0xb9775eCBce69555fBEE3C5cFB0c0D7c59a6b82e3", false).catch(
   (error) => {
     console.error(error);
     process.exitCode = 1;

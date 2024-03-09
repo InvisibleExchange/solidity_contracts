@@ -9,7 +9,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
         address tokenAddress,
         uint256 amount,
         uint256 starkKey,
-        uint32 chainId
+        uint64 chainId
     ) internal returns (uint64 newAmountDeposited, uint64 depositId) {
         require(starkKey < 2 ** 251 + 17 * 2 ** 192 + 1, "Invalid stark Key");
         require(starkKey > 0, "Invalid stark Key");
@@ -23,7 +23,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
 
     function _makeEthDeposit(
         uint256 starkKey,
-        uint32 chainId 
+        uint64 chainId 
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
@@ -52,7 +52,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
         address tokenAddress,
         uint256 amount,
         uint256 starkKey,
-        uint32 chainId 
+        uint64 chainId 
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
