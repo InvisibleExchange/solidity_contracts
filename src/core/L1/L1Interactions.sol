@@ -23,7 +23,7 @@ abstract contract L1Interactions is
         payable
         nonReentrant
         returns (uint64 newAmountDeposited, uint64 depositId)
-    {   
+    {
         uint64 chainId = getChainId();
         return _makeDeposit(tokenAddress, amount, starkKey, chainId);
     }
@@ -50,6 +50,19 @@ abstract contract L1Interactions is
         uint256 starkKey
     ) public view returns (uint256) {
         return _getPendingDepositAmount(starkKey, address(0));
+    }
+
+    function getWithdrawableAmount(
+        address recipient,
+        address tokenAddress
+    ) public view returns (uint256) {
+        return _getWithdrawableAmount(recipient, tokenAddress);
+    }
+
+    function getETHWithdrawableAmount(
+        address recipient
+    ) public view returns (uint256) {
+        return _getWithdrawableAmount(recipient, address(0));
     }
 
     //

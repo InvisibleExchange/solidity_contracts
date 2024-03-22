@@ -21,7 +21,6 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 // * 8. The cancellation will be valid after a time delay of 3 days (for example)
 // * 9. The user can reclaim the funds back to his account after the time delay
 
-
 abstract contract L2Interactions is
     ReentrancyGuardUpgradeable,
     L2Deposit,
@@ -41,8 +40,7 @@ abstract contract L2Interactions is
             uint64 depositId,
             bytes32 depositHash
         )
-    {   
-
+    {
         uint64 chainId = getChainId();
         (newAmountDeposited, depositId) = _makeDeposit(
             tokenAddress,
@@ -50,7 +48,6 @@ abstract contract L2Interactions is
             starkKey,
             chainId
         );
-
 
         depositHash = _updateDepositHashes(
             depositId,
@@ -62,17 +59,12 @@ abstract contract L2Interactions is
         return (newAmountDeposited, depositId, depositHash);
     }
 
-
-
-
-
     function _updateDepositHashes(
         uint64 depositId,
         address tokenAddress,
         uint256 amount,
         uint256 starkKey
-        ) private returns (bytes32 depositHash) {
-
+    ) private returns (bytes32 depositHash) {
         // ? Hash the deposit info
         uint32 tokenId = getTokenId(tokenAddress);
         uint64 amountScaled;
@@ -123,13 +115,25 @@ abstract contract L2Interactions is
         return _getPendingDepositAmount(starkKey, address(0));
     }
 
+    function getWithdrawableAmount(
+        address recipient,
+        address tokenAddress
+    ) public view returns (uint256) {
+        return _getWithdrawableAmount(recipient, tokenAddress);
+    }
+
+    function getETHWithdrawableAmount(
+        address recipient
+    ) public view returns (uint256) {
+        return _getWithdrawableAmount(recipient, address(0));
+    }
+
     // * Process Accumulated Deposits/Withdrawals --------------------------------------------------------------------
 
     function processDepositHashes(
         uint32 txBatchId,
         DepositRequest[] calldata deposits
     ) external {
-
         if (deposits.length == 0) return;
 
         _processDepositHashes(txBatchId, deposits);
@@ -139,7 +143,6 @@ abstract contract L2Interactions is
         uint32 txBatchId,
         WithdrawalRequest[] calldata withdrawals
     ) external {
-
         if (withdrawals.length == 0) return;
 
         uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;

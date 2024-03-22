@@ -15,15 +15,9 @@ abstract contract VaultManager is
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
     VaultManagerStorage,
-    FlashLender,
     TokenInfo
 {
-    function __VaultManager_init(
-        address payable _gasCollector,
-        uint32 _chainId
-    ) internal {
-        s_gasFeeCollector = _gasCollector;
-
+    function __VaultManager_init(uint32 _chainId) internal {
         __tokenInfo_init();
 
         s_vaults[address(0)] = true; // Eth vault
@@ -87,22 +81,14 @@ abstract contract VaultManager is
     function makeErc20VaultWithdrawal(
         address tokenAddress,
         address recipient,
-        uint256 totalAmount,
-        uint256 gasFee
+        uint256 withdrawalAmount
     ) internal returns (bool) {
         if (!s_vaults[tokenAddress]) return true;
 
         // ? Get the withdrawable amount pending for the recipient
-        uint256 withdrawalAmount = totalAmount - gasFee;
         if (withdrawalAmount <= 0) return true;
 
         IERC20 token = IERC20(tokenAddress);
-
-        // ? Transfer the fee to the gasFeeCollector
-        if (gasFee > 0) {
-            bool success_ = token.transfer(s_gasFeeCollector, gasFee);
-            if (!success_) return false;
-        }
 
         bool success = token.transfer(recipient, withdrawalAmount);
         return success;
@@ -112,18 +98,9 @@ abstract contract VaultManager is
 
     function makeETHVaultWithdrawal(
         address payable recipient,
-        uint256 totalAmount,
-        uint256 gasFee
+        uint256 withdrawalAmount
     ) internal returns (bool) {
-        // ? Get the withdrawable amount pending for the recipient
-        uint256 withdrawalAmount = totalAmount - gasFee;
         if (withdrawalAmount <= 0) return true;
-
-        // ? Transfer the fee to the gasFeeCollector
-        if (gasFee > 0) {
-            (bool sent, ) = s_gasFeeCollector.call{value: gasFee}("");
-            require(sent, "Failed to send Ether to gasCollector");
-        }
 
         // ? Transfer the rest to the recipient
         (bool sent2, ) = recipient.call{value: withdrawalAmount}("");
@@ -158,6 +135,33 @@ abstract contract VaultManager is
                 escapeAmount
             );
             require(success, "Transfer failed");
+        }
+    }
+
+    // ---------------------------------------------------------
+    function collectGasFees(
+        address[] calldata tokens
+    ) external nonReentrant onlyOwner {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address tokenAddress = tokens[i];
+            uint256 gasFee = s_gasFeesCollected[tokenAddress];
+
+            if (gasFee > 0) {
+                s_gasFeesCollected[tokenAddress] = 0;
+
+                if (tokenAddress == address(0)) {
+                    // Eth gas fee
+                    (bool sent2, ) = msg.sender.call{value: gasFee}("");
+                    require(sent2, "Failed to send Ether");
+                } else {
+                    // Erc gas fee
+                    bool success = IERC20(tokenAddress).transfer(
+                        msg.sender,
+                        gasFee
+                    );
+                    require(success, "Transfer failed");
+                }
+            }
         }
     }
 

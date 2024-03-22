@@ -100,7 +100,7 @@ async function relayL2Acknowledgment(relayAddress, txBatchId) {
   console.log("\nSuccessfully sent accumulated hashes: ", txRes.hash);
 }
 
-let relayAddress = "0x3846c7Cf4718E080Bd023C58d9EEe640c26ffe56";
+let relayAddress = "0xF1C4a5f1b4f70237b6C9ABCd222e160a99C4bAC5";
 let txBatchId = 2;
 relayAccumulatedHashes(relayAddress, txBatchId).catch((error) => {
   console.error(error);

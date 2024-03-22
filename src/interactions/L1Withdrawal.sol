@@ -13,19 +13,13 @@ abstract contract L1Withdrawal is WithdrawalBase {
         WithdrawalTransactionOutput[] memory withdrawalOutputs,
         uint64 txBatchId
     ) internal {
-        // ? the withdrawals should be grouped by token to make it easier to process
-
-        // ? cache the lates token info (token, address, gas fee, etc.) after
-        // ? each withdrawal to save on gas fees. (since the withdrawals are grouped by token)
-        uint32 currentToken;
-        address currentTokenAddress;
-        uint256 gasFee;
         uint64 thisChainId = getChainId();
         for (uint256 i = 0; i < withdrawalOutputs.length; i++) {
             WithdrawalTransactionOutput
                 memory withdrawalOutput = withdrawalOutputs[i];
 
             (
+                bool isAutomatic,
                 uint32 chainId,
                 uint32 tokenId,
                 uint64 amount,
@@ -38,28 +32,23 @@ abstract contract L1Withdrawal is WithdrawalBase {
 
             if (thisChainId != chainId) continue;
 
-            // ? Get the cached gasFee or recalculate it if the token has changed
-            if (tokenId != currentToken) {
-                currentToken = tokenId;
-                if (tokenId == ETH_ID) {
-                    currentTokenAddress = address(0);
-
-                    gasFee = gasFeeForETHWithdrawal();
-                } else {
-                    currentTokenAddress = getTokenAddress(currentToken);
-
-                    gasFee = gasFeeForERCWithdrawal(currentTokenAddress);
-                }
-            }
+            address tokenAddress = getTokenAddress(tokenId);
 
             uint256 amountScaled = scaleUp(amount, tokenId);
 
-            _executeWithdrawal(
-                currentTokenAddress,
-                recipient,
-                amountScaled,
-                gasFee
-            );
+            if (isAutomatic) {
+                _executeAutomaticWithdrawal(
+                    tokenAddress,
+                    recipient,
+                    amountScaled
+                );
+            } else {
+                _registerManualWithdrawal(
+                    tokenAddress,
+                    recipient,
+                    amountScaled
+                );
+            }
         }
 
         emit ProcessedWithdrawals(block.timestamp, txBatchId);

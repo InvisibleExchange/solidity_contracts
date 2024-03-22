@@ -15,7 +15,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-
 contract InvisibleL1 is
     Initializable,
     OwnableUpgradeable,
@@ -32,7 +31,7 @@ contract InvisibleL1 is
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
 
-        __VaultManager_init(payable(initialOwner), _chainId);
+        __VaultManager_init(_chainId);
 
         s_txBatchId = 1;
         s_txBatchId2StateRoot[s_txBatchId] = INIT_STATE_ROOT;
@@ -94,16 +93,6 @@ contract InvisibleL1 is
             "Invalid expiration timestamp"
         );
 
-        for (uint256 i = 0; i < deposits.length; i++) {
-            DepositTransactionOutput memory depositOutput = deposits[i];
-            (
-                uint64 depositId,
-                uint32 tokenId,
-                uint64 depositAmount,
-                uint256 depositPubKey
-            ) = ProgramOutputParser.uncompressDepositOutput(depositOutput);
-        }
-
         updatePendingDeposits(deposits, s_txBatchId);
         processBatchWithdrawalOutputs(withdrawals, s_txBatchId);
 
@@ -119,7 +108,7 @@ contract InvisibleL1 is
 
         relayAccumulatedHashes(s_txBatchId, hashes);
 
-        s_txBatchId += 1;
+        s_txBatchId = uint32(dexState.txBatchId) + 1;
         s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
         s_txBatchId2Timestamp[s_txBatchId] = block.timestamp;
 

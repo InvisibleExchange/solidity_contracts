@@ -56,6 +56,7 @@ abstract contract L2InteractionsStorage is InteractionsStorageBase {
         uint32 tokenId;
         uint64 amount;
         address recipient;
+        bool isAutomatic;
     }
 
     struct DepositRequest {

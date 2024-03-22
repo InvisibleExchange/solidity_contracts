@@ -68,7 +68,6 @@ abstract contract TokenInfo is VaultManagerStorage {
 
         uint8 scaleFactor = s_tokenId2ScaleFactor[tokenId];
 
-        require(scaleFactor >= 0, "Invalid scale factor");
         require(scaleFactor <= 18, "Invalid scale factor");
         amountScaled = uint256(amount) * (10 ** scaleFactor);
 
@@ -83,7 +82,6 @@ abstract contract TokenInfo is VaultManagerStorage {
 
         uint8 scaleFactor = s_tokenId2ScaleFactor[tokenId];
 
-        require(scaleFactor >= 0, "Invalid scale factor");
         require(scaleFactor <= 18, "Invalid scale factor");
         amountScaled = uint64(amount / (10 ** scaleFactor));
 

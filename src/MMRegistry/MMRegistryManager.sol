@@ -7,8 +7,6 @@ import "./MMRegistryUpdates.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
-    // address public s_admin;
-
     uint32 constant MAX_VLP_ID = 100_000;
 
     function registerNewMarkets(
@@ -36,49 +34,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     ) external onlyOwner {
         s_approvedPerpMMs[mmOwner][tabPosAddress] = true;
     }
-
-    // function registerSpotMarketMaker(
-    //     uint32 baseAsset,
-    //     uint32 quoteAsset,
-    //     uint256 tabAddress,
-    // ) public {
-    //     require(
-    //         s_approvedSpotMMs[msg.sender][tabAddress],
-    //         "Only approved spot market makers can register"
-    //     );
-    //     require(
-    //         s_spotMarkets[baseAsset][quoteAsset],
-    //         "Spot market does not exist"
-    //     );
-    //     require(
-    //         s_spotRegistrations[tabAddress].tabAddress == 0,
-    //         "already registered"
-    //     );
-
-    //     uint32 vlpTokenId = s_vlpTokenIdCount;
-    //     require(vlpTokenId < MAX_VLP_ID);
-    //     s_vlpTokenIdCount += 1;
-
-    //     SpotMMRegistration memory registration = SpotMMRegistration(
-    //         msg.sender,
-    //         baseAsset,
-    //         quoteAsset,
-    //         tabAddress,
-    //         vlpTokenId,
-    //         false
-    //     );
-
-    //     // store the registration under pending registrations
-    //     s_spotRegistrations[tabAddress] = registration;
-
-    //     emit newSpotMMRegistration(
-    //         msg.sender,
-    //         baseAsset,
-    //         quoteAsset,
-    //         tabAddress,
-    //         vlpTokenId
-    //     );
-    // }
 
     function registerPerpMarketMaker(
         uint32 syntheticAsset,

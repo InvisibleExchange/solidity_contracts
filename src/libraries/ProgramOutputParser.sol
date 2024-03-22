@@ -362,12 +362,14 @@ library ProgramOutputParser {
         internal
         pure
         returns (
+            bool is_automatic,
             uint32 chainId,
             uint32 tokenId,
             uint64 amount,
             address recipient
         )
     {
+        is_automatic = uint8(withdrawal.batchedWithdrawalInfo >> 128) == 1;
         chainId = uint32(withdrawal.batchedWithdrawalInfo >> 96);
         tokenId = uint32(withdrawal.batchedWithdrawalInfo >> 64);
         amount = uint64(withdrawal.batchedWithdrawalInfo);

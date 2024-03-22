@@ -23,7 +23,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
 
     function _makeEthDeposit(
         uint256 starkKey,
-        uint64 chainId 
+        uint64 chainId
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
@@ -33,7 +33,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
         s_pendingDeposits[starkKey][ETH_ID] =
             pendingAmount +
             depositAmountScaled;
-        
+
         depositId = chainId * 2 ** 32 + s_depositCount;
         s_depositCount += 1;
 
@@ -52,7 +52,7 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
         address tokenAddress,
         uint256 amount,
         uint256 starkKey,
-        uint64 chainId 
+        uint64 chainId
     ) private returns (uint64 newAmountDeposited, uint64 depositId) {
         //
 
@@ -94,19 +94,17 @@ abstract contract DepositBase is VaultManager, InteractionsStorageBase {
 }
 
 abstract contract WithdrawalBase is VaultManager, InteractionsStorageBase {
-    function _executeWithdrawal(
+    function _executeAutomaticWithdrawal(
         address _tokenAddress,
         address _recipient,
-        uint256 _totalAmount,
-        uint256 _gasFee
+        uint256 _totalAmount
     ) internal {
         //
 
         if (_tokenAddress == address(0)) {
             bool success = makeETHVaultWithdrawal(
                 payable(_recipient),
-                _totalAmount,
-                _gasFee
+                _totalAmount
             );
 
             if (!success) {
@@ -116,14 +114,21 @@ abstract contract WithdrawalBase is VaultManager, InteractionsStorageBase {
             bool success = makeErc20VaultWithdrawal(
                 _tokenAddress,
                 _recipient,
-                _totalAmount,
-                _gasFee
+                _totalAmount
             );
 
             if (!success) {
                 s_pendingWithdrawals[_recipient][_tokenAddress] += _totalAmount;
             }
         }
+    }
+
+    function _registerManualWithdrawal(
+        address _tokenAddress,
+        address _recipient,
+        uint256 _totalAmount
+    ) internal {
+        s_pendingWithdrawals[_recipient][_tokenAddress] += _totalAmount;
     }
 
     function claimPendingWithdrawal(
@@ -141,52 +146,18 @@ abstract contract WithdrawalBase is VaultManager, InteractionsStorageBase {
             require(success, "Transfer failed");
         } else {
             // ? ERC20 Withdrawal
-            bool success = makeErc20VaultWithdrawal(
-                token,
-                recipient,
-                amount,
-                0
-            );
+            bool success = makeErc20VaultWithdrawal(token, recipient, amount);
             require(success, "Transfer failed");
         }
     }
 
-    // * Helpers --------------------------------------------------------------------
+    // ----------------------------------------------------------------------------
+    // View
 
-    function gasFeeForETHWithdrawal() internal view returns (uint256) {
-        uint256 gasLimit = 21000; // Default gas limit for a simple transfer
-        uint256 gasPrice = tx.gasprice;
-
-        return gasLimit * gasPrice;
-    }
-
-    function gasFeeForERCWithdrawal(
+    function _getWithdrawableAmount(
+        address recipient,
         address tokenAddress
     ) internal view returns (uint256) {
-        // TODO: Figure out what this should be
-
-        return 0;
-        // uint256 gasLimit = 80000; // TODO: Find out how much gas is required for a simple erc20 transfer
-        // uint256 gasPrice = tx.gasprice;
-
-        // uint256 gasFee = gasLimit * gasPrice;
-
-        // (uint8 tokenPriceDecimals, uint256 tokenPrice) = getTokenPrice(
-        //     tokenAddress
-        // );
-        // (uint8 ethPriceDecimals, uint256 ethPrice) = getTokenPrice(address(0));
-
-        // uint8 ethDecimals = 18;
-        // uint8 tokenDecimals = uint8(IERC20Metadata(tokenAddress).decimals());
-
-        // uint8 decimalConversion = ethDecimals +
-        //     ethPriceDecimals -
-        //     tokenDecimals -
-        //     tokenPriceDecimals;
-
-        // uint256 ercGasFee = (gasFee * ethPrice) /
-        //     (tokenPrice * 10 ** decimalConversion);
-
-        // return ercGasFee;
+        return s_pendingWithdrawals[recipient][tokenAddress];
     }
 }

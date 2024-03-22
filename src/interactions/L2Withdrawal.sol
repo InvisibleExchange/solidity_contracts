@@ -22,12 +22,19 @@ abstract contract L2Withdrawal is WithdrawalBase, L2InteractionsStorage {
                 withdrawals[i].tokenId
             );
 
-            _executeWithdrawal(
-                tokenAddress,
-                withdrawals[i].recipient,
-                amountScaled,
-                0 // TODO: Add gas fee
-            );
+            if (withdrawals[i].isAutomatic) {
+                _executeAutomaticWithdrawal(
+                    tokenAddress,
+                    withdrawals[i].recipient,
+                    amountScaled
+                );
+            } else {
+                _registerManualWithdrawal(
+                    tokenAddress,
+                    withdrawals[i].recipient,
+                    amountScaled
+                );
+            }
         }
 
         emit ProcessedWithdrawals(block.timestamp, txBatchId);

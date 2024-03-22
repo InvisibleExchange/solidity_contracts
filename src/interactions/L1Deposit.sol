@@ -25,6 +25,7 @@ abstract contract L1Deposit is DepositBase {
             );
             s_pendingDeposits[depositPubKey][tokenId] -= depositAmount;
         }
+
         emit UpdatedPendingDepositsEvent(block.timestamp, txBatchId);
 
         // ? After updating the deposits update the cancellations as well
@@ -55,7 +56,7 @@ abstract contract L1Deposit is DepositBase {
     }
 
     function cancelDeposits() private {
-        if (s_depositCencelations.length == 0) return;
+        if (s_depositCencelations.length <= 0) return;
 
         for (uint256 i = 0; i < s_depositCencelations.length; i++) {
             DepositCancellation storage cancellation = s_depositCencelations[i];

@@ -115,16 +115,16 @@ async function setPeers(messageRelayAddress, destIds, peerAddresses, isL1) {
 // * -------------------------------------------
 
 // * L1
-let invisibleL1 = "0x38a059b0EB6c42234AAAa872424500f3e1E4253F";
+let invisibleL1 = "0x8Be87E71c3b5BA0CC9B5e8Ab17dC932fD0c91fF3";
 let escapeVerifier = "0x3eAa88623F737950E46c820776A8925CC585B63E";
 let structHasher = "0x8824B3D2099C8B26dd9Eb5cf8e57D4B2F5f42EA8";
-let l1MessageRelay = "0x3846c7Cf4718E080Bd023C58d9EEe640c26ffe56";
+let l1MessageRelay = "0xF1C4a5f1b4f70237b6C9ABCd222e160a99C4bAC5";
 let testUsdc = "0xFa255d4aa3Aa5d3a26DF650a158835b77877767a";
 let testWbtc = "0x09Cbeb94e37b5132ad934bc0b55746349B90fEb3";
 
 // * L2
-let invisibleL2 = "0xb9775eCBce69555fBEE3C5cFB0c0D7c59a6b82e3";
-let l2MessageRelay = "0xF22b70448469950EfDFc44126382897CC7877A29";
+let invisibleL2 = "0xA912B172057d8ADa029797623a08762e672c3e59";
+let l2MessageRelay = "0x13a4d03c9d31DF372F991c7E01a31916f5cf833D";
 let testUsdcL2 = "0x2864e0B08dDF0e64FF7c7E8376A5170a8E325651";
 let testWbtcL2 = "0x27D6834e8D35CdAB5991b66ef1550326f1018F62";
 
@@ -144,10 +144,10 @@ let testWbtcL2 = "0x27D6834e8D35CdAB5991b66ef1550326f1018F62";
 // });
 
 // //
-// setPeers(l1MessageRelay, [40231], [l2MessageRelay], true).catch((error) => {
-//   console.error(error);
-//   process.exitCode = 1;
-// });
+setPeers(l1MessageRelay, [40231], [l2MessageRelay], true).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 
 // * -------------------------------------------
 
@@ -164,6 +164,7 @@ let testWbtcL2 = "0x27D6834e8D35CdAB5991b66ef1550326f1018F62";
 //   process.exitCode = 1;
 // });
 
+// //
 // setPeers(l2MessageRelay, [40161], [l1MessageRelay], false).catch((error) => {
 //   console.error(error);
 //   process.exitCode = 1;

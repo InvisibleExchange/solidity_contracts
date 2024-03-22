@@ -9,7 +9,7 @@ abstract contract VaultManagerStorage {
     event VaultRegisteredEvent(address tokenAddress);
 
     address escapeVerifier;
-    address payable s_gasFeeCollector;
+    mapping(address => uint256) s_gasFeesCollected;
     mapping(address => bool) s_vaults; // maps token address to vault
 
     address[] addresses;

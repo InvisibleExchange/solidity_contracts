@@ -25,7 +25,7 @@ contract InvisibleL2 is
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
 
-        __VaultManager_init(payable(initialOwner), _chainId);
+        __VaultManager_init(_chainId);
     }
 
     function setMessageRelay(address _relay) external onlyOwner {

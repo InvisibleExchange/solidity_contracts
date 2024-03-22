@@ -6,7 +6,6 @@ import "../interfaces/IMessageRelay.sol";
 
 import "./Base.sol";
 
-
 abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
     function _processDepositHashes(
         uint32 txBatchId,
@@ -65,8 +64,6 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
         uint64 depositId,
         uint256 starkKey
     ) internal {
-        // TODO: Add nonReentrant modifier
-
         uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;
         require(starkKey < P, "Invalid stark key");
         require(msg.sender != address(0), "msg.sender can't be 0");
@@ -115,8 +112,7 @@ abstract contract L2Deposit is DepositBase, L2InteractionsStorage {
             bool success = makeErc20VaultWithdrawal(
                 tokenAddress,
                 cancellation.depositor,
-                refundAmount,
-                0
+                refundAmount
             );
             require(success, "Transfer failed");
         }
