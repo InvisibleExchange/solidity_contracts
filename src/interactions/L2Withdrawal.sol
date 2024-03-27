@@ -41,15 +41,17 @@ abstract contract L2Withdrawal is WithdrawalBase, L2InteractionsStorage {
     }
 
     function _getWithdrawalHash(
+        bool isAutomatic_,
         uint32 chainId,
         uint32 tokenId,
         uint64 amount,
         address recipient_
     ) internal pure returns (bytes32) {
-        uint256 batchedWithdrawalInfo = ((uint(chainId) * 2 ** 32) +
-            uint(tokenId)) *
-            2 ** 64 +
-            uint(amount);
+        uint isAutomatic = isAutomatic_ ? 1 : 0;
+
+        uint i1 = isAutomatic * 2 ** 32 + chainId;
+        uint i2 = i1 * 2 ** 32 + tokenId;
+        uint batchedWithdrawalInfo = i2 * 2 ** 64 + amount;
         uint256 recipient = uint256(uint160(recipient_));
 
         uint256 P = 2 ** 251 + 17 * 2 ** 192 + 1;

@@ -30,20 +30,26 @@ abstract contract MMRegistry is
             "position address isn't registered"
         );
         require(
-            s_pendingCloseRequests[mmPositionAddress] == 0,
+            s_pendingCloseRequests[mmPositionAddress].txBatchId == 0,
             "position closed"
         );
+
         uint32 usdcTokenId = USDC_TOKEN_ID;
         address usdcTokenAddress = s_tokenId2Address[usdcTokenId];
+
         // ? Transfer the usdc from the user to the vault
         VaultManager.makeErc20VaultDeposit(usdcTokenAddress, usdcAmount);
+
         // ? Store the pending request in the contract
         uint64 scaledAmount = scaleDown(usdcAmount, usdcTokenId);
+
         s_pendingAddLiqudityRequests[msg.sender][
             mmPositionAddress
         ] += scaledAmount;
+
         uint32 mmActionId = s_mmActionId;
         s_mmActionId++;
+
         emit AddLiquidity(
             msg.sender,
             mmPositionAddress,
@@ -65,27 +71,32 @@ abstract contract MMRegistry is
         uint32 syntheticToken,
         uint256 mmPositionAddress
     ) external {
-        require(isMarketRegistered(syntheticToken), "market isn't registered");
+        require(isMarketRegistered(syntheticToken), "market is not registered");
         require(
             isAddressRegistered(mmPositionAddress),
-            "position address isn't registered"
+            "position address is not registered"
         );
         require(
-            s_pendingCloseRequests[mmPositionAddress] == 0,
+            s_pendingCloseRequests[mmPositionAddress].txBatchId == 0,
             "position closed"
         );
+
         // ? Get the active liquidity position of the user
         LiquidityInfo memory activeLiq = s_activeLiqudity[msg.sender][
             mmPositionAddress
         ];
+
         address usdcTokenAddress = s_tokenId2Address[USDC_TOKEN_ID];
+
         // ? If the position has been closed by the owner, we return the users share directly
         if (s_closedPositionLiqudity[mmPositionAddress].vlpAmountSum > 0) {
             // ? Get the user's share of the closed position liquidity
             uint64 userShare = (activeLiq.vlpAmount *
                 s_closedPositionLiqudity[mmPositionAddress].returnCollateral) /
                 s_closedPositionLiqudity[mmPositionAddress].vlpAmountSum;
+
             uint256 scaledAmount = scaleUp(userShare, USDC_TOKEN_ID);
+
             s_pendingWithdrawals[msg.sender][usdcTokenAddress] += scaledAmount;
             s_closedPositionLiqudity[mmPositionAddress]
                 .vlpAmountSum -= activeLiq.vlpAmount;
@@ -93,6 +104,7 @@ abstract contract MMRegistry is
                 .returnCollateral -= userShare;
             return;
         }
+
         // ? Store the hash of the withdrawal request (used to prevent censorship)
         bytes32 removeReqHash = keccak256(
             abi.encodePacked(msg.sender, activeLiq.vlpAmount)
@@ -101,9 +113,12 @@ abstract contract MMRegistry is
             s_pendingRemoveLiqudityRequests[removeReqHash] == 0,
             "request already pending"
         );
+
         s_pendingRemoveLiqudityRequests[removeReqHash] = block.timestamp;
+
         uint32 mmActionId = s_mmActionId;
         s_mmActionId++;
+
         emit RemoveLiquidity(
             msg.sender,
             mmPositionAddress,
@@ -117,25 +132,37 @@ abstract contract MMRegistry is
         PerpMMRegistration memory registration = s_perpRegistrations[
             mmPositionAddress
         ];
+
         require(
             registration.mmOwner == msg.sender,
             "Only the owner can close the position"
         );
+
         // ? Set the position as pending close
-        s_pendingCloseRequests[mmPositionAddress] = s_txBatchId;
+        s_pendingCloseRequests[mmPositionAddress] = CloseRequest(
+            block.timestamp,
+            s_txBatchId,
+            registration.mmOwner
+        );
     }
+
     function closePerpMarketMaker(uint256 mmPositionAddress) external {
         require(
-            s_pendingCloseRequests[mmPositionAddress] > 0,
+            s_pendingCloseRequests[mmPositionAddress].txBatchId > 0,
             "Initiate close first"
         );
         require(
-            s_txBatchId > s_pendingCloseRequests[mmPositionAddress],
+            s_txBatchId > s_pendingCloseRequests[mmPositionAddress].txBatchId,
             "Wait for the next batch to close the position"
         );
+        require(
+            s_pendingCloseRequests[mmPositionAddress].mmOwner == msg.sender
+        );
+
         // ? Get the aggregate value provided to the mm
         uint64 initialValueSum = s_providedUsdcLiquidity[mmPositionAddress];
         uint64 vlpAmountSum = s_aggregateVlpIssued[mmPositionAddress];
+
         uint32 mmActionId = s_mmActionId;
         s_mmActionId++;
         emit ClosePositionEvent(

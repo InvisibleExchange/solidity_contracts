@@ -83,18 +83,18 @@ contract InvisibleL1 is
             PositionEscapeOutput[] memory positionEscapes
         ) = ProgramOutputParser.parseProgramOutput(programOutput);
 
-        require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
-        require(
-            dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
-            "Invalid state root"
-        );
-        require(
-            dexState.globalExpirationTimestamp < block.timestamp,
-            "Invalid expiration timestamp"
-        );
+        // require(dexState.txBatchId == s_txBatchId, "invalid txBatchId");
+        // require(
+        //     dexState.initStateRoot == s_txBatchId2StateRoot[s_txBatchId],
+        //     "Invalid state root"
+        // );
+        // require(
+        //     dexState.globalExpirationTimestamp < block.timestamp,
+        //     "Invalid expiration timestamp"
+        // );
 
-        updatePendingDeposits(deposits, s_txBatchId);
-        processBatchWithdrawalOutputs(withdrawals, s_txBatchId);
+        updatePendingDeposits(deposits, dexState.txBatchId);
+        processBatchWithdrawalOutputs(withdrawals, dexState.txBatchId);
 
         updatePendingRegistrations(registrationsArr);
         updatePendingAddLiquidityUpdates(addLiquidityArr);
@@ -106,7 +106,7 @@ contract InvisibleL1 is
             positionEscapes
         );
 
-        relayAccumulatedHashes(s_txBatchId, hashes);
+        relayAccumulatedHashes(uint32(dexState.txBatchId), hashes);
 
         s_txBatchId = uint32(dexState.txBatchId) + 1;
         s_txBatchId2StateRoot[s_txBatchId] = dexState.finalStateRoot;
@@ -124,10 +124,10 @@ contract InvisibleL1 is
         uint32 txBatchId,
         AccumulatedHashesOutput[] memory accumulatedHashOutputs
     ) internal {
-        require(
-            !s_accumulatedHashesRelayed[txBatchId],
-            "Hashes Already Relayed"
-        );
+        // require(
+        //     !s_accumulatedHashesRelayed[txBatchId],
+        //     "Hashes Already Relayed"
+        // );
 
         for (uint256 i = 0; i < accumulatedHashOutputs.length; i++) {
             uint32 chainId = accumulatedHashOutputs[i].chainId;

@@ -95,5 +95,10 @@ abstract contract MMRegistryStorage {
     uint32 s_pendingPerpMMCount;
     mapping(uint256 => PerpMMRegistration) public s_perpRegistrations; // posAddress => PerpMMRegistration
 
-    mapping(uint256 => uint64) s_pendingCloseRequests; // positionAddress => txBatchId
+    struct CloseRequest {
+        uint256 timestamp;
+        uint32 txBatchId;
+        address mmOwner;
+    }
+    mapping(uint256 => CloseRequest) s_pendingCloseRequests; // positionAddress => txBatchId
 }

@@ -8,6 +8,14 @@ import "./Base.sol";
 // * =================================================================================================
 // * =================================================================================================
 
+event TestWithdrawal(
+    bool isAutomatic,
+    uint32 chainId,
+    uint32 tokenId,
+    uint64 amount,
+    address recipient
+);
+
 abstract contract L1Withdrawal is WithdrawalBase {
     function processBatchWithdrawalOutputs(
         WithdrawalTransactionOutput[] memory withdrawalOutputs,
@@ -27,6 +35,14 @@ abstract contract L1Withdrawal is WithdrawalBase {
             ) = ProgramOutputParser.uncompressWithdrawalOutput(
                     withdrawalOutput
                 );
+
+            emit TestWithdrawal(
+                isAutomatic,
+                chainId,
+                tokenId,
+                amount,
+                recipient
+            );
 
             if (amount == 0) continue;
 

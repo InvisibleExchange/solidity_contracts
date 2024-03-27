@@ -387,7 +387,7 @@ library ProgramOutputParser {
     {
         // & batched_registration_info format: | vlp_token (32 bits) | vlp_amount (64 bits) | action_type (8 bits) |
 
-        vlpToken = uint32(output.batchedActionInfo >> 136);
+        vlpToken = uint32(output.batchedActionInfo >> 72);
         vlpAmount = uint64(output.batchedActionInfo >> 8);
         mmAddress = output.mmPositionAddress;
     }

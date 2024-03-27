@@ -56,7 +56,7 @@ abstract contract MMRegistryUpdates is
             // ? Update the pending request that was just processed
             s_pendingAddLiqudityRequests[depositor][mmAddress] -= vlpAmount;
             // ? If position is closed/closing we should prevent new deposits
-            if (s_pendingCloseRequests[mmAddress] > 0) {
+            if (s_pendingCloseRequests[mmAddress].txBatchId > 0) {
                 s_pendingWithdrawals[depositor][usdcTokenAddress] += scaleUp(
                     initialAmount,
                     USDC_TOKEN_ID

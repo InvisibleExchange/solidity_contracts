@@ -12,15 +12,6 @@ abstract contract MMRegistryManager is OwnableUpgradeable, MMRegistryUpdates {
     function registerNewMarkets(
         uint32[] memory syntheticAssets
     ) external onlyOwner {
-        // require(baseAssets.length == quoteAssets.length, "Invalid input");
-
-        // for (uint256 i = 0; i < baseAssets.length; i++) {
-        //     uint32 baseAsset = baseAssets[i];
-        //     uint32 quoteAsset = quoteAssets[i];
-
-        //     s_spotMarkets[baseAsset][quoteAsset] = true;
-        // }
-
         for (uint256 i = 0; i < syntheticAssets.length; i++) {
             uint32 syntheticAsset = syntheticAssets[i];
 

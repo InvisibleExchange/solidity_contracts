@@ -151,6 +151,7 @@ abstract contract L2Interactions is
         // ? Hash the withdrawals
         for (uint256 i = 0; i < withdrawals.length; i++) {
             bytes32 withHash = _getWithdrawalHash(
+                withdrawals[i].isAutomatic,
                 withdrawals[i].chainId,
                 withdrawals[i].tokenId,
                 withdrawals[i].amount,
